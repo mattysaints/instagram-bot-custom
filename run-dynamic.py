@@ -31,6 +31,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import GramAddict  # noqa: F401  # bootstrap runtime env for IDE launches
+
 DEFAULT_CONFIG = "accounts/marramattia_fmgpro/config.yml"
 
 # Quanto aspettiamo (al massimo) che il device ADB indicato in config diventi
@@ -104,7 +106,7 @@ def build_windows(
         gap_min = int(round(gap_h * 60))
         next_start = cur + dt.timedelta(hours=gap_h)
         next_end = next_start + dt.timedelta(minutes=duration_min)
-        slack_min = int((hard_end - next_end).total_seconds() / 60)  # min residui prima di sforare
+        slack_min = int((hard_end - next_end).total_seconds() // 60)  # min residui prima di sforare
         max_pos_jitter = max(0, min(15, slack_min))
         max_neg_jitter = max(0, min(15, gap_min - duration_min))
         if max_pos_jitter == 0 and max_neg_jitter == 0:
