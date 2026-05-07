@@ -24,3 +24,7 @@ apk/
 .env
 .env.*
 !.env.example
+apk/
+.env
+.env.*
+!.env.example
