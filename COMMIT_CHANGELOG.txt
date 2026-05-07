@@ -1,0 +1,239 @@
+================================================================================
+COMMIT CHANGELOG — 2026-05-02
+Sessione di setup iniziale bot Instagram per @marramattia_fmgpro
+================================================================================
+
+OBIETTIVO
+---------
+Configurare GramAddict in modalità "stealth/anti-ban" per crescita follower
+sostenibile (target: ~65 follow/giorno, ~135 like/giorno) con strategia
+follow + unfollow su giorni alterni.
+
+
+PROBLEMI INIZIALI RISOLTI
+-------------------------
+
+1. IG version 428.0.0.0.4 (UI cambiata) → impossibile leggere profilo
+   FIX: downgrade manuale a 300.0.0.29.110 (versione testata da GramAddict)
+
+2. working-hours bloccavano lancio serale (23:30 fuori finestra)
+   FIX: introdotta config dinamica via run-dynamic.py
+
+3. fmg.fitness non esistente su Instagram → bot chiudeva sessione
+   FIX: rimosso da blogger-followers, lasciato solo wabbaitalia
+
+4. Stories container UI 300.x non si apriva → crash ricorrente
+   FIX: stories-count: 0, stories-percentage: 0
+
+5. total-scraped-limit: 0-0 chiudeva sessione subito
+   (bug GramAddict: scraped fa parte della condizione di stop)
+   FIX: total-scraped-limit: 200-300 (tetto alto, non scatterà mai)
+
+6. Sessione chiudeva dopo 1 sola fonte ("Same users iterated 2 times. End of the list")
+   anche con working-hours ancora aperte -> pochi follow per sessione (1 invece di 13)
+   CAUSA: con truncate-sources: 1-2 e shuffle, una sola fonte attiva per sessione,
+          se quella esauriva, non passava ad altre.
+   FIX: truncate-sources: 2-3 (piu' fonti per sessione)
+        skipped-list-limit: 15-25 (resiste di piu' prima di considerare "esaurita")
+
+7. Errore "ambiguous option: --=riminiwellness" all'avvio
+   CAUSA: blogger-followers in formato YAML "lista a trattini" non gestito dal parser
+   FIX: tornare a sintassi inline [a, b, c]
+
+8. Etichette del log "Total Interactions" fuorvianti: contava anche profili
+   visitati MA scartati (privato/filtri) come "interazioni".
+   FIX (session_state.py):
+     - "Total Interactions" -> "Profiles Visited (visits, also skipped)"
+     - "Total Successful Interactions" -> "Real Interactions (like/follow/cmt/dm)"
+   FIX (config): total-interactions-limit alzato a 999 (irrilevante).
+   Il vero limite anti-ban e': total-successful-interactions-limit (= azioni vere).
+
+
+FILE MODIFICATI/CREATI (in repo git)
+------------------------------------
+
+A. run-dynamic.py [NEW]
+   Wrapper Python che genera working-hours dinamiche basate sull'ora di lancio.
+   - Sempre 5 sessioni (configurabile con --sessions N)
+   - Durata 90 min ciascuna, gap inizio-inizio 3h con jitter ±15 min
+   - Vincolo anti-ban: solo tra 09:00 e 23:30
+   - Auto-shrink del gap se le 5 sessioni non ci stanno entro le 23:30
+   - Modalità --dry-run per anteprima senza lanciare
+   Uso: python run-dynamic.py [--sessions N] [--duration-min M] [--gap-h H]
+
+B. run-bot.sh [NEW]
+   Wrapper bash per alternare follow/unfollow a giorni alterni.
+   - Giorni dispari → config.yml (follow + like)
+   - Giorni pari    → config-unfollow.yml (solo unfollow)
+   - Modalità manuale: ./run-bot.sh follow | unfollow
+   Cron suggerito: 0 9 * * * cd /path/bot && ./run-bot.sh
+
+C. .idea/runConfigurations/ [NEW] (4 configurazioni PyCharm)
+   - Bot - Lancio dinamico (5 sessioni)  → main run-dynamic.py
+   - Bot - Anteprima sessioni (dry-run)  → mostra orari senza lanciare
+   - Bot - Unfollow (config-unfollow)    → solo unfollow
+   - Bot - Stop (kill processi)          → killa tutti i processi bot
+
+D. GramAddict/core/views.py [MODIFIED]
+   Modifiche minori per compatibilità UI 300.x (selettori fallback).
+
+E. GramAddict/core/filter.py [MODIFIED]
+   Modifiche minori al log di check profilo.
+
+F. config-examples/config.yml [MODIFIED]
+   Allineato al nuovo formato (riferimento utenti futuri).
+
+
+FILE NON IN REPO (gitignored ma documentati qui)
+------------------------------------------------
+
+accounts/marramattia_fmgpro/config.yml
+   Profilo "Prudente Realistico" anti-ban:
+   - blogger-followers: [wabbaitalia]
+   - 5 sessioni/giorno, 90 min ciascuna
+   - total-likes-limit: 24-30 (giornaliero ~135)
+   - total-follows-limit: 11-15 (giornaliero ~65)
+   - total-comments-limit: 0-0 (anti-shadowban)
+   - total-pm-limit: 0-0 (anti-shadowban)
+   - total-watches-limit: 0-0 (storie OFF: bug 300.x)
+   - total-scraped-limit: 200-300 (NON 0! altrimenti exit immediato)
+   - speed-multiplier: 0.85 (rallenta 15% per umanizzare)
+   - working-hours: dinamiche (riscritte da run-dynamic.py)
+   - shuffle-jobs: true, truncate-sources: 1-2
+
+accounts/marramattia_fmgpro/config-unfollow.yml
+   Config dedicata SOLO per unfollow:
+   - unfollow-non-followers: 12-15 (per sessione)
+   - unfollow-delay: 3 giorni (non scaricare chi seguito di recente)
+   - 4 finestre orarie SEPARATE da quelle dei follow
+   - Target: ~48-60 unfollow/giorno
+   - min-following: 100 (stop se scendi sotto)
+
+accounts/marramattia_fmgpro/filters.yml
+   Filtri "Quality + Stealth":
+   - skip_if_private: true (solo account pubblici)
+   - skip_following: true, skip_follower: true
+   - min_followers: 130, max_followers: 7000
+     (sotto 130 = account dormienti; sopra 7k = micro-influencer che
+      ricambiano poco)
+   - min_followings: 50, max_followings: 2500
+     (oltre 2500 = "follow-everything", utente non selettivo)
+   - min_potency_ratio: 0.7,   max_potency_ratio: 4
+     (finestra 0.7-4 = max probabilita' follow-back. Oltre il ratio 4
+      l'utente e' aspirazionale/professionale e ricambia raramente.)
+   - min_posts: 9
+     (account "vissuto", non vetrina mezza vuota)
+   - filtri biografia/lingua DISABILITATI (costosi e non necessari)
+
+
+PIPELINE DECISIONALE BOT (ordine di check per ogni profilo)
+----------------------------------------------------------
+1. Già interagito di recente?         → skip (storico)
+2. Dado interact-percentage 60-75%    → skip casuale (umanizza)
+3. Profilo non disponibile/vuoto      → skip
+4. Tu lo segui già?                   → skip (skip_following)
+5. Lui ti segue già?                  → skip (skip_follower)
+6. È privato?                         → skip (skip_if_private)
+7. min/max followers                  → skip se fuori range
+8. min/max followings                 → skip se fuori range
+9. potency_ratio (followers/foll)     → skip se < 0.25 o > 15
+10. min_posts                         → skip se < 6
+11. PASS → like 2 post + dado follow 50-65% → follow se favorevole
+12. Anti-block check dopo ogni azione
+
+
+TARGET ANTI-BAN (allineato tabelle 2026)
+----------------------------------------
+| Metrica            | Valore   | Target tabella       |
+|--------------------|----------|----------------------|
+| Follow/giorno      | ~65      | 60-70 (prudente)  ✅ |
+| Like/giorno        | ~135     | 120-150 (prudente)✅ |
+| Follow/ora         | ~8.7     | ≤ 8-10/h          ✅ |
+| Like/ora           | ~18.0    | ≤ 15-20/h         ✅ |
+| Commenti/giorno    | 0        | safe              ✅ |
+| DM/giorno          | 0        | safe              ✅ |
+| Unfollow/giorno    | 0 (cresc)| separato (cfg-unf) ✅ |
+
+
+STRATEGIA ATTUALE: "BURST & REST" (vs. "DISTRIBUTED")
+-----------------------------------------------------
+Il bot fa 4-5 sessioni di 20-30 min ciascuna, con ~2h di pausa tra una e l'altra.
+Dentro la sessione il rate orario e' ALTO (~25-30 follow/h, ~50/h like) ma compensato
+dalle lunghe pause -> rate medio giornaliero rispetta le tabelle.
+
+PRO:
+  - Pattern simile a "utente che apre IG 5 volte/giorno"
+  - Apri/chiudi app meno volte = meno fingerprint
+  - Sessioni piu' produttive (la sorgente non si "raffredda")
+
+CONTRO:
+  - Rate orario in-sessione fuori dalle tabelle "prudenti" (8-10/h)
+  - Se IG usa rate-limiter su finestra <= 1h, possibile soft action-block
+
+ALTERNATIVA "DISTRIBUTED" (da attivare SOLO se vediamo problemi):
+  working-hours: 8-10 micro-sessioni di 20-25 min
+  total-follows-limit: 6-8 per sessione
+  -> rate sempre <= 8/h, nessun burst.
+
+QUANDO PASSARE A DISTRIBUTED:
+  - Comparsa di action-block ("Try again later")
+  - Tasso follow-back < 5% dopo 7 giorni
+  - Reset password forzato da IG
+  - Verifiche identita' richieste
+
+DECISIONE: si rimane su "BURST" per i primi 7 giorni di osservazione.
+Risultato 02/05/2026 (giorno 1):  51 follow, 104 like, 0 errori, 0 action-block.
+
+
+SESSIONE SERALE SALTATA (FIX FUTURO)
+------------------------------------
+Il 02/05 la sessione delle 21.45 e' stata posticipata a domani 11.39.
+CAUSA: con time-delta + repeat (60-120 min) la finestra serale e' troppo
+       vicina alle 23.30 (LATEST_END nel run-dynamic.py).
+FIX (da fare se si ripete): in run-dynamic.py spostare l'ultima finestra a
+     21.30-22.30 invece di 21.45-23.15.
+
+
+WORKFLOW OPERATIVO CONSIGLIATO
+------------------------------
+Giorni 1-3: solo "Bot - Lancio dinamico" (build-up follow database)
+Giorni 4+ : "Lancio dinamico" + "Bot - Unfollow" (alternati)
+            oppure ./run-bot.sh (decide auto in base al giorno del mese)
+
+Lancio: idealmente tra 09:00 e 12:00 per avere tutte 5 sessioni di giorno.
+
+
+DIPENDENZE / AMBIENTE
+---------------------
+- Python 3.9 (.venv)
+- GramAddict v3.2.12 (locale, modificato leggermente)
+- Emulator: emulator-5556 (sdk_gphone_arm64, SDK 28, arm64-v8a)
+- IG installata: 300.0.0.29.110 (versione testata)
+
+
+COMANDI UTILI
+-------------
+# Lancio normale
+python run-dynamic.py
+
+# Anteprima orari
+python run-dynamic.py --dry-run
+
+# Stato bot
+pgrep -fl "python.*run.py.*marramattia"
+
+# Log live
+tail -f logs/marramattia_fmgpro.log
+
+# Stop
+pkill -f "python.*run.py.*marramattia"
+
+# Statistiche follow effettivi
+python -c "
+import json
+d = json.load(open('accounts/marramattia_fmgpro/interacted_users.json'))
+print('Totale profili visti:', len(d))
+print('Follow effettivi:', sum(1 for v in d.values() if v.get('followed')))
+print('Like dati:', sum(v.get('liked',0) for v in d.values()))
+"
+

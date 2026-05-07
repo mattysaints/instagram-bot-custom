@@ -7,6 +7,8 @@ from colorama import Fore, Style
 
 from GramAddict import __tested_ig_version__
 from GramAddict.core.config import Config
+from GramAddict.core.daily_budget import DailyBudget
+from GramAddict.core.action_throttler import init_throttler
 from GramAddict.core.device_facade import create_device, get_device_info
 from GramAddict.core.filter import Filter
 from GramAddict.core.filter import load_config as load_filter
@@ -253,6 +255,25 @@ def start_bot(**kwargs):
         )
         storage = Storage(session_state.my_username)
         filters = Filter(storage)
+
+        # Daily budget: persistent counter shared across ALL sessions of the
+        # current calendar day. Clips per-session limits so manual restarts
+        # cannot blow past Instagram's anti-spam thresholds.
+        daily_budget = DailyBudget(storage.account_path)
+        session_state.apply_daily_budget(daily_budget)
+        # Action throttler: enforces a hard floor between consecutive actions
+        # of the same type (follow/like/comment/pm/unfollow) so the bot can't
+        # accidentally fire bursts that look automated.
+        init_throttler(configs.args)
+        # snapshot of "before" so we can compute the delta of THIS session.
+        budget_before = {
+            "follows": daily_budget.used("follows"),
+            "likes": daily_budget.used("likes"),
+            "unfollows": daily_budget.used("unfollows"),
+            "comments": daily_budget.used("comments"),
+            "pms": daily_budget.used("pms"),
+        }
+
         show_ending_conditions()
         if not configs.args.debug:
             countdown(10, "Bot will start in: ")
@@ -334,6 +355,28 @@ def start_bot(**kwargs):
         # save the session in sessions.json
         session_state.finishTime = datetime.now()
         sessions.persist(directory=session_state.my_username)
+
+        # Persist daily budget delta so the next session/restart sees today's
+        # accumulated actions and clips its limits accordingly.
+        try:
+            session_followed = sum(session_state.totalFollowed.values())
+            daily_budget.add_session_totals(
+                followed=session_followed,
+                liked=session_state.totalLikes,
+                unfollowed=session_state.totalUnfollowed,
+                commented=session_state.totalComments,
+                pm=session_state.totalPm,
+            )
+            logger.info(
+                "[daily-budget] Updated daily totals: "
+                f"follows {budget_before['follows']}->{daily_budget.used('follows')}, "
+                f"likes {budget_before['likes']}->{daily_budget.used('likes')}, "
+                f"unfollows {budget_before['unfollows']}->{daily_budget.used('unfollows')}, "
+                f"comments {budget_before['comments']}->{daily_budget.used('comments')}, "
+                f"pms {budget_before['pms']}->{daily_budget.used('pms')}."
+            )
+        except Exception as e:
+            logger.warning(f"[daily-budget] Failed to persist session totals: {e}")
 
         # print reports
         if telegram_reports_at_end:

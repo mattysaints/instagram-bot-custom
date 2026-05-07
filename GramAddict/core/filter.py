@@ -48,7 +48,13 @@ FIELD_BIO_BANNED_LANGUAGE = "biography_banned_language"
 FIELD_MIN_POSTS = "min_posts"
 FIELD_MIN_LIKERS = "min_likers"
 FIELD_MAX_LIKERS = "max_likers"
+# Pre-flight (lightweight, evaluated without opening the profile)
+FIELD_SKIP_USERNAME_PATTERNS = "skip_username_patterns"
+FIELD_SKIP_USERNAME_WITH_EMOJI = "skip_username_with_emoji"
+FIELD_SKIP_USERNAME_LONGER_THAN = "skip_username_longer_than"
+FIELD_SKIP_USERNAME_DIGIT_RATIO = "skip_username_digit_ratio_above"
 FIELD_MUTUAL_FRIENDS = "mutual_friends"
+FIELD_LAST_POST_MAX_AGE_DAYS = "last_post_max_age_days"
 
 IGNORE_CHARSETS = ["MATHEMATICAL"]
 
@@ -86,6 +92,7 @@ class SkipReason(Enum):
     HAS_LINK_IN_BIO = auto()
     LT_MUTUAL = auto()
     BIOGRAPHY_IS_EMPTY = auto()
+    LAST_POST_TOO_OLD = auto()
 
 
 class Profile(object):
@@ -206,6 +213,63 @@ class Filter:
 
         return skip_reason is not None
 
+    def pre_filter_username(self, username: str) -> Optional[str]:
+        """Lightweight filter evaluated BEFORE opening the profile.
+
+        Returns a short reason string if the username should be skipped without
+        ever tapping it, or ``None`` if the user should pass to the full
+        ``check_profile`` flow.
+
+        This saves 3-5 seconds per skipped profile (no nav + back), which adds
+        up over a session: 30 skipped pre-flight = 1.5-2.5 minutes recovered
+        for actual interactions.
+
+        Configurable via filters.yml:
+          skip_username_patterns: [".*_official$", ".*\\.shop$", "^crypto.*"]
+          skip_username_with_emoji: true
+          skip_username_longer_than: 22
+          skip_username_digit_ratio_above: 0.5
+        """
+        if not self.conditions or not username:
+            return None
+        try:
+            patterns = self.conditions.get(FIELD_SKIP_USERNAME_PATTERNS) or []
+            if patterns:
+                for pat in patterns:
+                    try:
+                        if re.search(pat, username, flags=re.IGNORECASE):
+                            return f"username matches pattern '{pat}'"
+                    except re.error:
+                        # Bad regex from user config -> ignore that single pattern.
+                        continue
+
+            if self.conditions.get(FIELD_SKIP_USERNAME_WITH_EMOJI):
+                # Old emoji versions miss is_emoji(); fall back to UNICODE_EMOJI.
+                _is_emoji = getattr(emoji, "is_emoji", None)
+                if callable(_is_emoji):
+                    has_emoji = any(_is_emoji(c) for c in username)
+                else:
+                    unicode_emoji = getattr(emoji, "UNICODE_EMOJI", {}) or {}
+                    en_set = unicode_emoji.get("en", unicode_emoji)
+                    has_emoji = any(c in en_set for c in username)
+                if has_emoji:
+                    return "username contains emoji"
+
+            max_len = self.conditions.get(FIELD_SKIP_USERNAME_LONGER_THAN)
+            if isinstance(max_len, int) and max_len > 0 and len(username) > max_len:
+                return f"username longer than {max_len} chars"
+
+            digit_ratio_max = self.conditions.get(FIELD_SKIP_USERNAME_DIGIT_RATIO)
+            if isinstance(digit_ratio_max, (int, float)) and 0 < digit_ratio_max < 1:
+                if len(username) > 0:
+                    digits = sum(1 for c in username if c.isdigit())
+                    ratio = digits / len(username)
+                    if ratio > digit_ratio_max:
+                        return f"username digit-ratio {ratio:.2f} > {digit_ratio_max}"
+        except Exception as e:
+            logger.debug(f"pre_filter_username failed: {e}")
+        return None
+
     def check_profile(self, device, username):
         """
         This method assumes being on someone's profile already.
@@ -230,6 +294,9 @@ class Filter:
             field_bio_banned_language = self.conditions.get(FIELD_BIO_BANNED_LANGUAGE)
             field_min_posts = self.conditions.get(FIELD_MIN_POSTS)
             field_mutual_friends = self.conditions.get(FIELD_MUTUAL_FRIENDS, -1)
+            field_last_post_max_age_days = self.conditions.get(
+                FIELD_LAST_POST_MAX_AGE_DAYS
+            )
             field_skip_if_link_in_bio = self.conditions.get(
                 FIELD_SKIP_IF_LINK_IN_BIO, False
             )
@@ -422,6 +489,36 @@ class Filter:
             return profile_data, self.return_check_profile(
                 username, profile_data, SkipReason.NOT_ENOUGH_POSTS
             )
+
+        # Check freshness of the most recent post (proxy: read date from the
+        # accessibility description of the first cell in the profile grid).
+        # Fail-open: if we cannot parse the date we let the user pass.
+        if (
+            field_last_post_max_age_days is not None
+            and int(field_last_post_max_age_days) > 0
+        ):
+            try:
+                age_days = ProfileView(device).getFirstPostAgeDays()
+            except Exception as e:
+                logger.debug(f"getFirstPostAgeDays raised: {e}")
+                age_days = None
+            if age_days is None:
+                logger.debug(
+                    f"Could not determine last post age for @{username}, not skipping."
+                )
+            elif age_days > int(field_last_post_max_age_days):
+                logger.info(
+                    f"@{username}'s most recent post is {age_days} day(s) old "
+                    f"(max allowed: {field_last_post_max_age_days}), skip.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return profile_data, self.return_check_profile(
+                    username, profile_data, SkipReason.LAST_POST_TOO_OLD
+                )
+            else:
+                logger.debug(
+                    f"@{username}'s most recent post is {age_days} day(s) old, ok."
+                )
 
         cleaned_biography = " ".join(
             emoji.get_emoji_regexp()

@@ -392,6 +392,75 @@ class SearchView:
                 return item
         return None
 
+    def _adb_type_text(self, text: str) -> bool:
+        """
+        Type the given text into the currently-focused EditText using
+        `adb shell input text`. This bypasses FastInputIME entirely and
+        generates real keystroke events that IG can react to (live search
+        results will populate). Returns True on success.
+        """
+        import subprocess
+
+        try:
+            serial = self.device.deviceV2.serial
+        except Exception as e:
+            logger.debug(f"_adb_type_text: cannot read device serial: {e}")
+            return False
+        # `adb shell input text` does not accept spaces directly; replace with %s.
+        safe = text.replace(" ", "%s")
+        try:
+            res = subprocess.run(
+                ["adb", "-s", serial, "shell", "input", "text", safe],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10,
+            )
+            stdout = (res.stdout or b"").decode(errors="replace").strip()
+            stderr = (res.stderr or b"").decode(errors="replace").strip()
+            logger.debug(
+                f"_adb_type_text: rc={res.returncode} stdout={stdout!r} stderr={stderr!r}"
+            )
+            return res.returncode == 0
+        except Exception as ex:
+            logger.debug(f"_adb_type_text: adb failed: {ex}")
+            return False
+
+    def _kick_search(self):
+        """
+        After a PASTE-style set_text(), Instagram's search bar often does NOT trigger
+        the live search results because no actual keystroke event has been generated.
+        We force a real keyboard event via `adb shell input keyevent` so IG receives
+        an input change and populates the result list. We try multiple strategies
+        because different IG versions react differently.
+        """
+        import subprocess
+
+        try:
+            serial = self.device.deviceV2.serial
+        except Exception as e:
+            logger.debug(f"_kick_search: cannot read device serial: {e}")
+            return
+
+        def _adb(*args):
+            cmd = ["adb", "-s", serial, "shell", *args]
+            try:
+                subprocess.run(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                )
+            except Exception as ex:
+                logger.debug(f"_kick_search: adb failed for {cmd!r}: {ex}")
+
+        # Strategy 1: type a space then delete it -> this is real input event,
+        # IG always reacts to it and re-renders the result list.
+        logger.debug("_kick_search: sending space + backspace via adb input keyevent.")
+        _adb("input", "keyevent", "62")  # KEYCODE_SPACE
+        sleep(0.4)
+        _adb("input", "keyevent", "67")  # KEYCODE_DEL
+        sleep(0.4)
+
     def navigate_to_target(self, target: str, job: str) -> bool:
         target = emoji.emojize(target, use_aliases=True)
         logger.info(f"Navigate to {target}")
@@ -402,22 +471,71 @@ class SearchView:
         else:
             logger.debug("There is no searchbar!")
             return False
-        if self._check_current_view(target, job):
-            logger.info(f"{target} is in recent history.")
-            return True
-        search_edit_text.set_text(
-            target,
-            Mode.PASTE if args.dont_type else Mode.TYPE,
-        )
+        # NOTE: original implementation had an early _check_current_view here to
+        # detect if the target is already in the search history. We skip it on
+        # purpose: it is slow (uses long timeouts) and frequently steals focus
+        # from the EditText, breaking the subsequent typing.
+        # Type the search text using ADB `input text` so IG receives real
+        # keystroke events and triggers live search (FastInputIME tends to be
+        # broken on most emulators, so set_text+PASTE leaves the result list empty).
+        logger.debug(f"navigate_to_target: typing {target!r} via adb input text.")
+        adb_typed = self._adb_type_text(target)
+        if not adb_typed:
+            # Fallback to the original approach
+            logger.debug("navigate_to_target: adb typing failed, falling back to set_text.")
+            search_edit_text.set_text(
+                target,
+                Mode.PASTE if args.dont_type else Mode.TYPE,
+            )
+            if args.dont_type:
+                self._kick_search()
+        # Give IG some time to fetch search results
+        random_sleep(2, 4, modulable=False)
         if self._check_current_view(target, job):
             logger.info(f"{target} is in top view.")
             return True
+        # Diagnostic: dump what rows are visible right now
+        try:
+            visible_rows = self.device.find(
+                resourceIdMatches=ResourceID.SEARCH_ROW_ITEM
+            )
+            count = visible_rows.count_items()
+            logger.debug(
+                f"navigate_to_target: target {target!r} not found yet, "
+                f"{count} SEARCH_ROW_ITEM(s) visible after typing."
+            )
+        except Exception as e:
+            logger.debug(f"navigate_to_target: could not enumerate rows: {e}")
+        # Even more diagnostics: read what the EditText actually contains so we
+        # know whether typing hit the right widget at all.
+        try:
+            current = self._getSearchEditText()
+            if current is not None and current.exists():
+                txt = current.get_text()
+                logger.debug(
+                    f"navigate_to_target: searchbar currently contains: {txt!r}"
+                )
+        except Exception as e:
+            logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
+        # Dump the UI hierarchy NOW so we can see which resource-ids IG is
+        # using for search results in this version.
+        try:
+            xml = self.device.deviceV2.dump_hierarchy()
+            dump_path = "/tmp/gramaddict_ui_search.xml"
+            with open(dump_path, "w", encoding="utf-8") as f:
+                f.write(xml)
+            logger.debug(
+                f"navigate_to_target: UI dump saved to {dump_path} ({len(xml)} chars)"
+            )
+        except Exception as e:
+            logger.debug(f"navigate_to_target: UI dump failed: {e}")
         echo_text = self.device.find(resourceId=ResourceID.ECHO_TEXT)
         if echo_text.exists(Timeout.SHORT):
             logger.debug("Pressing on see all results.")
             echo_text.click()
         # at this point we have the tabs available
         self._switch_to_target_tag(job)
+        random_sleep(2, 4, modulable=False)
         if self._check_current_view(target, job, in_place_tab=True):
             return True
         return False
@@ -444,13 +562,42 @@ class SearchView:
             else:
                 obj = self._getPlaceRow()
         else:
+            # First try strict text match (original behavior)
             obj = self.device.find(
                 text=target,
                 resourceIdMatches=ResourceID.SEARCH_ROW_ITEM,
             )
+            if not obj.exists():
+                logger.debug(
+                    f"_check_current_view: no exact SEARCH_ROW_ITEM match for {target!r}, "
+                    "trying textStartsWith fallback."
+                )
+                obj = self.device.find(
+                    textStartsWith=target,
+                    resourceIdMatches=ResourceID.SEARCH_ROW_ITEM,
+                )
+            if not obj.exists():
+                logger.debug(
+                    f"_check_current_view: still no match, trying ROW_SEARCH_USER_USERNAME."
+                )
+                obj = self.device.find(
+                    text=target,
+                    resourceIdMatches=case_insensitive_re(
+                        ResourceID.ROW_SEARCH_USER_USERNAME
+                    ),
+                )
+            if not obj.exists():
+                obj = self.device.find(
+                    textStartsWith=target,
+                    resourceIdMatches=case_insensitive_re(
+                        ResourceID.ROW_SEARCH_USER_USERNAME
+                    ),
+                )
         if obj.exists():
+            logger.debug(f"_check_current_view: found {target!r}, clicking.")
             obj.click()
             return True
+        logger.debug(f"_check_current_view: {target!r} not found in current view.")
         return False
 
 
@@ -1466,6 +1613,174 @@ class ProfileView(ActionBarView):
         super().__init__(device)
         self.device = device
         self.is_own_profile = is_own_profile
+
+    def getFirstPostAgeDays(self) -> Optional[int]:
+        """
+        Try to read the date of the most recent post from the content-description
+        of the first cell in the profile grid (no need to actually open the post).
+
+        Common patterns produced by Instagram for the first post a11y label:
+            "Photo by Mario Rossi on October 12, 2025."
+            "Photo shared by mariorossi on March 14, 2026."
+            "Video by mariorossi on Jan 3 at 10:42 PM."   (current year, no year)
+            "Reel by mariorossi 2 days ago"
+            "Photo by mariorossi 3w"   (weeks-old short form)
+            "Carousel by ... posted on 12/10/2025"
+
+        Returns the age (in days) of that post, or None if it could not be parsed.
+        Designed to be fail-open: when in doubt return None and let the caller
+        decide whether to skip the user or not.
+        """
+        try:
+            # First cell in the profile grid (an IMAGE_BUTTON)
+            first_post = self.device.find(
+                resourceIdMatches=case_insensitive_re(ResourceID.IMAGE_BUTTON),
+            )
+            if not first_post.exists(Timeout.SHORT):
+                logger.debug("getFirstPostAgeDays: no IMAGE_BUTTON found in grid.")
+                return None
+            try:
+                desc = first_post.get_desc()
+            except Exception:
+                desc = None
+            if not desc:
+                logger.debug("getFirstPostAgeDays: first post has no content-desc.")
+                return None
+            logger.debug(f"getFirstPostAgeDays: first post desc = {desc!r}")
+
+            now = datetime.datetime.now()
+
+            # 1) Relative english forms: "2 days ago", "3 weeks ago", "5h", "2w", "1y"
+            rel = re.search(
+                r"(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?|s|m|h|d|w|mo|y)\s*(ago)?",
+                desc,
+                flags=re.IGNORECASE,
+            )
+            if rel:
+                n = int(rel.group(1))
+                unit = rel.group(2).lower()
+                # "m" alone is ambiguous (minutes vs months); only count it as minutes if "ago" present
+                if unit in ("s", "sec", "secs", "second", "seconds"):
+                    return 0
+                if unit in ("m", "min", "mins", "minute", "minutes"):
+                    return 0
+                if unit in ("h", "hr", "hrs", "hour", "hours"):
+                    return 0
+                if unit in ("d", "day", "days"):
+                    return n
+                if unit in ("w", "week", "weeks"):
+                    return n * 7
+                if unit in ("mo", "month", "months"):
+                    return n * 30
+                if unit in ("y", "year", "years"):
+                    return n * 365
+
+            # 2) Explicit date with full month name + year
+            #    e.g. "October 12, 2025" / "12 October 2025"
+            month_names_en = (
+                "January|February|March|April|May|June|July|August|"
+                "September|October|November|December|"
+                "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec"
+            )
+            month_names_it = (
+                "gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|"
+                "settembre|ottobre|novembre|dicembre"
+            )
+
+            month_map = {
+                "january": 1, "jan": 1, "gennaio": 1,
+                "february": 2, "feb": 2, "febbraio": 2,
+                "march": 3, "mar": 3, "marzo": 3,
+                "april": 4, "apr": 4, "aprile": 4,
+                "may": 5, "maggio": 5,
+                "june": 6, "jun": 6, "giugno": 6,
+                "july": 7, "jul": 7, "luglio": 7,
+                "august": 8, "aug": 8, "agosto": 8,
+                "september": 9, "sep": 9, "sept": 9, "settembre": 9,
+                "october": 10, "oct": 10, "ottobre": 10,
+                "november": 11, "nov": 11, "novembre": 11,
+                "december": 12, "dec": 12, "dicembre": 12,
+            }
+
+            # "October 12, 2025" / "Oct 12 2025"
+            m = re.search(
+                rf"({month_names_en}|{month_names_it})\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})",
+                desc,
+                flags=re.IGNORECASE,
+            )
+            if m:
+                month = month_map.get(m.group(1).lower())
+                day = int(m.group(2))
+                year = int(m.group(3))
+                if month:
+                    try:
+                        post_date = datetime.datetime(year, month, day)
+                        return max(0, (now - post_date).days)
+                    except ValueError:
+                        pass
+
+            # "12 October 2025" / "12 ottobre 2025"
+            m = re.search(
+                rf"(\d{{1,2}})\s+({month_names_en}|{month_names_it})\s+(\d{{4}})",
+                desc,
+                flags=re.IGNORECASE,
+            )
+            if m:
+                day = int(m.group(1))
+                month = month_map.get(m.group(2).lower())
+                year = int(m.group(3))
+                if month:
+                    try:
+                        post_date = datetime.datetime(year, month, day)
+                        return max(0, (now - post_date).days)
+                    except ValueError:
+                        pass
+
+            # 3) Date without year (assume current year, fall back to last year if future)
+            m = re.search(
+                rf"({month_names_en}|{month_names_it})\s+(\d{{1,2}})(?:st|nd|rd|th)?",
+                desc,
+                flags=re.IGNORECASE,
+            )
+            if m:
+                month = month_map.get(m.group(1).lower())
+                day = int(m.group(2))
+                if month:
+                    try:
+                        post_date = datetime.datetime(now.year, month, day)
+                        if post_date > now:
+                            post_date = datetime.datetime(now.year - 1, month, day)
+                        return max(0, (now - post_date).days)
+                    except ValueError:
+                        pass
+
+            # 4) Numeric date "12/10/2025" or "2025-10-12"
+            m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", desc)
+            if m:
+                try:
+                    post_date = datetime.datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                    return max(0, (now - post_date).days)
+                except ValueError:
+                    pass
+            m = re.search(r"(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})", desc)
+            if m:
+                try:
+                    d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                    if y < 100:
+                        y += 2000
+                    # Heuristic: if month > 12 swap (US style m/d/y)
+                    if mo > 12 and d <= 12:
+                        d, mo = mo, d
+                    post_date = datetime.datetime(y, mo, d)
+                    return max(0, (now - post_date).days)
+                except ValueError:
+                    pass
+
+            logger.debug("getFirstPostAgeDays: could not parse a date from content-desc.")
+            return None
+        except Exception as e:
+            logger.debug(f"getFirstPostAgeDays: unexpected error: {e}")
+            return None
 
     def navigateToOptions(self):
         logger.debug("Navigate to Options")

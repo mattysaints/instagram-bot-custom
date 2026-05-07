@@ -61,7 +61,7 @@ class InteractBloggerPostLikers(Plugin):
 
         # Handle sources
         sources = [s for s in self.args.blogger_post_likers if s.strip()]
-        for source in sample_sources(sources, self.args.truncate_sources):
+        for source in sample_sources(sources, self.args.truncate_sources, storage=storage, job_name=plugin):
             (
                 active_limits_reached,
                 _,

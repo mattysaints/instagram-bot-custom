@@ -12,6 +12,8 @@ import spintax
 from colorama import Fore, Style
 
 from GramAddict.core import storage
+from GramAddict.core import ai_comment
+from GramAddict.core.action_throttler import ActionType, get_throttler
 from GramAddict.core.device_facade import (
     DeviceFacade,
     Location,
@@ -284,6 +286,7 @@ def interact_with_user(
                     video_opened = opened_post_view.open_video()
                     if video_opened:
                         opened_post_view.watch_media(media_type)
+                        get_throttler().wait_if_needed(ActionType.LIKE)
                         like_succeed = opened_post_view.like_video()
                         logger.debug("Closing video...")
                         device.back()
@@ -291,6 +294,7 @@ def interact_with_user(
                     if media_type == MediaType.CAROUSEL:
                         _browse_carousel(device, obj_count)
                     opened_post_view.watch_media(media_type)
+                    get_throttler().wait_if_needed(ActionType.LIKE)
                     like_succeed = opened_post_view.like_post()
                 if like_succeed:
                     register_like(device, session_state)
@@ -308,6 +312,7 @@ def interact_with_user(
                             args,
                             session_state,
                             media_type,
+                            target_username=username,
                         )
                         if comment_done:
                             number_of_commented += 1
@@ -593,6 +598,7 @@ def _comment(
     args,
     session_state: SessionState,
     media_type: MediaType,
+    target_username: Optional[str] = None,
 ) -> bool:
     if not session_state.check_limit(
         limit_type=session_state.Limit.COMMENTS, output=False
@@ -620,6 +626,37 @@ def _comment(
                 resourceId=ResourceID.ROW_FEED_BUTTON_COMMENT,
             )
             if comment_button.exists():
+                # Best-effort: estrai la caption del post PRIMA di aprire la
+                # comment thread. Una volta dentro la comment view la caption
+                # in cima e' una riga "ROW_COMMENT_*", non piu' la
+                # ROW_FEED_COMMENT_TEXTVIEW_LAYOUT del feed/post-view, e
+                # rischieremmo di confonderla con un commento di altri.
+                # Tutto try/except: se la caption non c'e' (post senza
+                # didascalia, o resourceId cambiato in nuove versioni IG),
+                # passiamo stringa vuota e l'AI commentera' "sul media".
+                post_caption = ""
+                if ai_comment.is_enabled(args):
+                    try:
+                        caption_view = device.find(
+                            resourceId=ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT,
+                        )
+                        if caption_view.exists():
+                            cap_text = caption_view.get_text() or ""
+                            # In IG la caption e' tipicamente "username  caption-text"
+                            # se l'username e' all'inizio, lo strippiamo.
+                            if target_username and cap_text.lower().startswith(
+                                target_username.lower()
+                            ):
+                                cap_text = cap_text[len(target_username):].strip()
+                            post_caption = cap_text.strip()
+                            if post_caption:
+                                logger.info(
+                                    f"[ai-comment] caption captured ({len(post_caption)} chars): "
+                                    f"{post_caption[:60]}{'...' if len(post_caption) > 60 else ''}"
+                                )
+                    except Exception as e:
+                        logger.debug(f"[ai-comment] caption extraction skipped: {e}")
+
                 logger.info("Open comments of post.")
                 comment_button.click()
                 comment_box = device.find(
@@ -627,7 +664,39 @@ def _comment(
                     enabled="true",
                 )
                 if comment_box.exists():
-                    comment = load_random_comment(my_username, media_type)
+                    # 1) prova AI; 2) se None, fallback al txt (a meno che
+                    #    l'utente abbia esplicitamente disabilitato il
+                    #    fallback, nel qual caso saltiamo il commento).
+                    comment = None
+                    if ai_comment.is_enabled(args):
+                        comment = ai_comment.generate_comment(
+                            args=args,
+                            caption=post_caption,
+                            target_username=target_username,
+                            media_type=getattr(media_type, "name", str(media_type)),
+                        )
+                        if comment:
+                            logger.info(
+                                f"[ai-comment] generated: '{comment}'",
+                                extra={"color": f"{Fore.MAGENTA}"},
+                            )
+                        else:
+                            logger.info(
+                                "[ai-comment] generation failed/blocked; falling back to comments_list.txt"
+                            )
+                    if comment is None:
+                        # rispetta l'opt-out hard del fallback al file
+                        if (
+                            ai_comment.is_enabled(args)
+                            and getattr(args, "ai_comments_fallback_to_file", True) is False
+                        ):
+                            logger.info(
+                                "[ai-comment] fallback-to-file disabled; skipping comment."
+                            )
+                            UniversalActions.close_keyboard(device)
+                            device.back()
+                            return False
+                        comment = load_random_comment(my_username, media_type)
                     if comment is None:
                         UniversalActions.close_keyboard(device)
                         device.back()
@@ -642,6 +711,7 @@ def _comment(
                     post_button = device.find(
                         resourceId=ResourceID.LAYOUT_COMMENT_THREAD_POST_BUTTON_CLICK_AREA
                     )
+                    get_throttler().wait_if_needed(ActionType.COMMENT)
                     post_button.click()
                 else:
                     logger.info("Comments on this post have been limited.")
@@ -651,21 +721,79 @@ def _comment(
 
                 universal_actions.detect_block(device)
                 universal_actions.close_keyboard(device)
-                posted_text = device.find(
-                    text=f"{my_username} {comment}",
-                )
+                # Verifica multi-strategia: dopo il click su "Post", IG nelle
+                # versioni 300+ a volte non espone piu' un singolo node text
+                # con "username comment" tutto attaccato (lo splittano in 2
+                # TextView separati). La vecchia verify dava sempre
+                # "Failed to check if comment succeed" -> totalComments mai
+                # incrementato -> daily-cap aggirato (rischio ban).
+                #
+                # Strategie in cascata (la prima che matcha conferma):
+                #  A) match esatto "{username} {comment}"  (vecchio path)
+                #  B) match per username + first 30 chars del commento
+                #  C) match della comment_box: se DOPO il click la textbox
+                #     e' SVUOTATA e di nuovo enabled, quasi sempre IG ha
+                #     accettato il commento (in caso di errore IG mantiene
+                #     il testo per permettere retry).
+                comment_confirmed = False
+                # ---- A: full text match ----
+                posted_text = device.find(text=f"{my_username} {comment}")
                 when_posted = posted_text.sibling(
                     resourceId=ResourceID.ROW_COMMENT_SUB_ITEMS_BAR
                 ).child(resourceId=ResourceID.ROW_COMMENT_TEXTVIEW_TIME_AGO)
-                if posted_text.exists(Timeout.MEDIUM) and when_posted.exists(
-                    Timeout.MEDIUM
+                if posted_text.exists(Timeout.SHORT) and when_posted.exists(
+                    Timeout.SHORT
                 ):
-                    logger.info("Comment succeed.", extra={"color": f"{Fore.GREEN}"})
-                    session_state.totalComments += 1
+                    logger.info(
+                        "Comment succeed (verify A: full match).",
+                        extra={"color": f"{Fore.GREEN}"},
+                    )
                     comment_confirmed = True
+
+                # ---- B: prefix match (commenti lunghi vengono troncati) ----
+                if not comment_confirmed:
+                    snippet = comment[:30].strip()
+                    # contains-match su un nodo che contiene lo snippet
+                    snippet_node = device.find(textContains=snippet)
+                    if snippet_node.exists(Timeout.SHORT):
+                        logger.info(
+                            f"Comment succeed (verify B: snippet '{snippet[:20]}...' found).",
+                            extra={"color": f"{Fore.GREEN}"},
+                        )
+                        comment_confirmed = True
+
+                # ---- C: textbox cleared (heuristic) ----
+                if not comment_confirmed:
+                    cleared_box = device.find(
+                        resourceId=ResourceID.LAYOUT_COMMENT_THREAD_EDITTEXT,
+                        enabled="true",
+                    )
+                    if cleared_box.exists(Timeout.SHORT):
+                        try:
+                            current_txt = cleared_box.get_text(error=False) or ""
+                        except Exception:
+                            current_txt = ""
+                        # IG svuota la textbox SOLO quando il commento e' stato
+                        # accettato. Se contiene ancora il nostro testo o un
+                        # placeholder ("Add a comment..."), non e' confermato.
+                        if not current_txt or current_txt.strip().lower() in (
+                            "",
+                            "add a comment...",
+                            "aggiungi un commento...",
+                            "comment...",
+                        ):
+                            logger.info(
+                                "Comment succeed (verify C: textbox cleared).",
+                                extra={"color": f"{Fore.GREEN}"},
+                            )
+                            comment_confirmed = True
+
+                if comment_confirmed:
+                    session_state.totalComments += 1
                 else:
-                    logger.warning("Failed to check if comment succeed.")
-                    comment_confirmed = False
+                    logger.warning(
+                        "Failed to check if comment succeed (all 3 verify strategies failed)."
+                    )
 
                 logger.info("Go back to post view.")
                 device.back()
@@ -749,6 +877,7 @@ def _send_PM(
             resourceId=ResourceID.ROW_THREAD_COMPOSER_BUTTON_SEND,
         )
         if send_button.exists():
+            get_throttler().wait_if_needed(ActionType.PM)
             send_button.click()
             universal_actions.detect_block(device)
             universal_actions.close_keyboard(device)
@@ -891,6 +1020,8 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
         elif follow_button.exists():
             max_tries = 3
             for n in range(max_tries):
+                if n == 0:
+                    get_throttler().wait_if_needed(ActionType.FOLLOW)
                 follow_button.click()
                 if device.find(
                     textMatches=UNFOLLOW_REGEX,

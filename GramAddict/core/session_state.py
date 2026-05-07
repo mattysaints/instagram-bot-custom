@@ -9,6 +9,13 @@ from GramAddict.core.utils import get_value
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(val, default=0):
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return default
+
+
 class SessionState:
     id = None
     args = {}
@@ -109,6 +116,59 @@ class SessionState:
             self.args.total_crashes_limit, None, 5
         )
 
+    def apply_daily_budget(self, daily_budget) -> None:
+        """Clip per-session limits to whatever remains of the daily caps.
+
+        Called *after* :meth:`set_limits_session`. If a daily cap is reached,
+        the corresponding ``current_*_limit`` is forced to 0, which makes the
+        existing session-level checks short-circuit naturally (no follow / like
+        / etc.) without changing the rest of GramAddict's flow.
+
+        Parameters
+        ----------
+        daily_budget : DailyBudget
+            Persistent counter loaded from ``accounts/<user>/daily_budget.json``.
+        """
+        if daily_budget is None:
+            return
+
+        caps = {
+            "follows": _safe_int(getattr(self.args, "daily_follows_cap", 0)),
+            "likes": _safe_int(getattr(self.args, "daily_likes_cap", 0)),
+            "unfollows": _safe_int(getattr(self.args, "daily_unfollows_cap", 0)),
+            "comments": _safe_int(getattr(self.args, "daily_comments_cap", 0)),
+            "pms": _safe_int(getattr(self.args, "daily_pm_cap", 0)),
+        }
+        # If user disabled all caps, nothing to do.
+        if not any(v > 0 for v in caps.values()):
+            return
+
+        mapping = {
+            "follows": "current_follow_limit",
+            "likes": "current_likes_limit",
+            "unfollows": "current_unfollow_limit",
+            "comments": "current_comments_limit",
+            "pms": "current_pm_limit",
+        }
+
+        logger.info("[daily-budget] Today's usage so far:")
+        for action, cap in caps.items():
+            used = daily_budget.used(action)
+            if cap <= 0:
+                logger.info(f"  - {action:<10} {used} (no daily cap)")
+                continue
+            remaining = max(0, cap - used)
+            attr = mapping[action]
+            session_lim = _safe_int(getattr(self.args, attr, 0))
+            new_lim = min(session_lim, remaining) if session_lim else remaining
+            new_lim = max(0, new_lim)
+            setattr(self.args, attr, str(new_lim))
+            mark = "REACHED" if remaining == 0 else "OK"
+            logger.info(
+                f"  - {action:<10} {used}/{cap}  remaining={remaining}  "
+                f"session_limit {session_lim} -> {new_lim}  [{mark}]"
+            )
+
     def check_limit(self, limit_type=None, output=False):
         """Returns True if limit reached - else False"""
         limit_type = SessionState.Limit.ALL if limit_type is None else limit_type
@@ -142,8 +202,8 @@ class SessionState:
             f"- Total Followed:\t\t\t\t{'Limit Reached' if total_followed else 'OK'} ({sum(self.totalFollowed.values())}/{self.args.current_follow_limit})",
             f"- Total Unfollowed:\t\t\t\t{'Limit Reached' if total_unfollowed else 'OK'} ({self.totalUnfollowed}/{self.args.current_unfollow_limit})",
             f"- Total Watched:\t\t\t\t{'Limit Reached' if total_watched else 'OK'} ({self.totalWatched}/{self.args.current_watch_limit})",
-            f"- Total Successful Interactions:\t\t{'Limit Reached' if total_successful else 'OK'} ({sum(self.successfulInteractions.values())}/{self.args.current_success_limit})",
-            f"- Total Interactions:\t\t\t{'Limit Reached' if total_interactions else 'OK'} ({sum(self.totalInteractions.values())}/{self.args.current_total_limit})",
+            f"- Real Interactions (like/follow/cmt/dm):\t{'Limit Reached' if total_successful else 'OK'} ({sum(self.successfulInteractions.values())}/{self.args.current_success_limit})",
+            f"- Profiles Visited (visits, also skipped):\t{'Limit Reached' if total_interactions else 'OK'} ({sum(self.totalInteractions.values())}/{self.args.current_total_limit})",
             f"- Total Crashes:\t\t\t\t{'Limit Reached' if total_crashes else 'OK'} ({self.totalCrashes}/{self.args.current_crashes_limit})",
             f"- Total Successful Scraped Users:\t\t{'Limit Reached' if total_scraped else 'OK'} ({sum(self.totalScraped.values())}/{self.args.current_scraped_limit})",
         ]

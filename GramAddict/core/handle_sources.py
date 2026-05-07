@@ -37,6 +37,117 @@ from GramAddict.core.views import (
 logger = logging.getLogger(__name__)
 
 
+def _get_scroll_skip_start(args, label: str) -> int:
+    """Read --scroll-skip-start from args and resolve to an int (supports ranges).
+
+    Returns 0 if the option is missing/disabled.
+    """
+    raw = getattr(args, "scroll_skip_start", None)
+    if raw is None or str(raw) == "0":
+        return 0
+    try:
+        n = get_value(str(raw), f"Skip first {{}} {label} from source list", 0)
+    except Exception as e:
+        logger.debug(f"scroll-skip-start parse error: {e}")
+        return 0
+    if n is None:
+        return 0
+    return max(0, int(n))
+
+
+def _resume_enabled(args) -> bool:
+    return bool(getattr(args, "resume_from_last_position", False))
+
+
+def _resume_search_limit(args) -> int:
+    raw = getattr(args, "resume_anchor_search_limit", None)
+    if raw is None:
+        return 50
+    try:
+        return max(1, int(get_value(str(raw), None, 50)))
+    except Exception:
+        return 50
+
+
+def _resume_cooldown_days(args) -> int:
+    raw = getattr(args, "resume_cooldown_days", None)
+    if raw is None:
+        return 14
+    try:
+        return max(0, int(get_value(str(raw), None, 14)))
+    except Exception:
+        return 14
+
+
+def _hot_zone_params(args):
+    """Return (screens_threshold, flings_per_jump, max_jumps). 0 screens disables the feature."""
+    def _read(name, default):
+        raw = getattr(args, name, None)
+        if raw is None:
+            return default
+        try:
+            return max(0, int(get_value(str(raw), None, default)))
+        except Exception:
+            return default
+
+    return (
+        _read("hot_zone_screens", 3),
+        _read("hot_zone_jump_flings", 4),
+        _read("hot_zone_max_jumps", 2),
+    )
+
+
+def _seek_anchor_in_followers(
+    self_obj, device, list_view, anchors, max_scrolls: int
+):
+    """Scroll the followers list down looking for any of the given anchor usernames.
+
+    Returns (found: bool, anchor: Optional[str], scrolls_done: int).
+    Stops early if the list does not advance (end reached / list shorter than anchor position).
+    """
+    if not anchors:
+        return False, None, 0
+    anchors_set = set(anchors)
+    prev_first = None
+    for i in range(max_scrolls):
+        try:
+            user_list = device.find(
+                resourceIdMatches=self_obj.ResourceID.USER_LIST_CONTAINER,
+            )
+            visible_usernames = []
+            first_username = None
+            try:
+                for it in user_list:
+                    uname_view = it.child(index=1).child(index=0).child()
+                    if not uname_view.exists():
+                        continue
+                    name = uname_view.get_text()
+                    visible_usernames.append(name)
+                    if first_username is None:
+                        first_username = name
+            except Exception:
+                pass
+
+            for name in visible_usernames:
+                if name in anchors_set:
+                    # uno scroll extra per saltare oltre l'anchor stesso
+                    list_view.scroll(Direction.DOWN)
+                    random_sleep(0.3, 0.8, modulable=False)
+                    return True, name, i + 1
+
+            # se non muove piu', siamo a fondo lista
+            if first_username is not None and prev_first == first_username:
+                return False, None, i
+            prev_first = first_username
+
+            list_view.scroll(Direction.DOWN)
+            random_sleep(0.3, 0.9, modulable=False)
+        except Exception as e:
+            logger.debug(f"_seek_anchor_in_followers interrupted: {e}")
+            return False, None, i
+    return False, None, max_scrolls
+
+
 def interact(
     storage,
     is_follow_limit_reached,
@@ -82,6 +193,15 @@ def interact(
         commented=number_of_comments,
         pm_sent=pm_sent,
     )
+    # Per-source quality tracking: count this follow against the source/target
+    # so future sessions can weight selection towards higher FBR sources.
+    if followed:
+        stats = getattr(storage, "source_stats", None)
+        if stats is not None and target:
+            try:
+                stats.register_follow(current_job, target)
+            except Exception as e:
+                logger.debug(f"[source-stats] register_follow failed: {e}")
     return on_interaction(
         succeed=interaction_succeed,
         followed=followed,
@@ -341,6 +461,46 @@ def handle_likers(
             return
         prev_screen_iterated_likers = []
 
+        # --- Random skip start on likers list ---
+        skip_n = _get_scroll_skip_start(self.args, "likers")
+        if skip_n > 0:
+            logger.info(
+                f"Skipping first {skip_n} likers of {target} (random start).",
+                extra={"color": f"{Fore.CYAN}"},
+            )
+            actually_skipped = 0
+            prev_first = None
+            for i in range(skip_n):
+                try:
+                    uc = OpenedPostView(device)._getUserContainer()
+                    first_uname = None
+                    if uc is not None:
+                        try:
+                            for it in uc:
+                                uname_view = OpenedPostView(device)._getUserName(it)
+                                if uname_view.exists():
+                                    first_uname = uname_view.get_text()
+                                    break
+                        except Exception:
+                            pass
+                    likes_list_view.scroll(Direction.DOWN)
+                    random_sleep(0.3, 0.9, modulable=False)
+                    if first_uname is not None and prev_first == first_uname:
+                        logger.info(
+                            f"Likers list didn't move while skipping (skipped {actually_skipped}/{skip_n}). Stop.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                        break
+                    prev_first = first_uname
+                    actually_skipped += 1
+                except Exception as e:
+                    logger.debug(f"Skip-start (likers) interrupted: {e}")
+                    break
+            logger.info(
+                f"Skipped {actually_skipped} likers, starting iteration here.",
+                extra={"color": f"{Fore.CYAN}"},
+            )
+
         while True:
             logger.info("Iterate over visible likers.")
             screen_iterated_likers = []
@@ -511,6 +671,27 @@ def handle_posts(
     already_liked_count_limit = 20
     post_view_list = PostsViewList(device)
     opened_post_view = OpenedPostView(device)
+    # --- Random skip start on posts (hashtag/place). Disabled for feed. ---
+    if current_job != "feed":
+        skip_n = _get_scroll_skip_start(self.args, "posts")
+        if skip_n > 0:
+            logger.info(
+                f"Skipping first {skip_n} posts of {target} (random start).",
+                extra={"color": f"{Fore.CYAN}"},
+            )
+            actually_skipped = 0
+            for i in range(skip_n):
+                try:
+                    post_view_list.swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                    random_sleep(0.4, 1.0, modulable=False)
+                    actually_skipped += 1
+                except Exception as e:
+                    logger.debug(f"Skip-start (posts) interrupted: {e}")
+                    break
+            logger.info(
+                f"Skipped {actually_skipped} posts, starting iteration here.",
+                extra={"color": f"{Fore.CYAN}"},
+            )
     while True:
         (
             is_same_post,
@@ -669,6 +850,7 @@ def handle_followers(
     interaction,
     is_follow_limit_reached,
     scroll_end_detector,
+    profile_filter=None,
 ):
     is_myself = username == session_state.my_username
     if not nav_to_blogger(device, username, current_job):
@@ -686,6 +868,7 @@ def handle_followers(
         session_state,
         current_job,
         username,
+        profile_filter=profile_filter,
     )
 
 
@@ -701,6 +884,7 @@ def iterate_over_followers(
     session_state,
     current_job,
     target,
+    profile_filter=None,
 ):
     device.find(
         resourceId=self.ResourceID.FOLLOW_LIST_CONTAINER,
@@ -714,10 +898,151 @@ def iterate_over_followers(
         )
         return row_search.exists()
 
+    # --- Resume + Skip start: avoid always analyzing the same users at top of list ---
+    explored = getattr(storage, "explored_segments", None) if not is_myself else None
+    resumed_from_anchor = False
+    if explored is not None and _resume_enabled(self.args):
+        try:
+            cooldown = _resume_cooldown_days(self.args)
+            if explored.should_resume(current_job, target, cooldown):
+                anchors = explored.get_anchors_fallback(current_job, target)
+                if anchors:
+                    list_view = device.find(
+                        resourceId=self.ResourceID.LIST,
+                        className=ClassName.LIST_VIEW,
+                    )
+                    if list_view.exists():
+                        max_scrolls = _resume_search_limit(self.args)
+                        logger.info(
+                            f"[resume] Looking for last anchor of @{target} (up to {max_scrolls} scrolls). Candidates: {anchors[:3]}{'...' if len(anchors)>3 else ''}",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                        found, matched, scrolls_done = _seek_anchor_in_followers(
+                            self, device, list_view, anchors, max_scrolls
+                        )
+                        if found:
+                            logger.info(
+                                f"[resume] Found anchor @{matched} after {scrolls_done} scrolls -> resuming from here.",
+                                extra={"color": f"{Fore.CYAN}"},
+                            )
+                            explored.reset_anchor_misses(current_job, target)
+                            resumed_from_anchor = True
+                        else:
+                            misses = explored.register_anchor_miss(
+                                current_job, target
+                            )
+                            logger.info(
+                                f"[resume] Anchor not found after {scrolls_done} scrolls (miss #{misses}). Falling back to scroll-skip-start.",
+                                extra={"color": f"{Fore.CYAN}"},
+                            )
+            else:
+                logger.info(
+                    f"[resume] Source @{target} is in cooldown after exhaustion. Skipping resume.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+        except Exception as e:
+            logger.warning(f"[resume] Error while seeking anchor: {e}")
+
+    if not is_myself and not resumed_from_anchor:
+        skip_n = _get_scroll_skip_start(self.args, "followers")
+        # Per sorgenti MAI viste prima (record vuoto), un random skip troppo
+        # grande puo' portare oltre la fine della lista (rendering vuoto =
+        # "no followers iterated"). Cap a 10 per il primo contatto.
+        # Se la sorgente ha gia' fallito 1+ volte come "first visit empty",
+        # azzera lo skip per partire dal TOP della lista.
+        if skip_n > 0 and explored is not None:
+            try:
+                rec_iters = 0
+                rec_anchor = None
+                empty_visits = 0
+                if hasattr(explored, "_get_record"):
+                    _rec = explored._get_record(current_job, target)
+                    rec_iters = int(_rec.get("total_iterations", 0))
+                    rec_anchor = _rec.get("last_anchor")
+                    empty_visits = int(
+                        _rec.get("consecutive_empty_first_visits", 0)
+                    )
+                is_virgin = rec_iters == 0 and rec_anchor is None
+                if is_virgin and empty_visits >= 1:
+                    logger.info(
+                        f"[skip-start] @{target} previously failed empty page "
+                        f"x{empty_visits}: starting from TOP (skip=0).",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    skip_n = 0
+                elif is_virgin and skip_n > 10:
+                    capped = min(skip_n, 10)
+                    logger.info(
+                        f"[skip-start] First time on @{target}: capping skip "
+                        f"{skip_n} -> {capped} to avoid overshooting list end.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    skip_n = capped
+            except Exception as e:
+                logger.debug(f"first-time skip cap check failed: {e}")
+        if skip_n > 0:
+            list_view = device.find(
+                resourceId=self.ResourceID.LIST, className=ClassName.LIST_VIEW
+            )
+            if list_view.exists():
+                logger.info(
+                    f"Skipping first {skip_n} followers of @{target} (random start).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                actually_skipped = 0
+                prev_first_username = None
+                for i in range(skip_n):
+                    try:
+                        user_list = device.find(
+                            resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
+                        )
+                        first_username = None
+                        try:
+                            for it in user_list:
+                                uname_view = it.child(index=1).child(index=0).child()
+                                if uname_view.exists():
+                                    first_username = uname_view.get_text()
+                                    break
+                        except Exception:
+                            pass
+                        list_view.scroll(Direction.DOWN)
+                        random_sleep(0.3, 0.9, modulable=False)
+                        if (
+                            first_username is not None
+                            and prev_first_username == first_username
+                        ):
+                            logger.info(
+                                f"List didn't move while skipping (skipped {actually_skipped}/{skip_n}). Stop.",
+                                extra={"color": f"{Fore.CYAN}"},
+                            )
+                            break
+                        prev_first_username = first_username
+                        actually_skipped += 1
+                    except Exception as e:
+                        logger.debug(f"Skip-start interrupted: {e}")
+                        break
+                logger.info(
+                    f"Skipped {actually_skipped} followers, starting iteration here.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+
+    # --- Hot-zone state ---
+    hz_screens_threshold, hz_flings_per_jump, hz_max_jumps = _hot_zone_params(
+        self.args
+    )
+    hot_zone_enabled = (
+        not is_myself
+        and hz_screens_threshold > 0
+        and hz_flings_per_jump > 0
+    )
+    consecutive_zero_fresh = 0
+    jumps_done = 0
+
     while True:
         logger.info("Iterate over visible followers.")
         screen_iterated_followers = []
         screen_skipped_followers_count = 0
+        screen_fresh_count = 0
         scroll_end_detector.notify_new_page()
         user_list = device.find(
             resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
@@ -741,6 +1066,17 @@ def iterate_over_followers(
                 screen_iterated_followers.append(username)
                 scroll_end_detector.notify_username_iterated(username)
 
+                # --- Pre-flight username filter (no profile open) ---
+                if profile_filter is not None:
+                    pre_skip = profile_filter.pre_filter_username(username)
+                    if pre_skip:
+                        logger.info(
+                            f"@{username} pre-filter skip: {pre_skip}.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                        screen_skipped_followers_count += 1
+                        continue
+
                 can_interact = False
                 if storage.is_user_in_blacklist(username):
                     logger.info(f"@{username} is in blacklist. Skip.")
@@ -762,6 +1098,7 @@ def iterate_over_followers(
                             screen_skipped_followers_count += 1
                     else:
                         can_interact = True
+                        screen_fresh_count += 1
 
                 if can_interact:
                     logger.info(
@@ -792,6 +1129,77 @@ def iterate_over_followers(
                 extra={"color": f"{Fore.GREEN}"},
             )
 
+        # --- Hot-zone detector: troppi schermi consecutivi senza utenti FRESH ---
+        if hot_zone_enabled and len(screen_iterated_followers) > 0:
+            if screen_fresh_count == 0:
+                consecutive_zero_fresh += 1
+                logger.info(
+                    f"[hot-zone] No fresh users on this screen ({consecutive_zero_fresh}/{hz_screens_threshold}).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+            else:
+                if consecutive_zero_fresh > 0 or jumps_done > 0:
+                    logger.info(
+                        f"[hot-zone] Fresh users found ({screen_fresh_count}). Reset hot-zone counters.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                consecutive_zero_fresh = 0
+                jumps_done = 0
+
+            if consecutive_zero_fresh >= hz_screens_threshold:
+                if jumps_done >= hz_max_jumps:
+                    logger.info(
+                        f"[hot-zone] Already attempted {jumps_done} jumps on @{target} without finding fresh users. Abandoning source.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    if (
+                        explored is not None
+                        and _resume_enabled(self.args)
+                        and len(screen_iterated_followers) > 0
+                    ):
+                        try:
+                            explored.set_anchor(
+                                current_job, target, screen_iterated_followers[-1]
+                            )
+                        except Exception as e:
+                            logger.debug(f"set_anchor (hot-zone abandon) failed: {e}")
+                    return
+                jumps_done += 1
+                logger.info(
+                    f"[hot-zone] Hot zone detected: doing {hz_flings_per_jump} flings to escape (jump {jumps_done}/{hz_max_jumps}).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                lv = device.find(
+                    resourceId=self.ResourceID.LIST,
+                    className=ClassName.LIST_VIEW,
+                )
+                if lv.exists():
+                    for _f in range(hz_flings_per_jump):
+                        try:
+                            lv.fling(Direction.DOWN)
+                            random_sleep(0.5, 1.0, modulable=False)
+                        except Exception as e:
+                            logger.debug(f"[hot-zone] fling interrupted: {e}")
+                            break
+                consecutive_zero_fresh = 0
+                # Salta la logica scroll standard: ricomincia il while con la
+                # nuova posizione di lista raggiunta dai fling.
+                continue
+
+        # Salva l'ultimo username della schermata come anchor (resume).
+        if (
+            not is_myself
+            and explored is not None
+            and _resume_enabled(self.args)
+            and len(screen_iterated_followers) > 0
+        ):
+            try:
+                explored.set_anchor(
+                    current_job, target, screen_iterated_followers[-1]
+                )
+            except Exception as e:
+                logger.debug(f"set_anchor failed: {e}")
+
         if is_myself and scrolled_to_top():
             logger.info("Scrolled to top, finish.", extra={"color": f"{Fore.GREEN}"})
             return
@@ -802,6 +1210,20 @@ def iterate_over_followers(
             load_more_button_exists = load_more_button.exists()
 
             if scroll_end_detector.is_the_end():
+                if (
+                    not is_myself
+                    and explored is not None
+                    and _resume_enabled(self.args)
+                ):
+                    try:
+                        marked = explored.mark_exhausted(current_job, target)
+                        if marked:
+                            logger.info(
+                                f"[resume] @{target} list exhausted -> marked. Will be skipped for cooldown.",
+                                extra={"color": f"{Fore.CYAN}"},
+                            )
+                    except Exception as e:
+                        logger.debug(f"mark_exhausted failed: {e}")
                 return
 
             need_swipe = screen_skipped_followers_count == len(
@@ -863,4 +1285,68 @@ def iterate_over_followers(
                 "No followers were iterated, finish.",
                 extra={"color": f"{Fore.GREEN}"},
             )
+            if (
+                not is_myself
+                and explored is not None
+                and _resume_enabled(self.args)
+            ):
+                try:
+                    # Tracker per sorgenti vergini che continuano a fallire
+                    # con empty page: dopo N fallimenti consecutivi, marcamo
+                    # exhausted comunque (non esistono utenti scrollabili).
+                    rec_iters = 0
+                    if hasattr(explored, "_get_record"):
+                        _rec = explored._get_record(current_job, target)
+                        rec_iters = int(_rec.get("total_iterations", 0))
+                    if rec_iters == 0 and hasattr(
+                        explored, "mark_first_visit_empty"
+                    ):
+                        empty_count = explored.mark_first_visit_empty(
+                            current_job, target
+                        )
+                        logger.info(
+                            f"[empty-page] @{target} virgin source empty page "
+                            f"#{empty_count}/3.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                        if empty_count >= 3:
+                            # 3 fallimenti consecutivi su sorgente vergine =
+                            # blogger fantasma (lista followers inaccessibile)
+                            explored.mark_exhausted(
+                                current_job, target, force=True
+                            )
+                            # mark_exhausted con iters==0 e' bloccato dal guard.
+                            # Forziamo settando direttamente exhausted_at.
+                            try:
+                                _rec["exhausted_at"] = (
+                                    __import__("datetime").datetime.now().isoformat(
+                                        timespec="seconds"
+                                    )
+                                )
+                                explored._flush()
+                            except Exception:
+                                pass
+                            logger.info(
+                                f"[empty-page] @{target} reached 3 empty "
+                                f"failures: marked exhausted (ghost blogger).",
+                                extra={"color": f"{Fore.CYAN}"},
+                            )
+                            return
+
+                    marked = explored.mark_exhausted(
+                        current_job, target, force=True
+                    )
+                    if marked:
+                        logger.info(
+                            f"[resume] @{target} reached empty page -> marked exhausted.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                    else:
+                        logger.info(
+                            f"[resume] @{target} empty page rejected by guard. "
+                            f"Source preserved for next session.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                except Exception as e:
+                    logger.debug(f"mark_exhausted failed: {e}")
             return

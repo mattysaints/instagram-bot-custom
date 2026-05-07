@@ -83,6 +83,25 @@ class Storage:
 
         self.report_path = os.path.join(self.account_path, REPORTS)
 
+        # Persistenza dei segmenti esplorati per sorgente (resume-from-last-position)
+        try:
+            from GramAddict.core.explored_segments import ExploredSegments
+
+            self.explored_segments = ExploredSegments(self.account_path)
+        except Exception as e:
+            logger.warning(f"Could not init ExploredSegments: {e}")
+            self.explored_segments = None
+
+        # Per-source stats (follows_done / follow_back_rate) used to weight
+        # source selection across sessions.
+        try:
+            from GramAddict.core.source_stats import SourceStats
+
+            self.source_stats = SourceStats(self.account_path)
+        except Exception as e:
+            logger.warning(f"Could not init SourceStats: {e}")
+            self.source_stats = None
+
     def can_be_reinteract(
         self,
         last_interaction: datetime,
@@ -183,6 +202,21 @@ class Storage:
             user["job_name"] = job_name
         if not user.get("target"):
             user["target"] = target
+
+        # Track the follow against the source for follow-back-rate analytics.
+        # Only on a NEW successful follow (not a re-add of an existing entry).
+        if followed and getattr(self, "source_stats", None) is not None:
+            try:
+                _job = user.get("job_name") or job_name or "unknown"
+                _target = user.get("target") or target
+                if _target:
+                    self.source_stats.register_follow(_job, _target)
+                    logger.info(
+                        f"[source-stats] register_follow {_job}|{_target} "
+                        f"(total={self.source_stats.follows_done(_job, _target)})"
+                    )
+            except Exception as e:
+                logger.debug(f"[source-stats] register_follow failed: {e}")
 
         # Increase the value of liked, watched or commented if we have already a value
         user["liked"] = liked if "liked" not in user else (user["liked"] + liked)
