@@ -27,12 +27,22 @@ import random
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Optional
 
 DEFAULT_CONFIG = "accounts/marramattia_fmgpro/config.yml"
 
-# Inizio "umano" anti-ban (mai sessioni notturne 03-09)
-EARLIEST_START = dt.time(9, 0)
+# Quanto aspettiamo (al massimo) che il device ADB indicato in config diventi
+# 'device' e abbia completato il boot. Se l'emulatore parte freddo serve
+# tipicamente 30-90s; mettiamo un cap generoso. Se non si presenta entro il
+# timeout, abortiamo prima di lanciare il bot per evitare l'errore
+# "Connected devices via adb: 0. Cannot proceed".
+ADB_WAIT_TIMEOUT_S = 180
+ADB_POLL_INTERVAL_S = 2
+
+# Inizio "umano" anti-ban (mai sessioni notturne 03-07)
+EARLIEST_START = dt.time(7, 0)
 # Hard limit late-night: oltre questa ora del giorno successivo NON pianifichiamo
 # piu' sessioni, anche se il calcolo gap*N le richiederebbe. 03:00 e' il limite
 # massimo "umano" per uso reale di IG -- oltre, l'attivita' diventa sospetta.
@@ -143,6 +153,108 @@ def patch_working_hours(config_path: Path, windows: list[str]) -> None:
     config_path.write_text(text)
 
 
+def _read_device_from_config(config_path: Path) -> Optional[str]:
+    """Estrae il valore della chiave 'device:' dal config YAML (parsing
+    minimale: niente PyYAML dependency). Ritorna None se non trovato.
+    Necessario per sapere a quale serial fare wait-for-device."""
+    try:
+        text = config_path.read_text()
+    except Exception:
+        return None
+    m = re.search(r"^\s*device\s*:\s*([^\s#]+)", text, re.MULTILINE)
+    if not m:
+        return None
+    return m.group(1).strip().strip('"').strip("'")
+
+
+def _adb_device_state(serial: Optional[str]) -> str:
+    """Ritorna lo stato del device come riportato da `adb devices`:
+      - 'device'   : pronto
+      - 'offline'  : in boot / non risponde
+      - 'unauthorized' : USB-debug non autorizzato
+      - 'missing'  : non presente nell'output
+    Se serial e' None, prende il primo non-header.
+    """
+    try:
+        out = subprocess.run(
+            ["adb", "devices"], capture_output=True, text=True, timeout=10
+        ).stdout
+    except Exception:
+        return "missing"
+    for line in out.splitlines()[1:]:  # skip "List of devices attached"
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        s, state = parts[0], parts[1]
+        if serial is None or s == serial:
+            return state
+    return "missing"
+
+
+def _adb_boot_completed(serial: str) -> bool:
+    """Conferma che il device abbia finito il boot (sys.boot_completed=1).
+    Senza questo check rischiamo di lanciare il bot mentre l'home screen
+    non e' ancora pronta -> uiautomator2 fallisce."""
+    try:
+        out = subprocess.run(
+            ["adb", "-s", serial, "shell", "getprop", "sys.boot_completed"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+        return out == "1"
+    except Exception:
+        return False
+
+
+def wait_for_adb_device(serial: Optional[str], timeout_s: int = ADB_WAIT_TIMEOUT_S) -> bool:
+    """Polla `adb devices` finche' il serial non risulta 'device' E ha
+    completato il boot. Ritorna True se pronto, False su timeout / unauth.
+
+    Se serial e' None, accetta qualsiasi device pronto.
+    """
+    target = serial or "<any>"
+    deadline = time.monotonic() + timeout_s
+    last_state = ""
+    announced_wait = False
+    while time.monotonic() < deadline:
+        state = _adb_device_state(serial)
+        if state != last_state:
+            print(f"⏳ ADB device '{target}' state: {state}")
+            last_state = state
+        if state == "device":
+            # serial reale (anche se l'utente non l'ha specificato)
+            real_serial = serial or _first_ready_serial()
+            if real_serial and _adb_boot_completed(real_serial):
+                print(f"✅ ADB device '{real_serial}' pronto (boot completato).")
+                return True
+            if not announced_wait:
+                print("⏳ Device 'device' ma boot non ancora completato, aspetto...")
+                announced_wait = True
+        elif state == "unauthorized":
+            print("❌ Device 'unauthorized': autorizza il debug USB sul telefono e riprova.")
+            return False
+        time.sleep(ADB_POLL_INTERVAL_S)
+    print(f"❌ Timeout {timeout_s}s: ADB device '{target}' non e' pronto. "
+          f"Verifica con `adb devices` e avvia l'emulatore prima di rilanciare.")
+    return False
+
+
+def _first_ready_serial() -> Optional[str]:
+    try:
+        out = subprocess.run(
+            ["adb", "devices"], capture_output=True, text=True, timeout=10
+        ).stdout
+    except Exception:
+        return None
+    for line in out.splitlines()[1:]:
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[1] == "device":
+            return parts[0]
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=DEFAULT_CONFIG, help="Path al config.yml")
@@ -156,6 +268,17 @@ def main():
         default=30,
         help="Durata minima accettabile per una sessione quando si fa auto-shrink (default 30 min).",
     )
+    ap.add_argument(
+        "--skip-adb-check",
+        action="store_true",
+        help="Salta il wait-for-device pre-lancio (utile in CI o con device gia' garantito pronto).",
+    )
+    ap.add_argument(
+        "--adb-wait-timeout",
+        type=int,
+        default=ADB_WAIT_TIMEOUT_S,
+        help=f"Timeout (s) per l'attesa del device ADB pronto (default {ADB_WAIT_TIMEOUT_S}s).",
+    )
     args = ap.parse_args()
 
     config_path = Path(args.config)
@@ -165,16 +288,16 @@ def main():
 
     now = dt.datetime.now()
 
-    # Vincolo: prima delle 09:00 -> sposta a 09:00 di oggi (con jitter umano)
+    # Vincolo: prima di EARLIEST_START -> sposta a EARLIEST_START di oggi (con jitter umano)
     if now.time() < EARLIEST_START:
-        now = now.replace(hour=9, minute=random.randint(0, 30), second=0, microsecond=0)
+        now = now.replace(hour=EARLIEST_START.hour, minute=random.randint(0, 30), second=0, microsecond=0)
         print(f"ℹ️  Prima delle {EARLIEST_START.strftime('%H:%M')} -> prima sessione spostata alle {now.strftime('%H:%M')}")
 
-    # Vincolo: tra LATEST_NEXT_DAY (03:00) e EARLIEST_START (09:00) di OGGI ->
-    # non possiamo lanciare ne' subito ne' la stessa "notte"; sposta a oggi 09:00.
-    # (Se ti svegli alle 4 e lanci, NON vogliamo sessioni alle 4-9.)
+    # Vincolo: tra LATEST_NEXT_DAY (03:00) e EARLIEST_START (07:00) di OGGI ->
+    # non possiamo lanciare ne' subito ne' la stessa "notte"; sposta a oggi EARLIEST_START.
+    # (Se ti svegli alle 4 e lanci, NON vogliamo sessioni alle 4-7.)
     if LATEST_NEXT_DAY <= now.time() < EARLIEST_START:
-        now = now.replace(hour=9, minute=random.randint(0, 30), second=0, microsecond=0)
+        now = now.replace(hour=EARLIEST_START.hour, minute=random.randint(0, 30), second=0, microsecond=0)
         print(f"ℹ️  Sei nella fascia notte ({LATEST_NEXT_DAY.strftime('%H:%M')}-{EARLIEST_START.strftime('%H:%M')}). Prima sessione spostata alle {now.strftime('%H:%M')}.")
 
     # auto-shrink: tenta in ordine
@@ -266,6 +389,21 @@ def main():
     if args.dry_run:
         print("\n(--dry-run: bot non lanciato)")
         return
+
+    # Pre-flight ADB check: aspetta che il device specificato in config sia
+    # 'device' e abbia finito il boot. Risolve la race condition per cui il
+    # bot partiva mentre l'emulatore era ancora 'offline' e crashava con
+    # "Connected devices via adb: 0. Cannot proceed".
+    if not args.skip_adb_check:
+        device_serial = _read_device_from_config(config_path)
+        if device_serial:
+            print(f"🔌 Verifico che ADB device '{device_serial}' sia pronto...")
+        else:
+            print("🔌 Nessun 'device:' in config; verifico che almeno un device ADB sia pronto...")
+        if not wait_for_adb_device(device_serial, timeout_s=args.adb_wait_timeout):
+            print("❌ Abort: device ADB non pronto entro il timeout. "
+                  "Avvia l'emulatore (o collega il telefono con USB-debug autorizzato) e riprova.")
+            sys.exit(2)
 
     # Lancia il bot
     cmd = [sys.executable, "run.py", "--config", str(config_path)]

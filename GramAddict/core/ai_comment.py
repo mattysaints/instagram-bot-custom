@@ -26,9 +26,85 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# .env.local auto-loader: carichiamo le credenziali (GEMINI_API_KEY, ecc.)
+# direttamente all'import, cosi' chi importa questo modulo ha SEMPRE le env
+# vars disponibili a prescindere da come ha lanciato il bot:
+#   - run-bot.sh           -> gia' faceva 'source .env.local'
+#   - run-dynamic.py       -> gia' parsava .env.local prima di subprocess
+#   - python run.py ...    -> NON caricava nulla -> ai_comment falliva
+#   - IDE PyCharm run cfg  -> idem
+# Cerchiamo .env.local risalendo le directory fino alla root del repo
+# (max 5 livelli) per supportare cwd diverse. Non sovrascriviamo env vars
+# gia' settate (chi le ha gia' export-ate manualmente vince).
+# ---------------------------------------------------------------------------
+def _autoload_env_local() -> None:
+    """Carica .env.local in os.environ se trovato.
+
+    Idempotente: chi ha gia' exportato GEMINI_API_KEY a mano (es. da shell
+    rc) NON viene sovrascritto. Tutto in try/except: un .env.local malformato
+    non deve mai bloccare l'import del modulo.
+    """
+    try:
+        # parti dal file ai_comment.py e risali al massimo 5 livelli
+        here = Path(__file__).resolve().parent
+        for _ in range(6):
+            candidate = here / ".env.local"
+            if candidate.is_file():
+                _parse_and_apply_env(candidate)
+                return
+            if here.parent == here:  # root filesystem raggiunta
+                break
+            here = here.parent
+        # fallback: cwd corrente (utile se l'utente lo mette altrove)
+        cwd_candidate = Path.cwd() / ".env.local"
+        if cwd_candidate.is_file():
+            _parse_and_apply_env(cwd_candidate)
+    except Exception as e:
+        # NON loggare lo stack: vogliamo un import 100% silenzioso
+        logger.debug(f"[ai-comment] autoload .env.local skipped: {e}")
+
+
+def _parse_and_apply_env(path: Path) -> None:
+    """Parser minimale (no python-dotenv dependency): ignora commenti,
+    supporta `export KEY=val`, `KEY=val`, e value virgolettati."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception:
+        return
+    loaded_keys = []
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):]
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if not k:
+            continue
+        # NON sovrascrivere env vars gia' settate (precedenza all'utente)
+        if os.environ.get(k):
+            continue
+        os.environ[k] = v
+        loaded_keys.append(k)
+    if loaded_keys:
+        logger.debug(
+            f"[ai-comment] auto-loaded {len(loaded_keys)} key(s) from {path.name}: "
+            f"{', '.join(loaded_keys)}"
+        )
+
+
+# Esegui all'import (una volta sola).
+_autoload_env_local()
 
 # Endpoint REST Gemini (v1beta, generateContent). Lo costruiamo a runtime
 # dal nome del modello cosi' l'utente puo' switchare modello senza toccare

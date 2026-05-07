@@ -936,10 +936,21 @@ def iterate_over_followers(
                                 extra={"color": f"{Fore.CYAN}"},
                             )
             else:
-                logger.info(
-                    f"[resume] Source @{target} is in cooldown after exhaustion. Skipping resume.",
-                    extra={"color": f"{Fore.CYAN}"},
-                )
+                # should_resume() ha ritornato False. Due possibili cause:
+                #   1) sorgente vergine (no anchor, no exhausted_at)
+                #   2) sorgente esaurita ed entro il cooldown
+                # Distinguiamo i due casi nel log per non confondere l'utente.
+                _rec = explored._get_record(current_job, target) if hasattr(explored, "_get_record") else {}
+                if _rec.get("exhausted_at"):
+                    logger.info(
+                        f"[resume] Source @{target} is in cooldown after exhaustion. Skipping resume.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                else:
+                    logger.info(
+                        f"[resume] Source @{target} has no anchor yet (virgin or reset). Falling back to scroll-skip-start.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
         except Exception as e:
             logger.warning(f"[resume] Error while seeking anchor: {e}")
 
