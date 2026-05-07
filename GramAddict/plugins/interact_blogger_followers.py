@@ -71,7 +71,7 @@ class InteractBloggerFollowers_Following(Plugin):
             sources = [s for s in self.args.blogger_following if s.strip()]
 
         # Start
-        for source in sample_sources(sources, self.args.truncate_sources):
+        for source in sample_sources(sources, self.args.truncate_sources, storage=storage, job_name=plugin):
             (
                 active_limits_reached,
                 _,
@@ -178,7 +178,12 @@ class InteractBloggerFollowers_Following(Plugin):
         skipped_fling_limit = get_value(self.args.fling_when_skipped, None, 0)
 
         posts_end_detector = ScrollEndDetector(
-            repeats_to_end=2,
+            # [bugfix] alzato da 2 a 5: con repeats_to_end=2 bastano 2 schermate
+            # consecutive di "stessi utenti" per dichiarare "end of list", che e'
+            # un falso positivo nelle "zone calde" di blogger >50k follower.
+            # Con 5 ripetizioni serve uno stallo molto piu' chiaro -> meno
+            # sorgenti che vanno in falso-exhausted.
+            repeats_to_end=5,
             skipped_list_limit=skipped_list_limit,
             skipped_fling_limit=skipped_fling_limit,
         )
@@ -193,4 +198,5 @@ class InteractBloggerFollowers_Following(Plugin):
             interaction,
             is_follow_limit_reached,
             posts_end_detector,
+            profile_filter=profile_filter,
         )

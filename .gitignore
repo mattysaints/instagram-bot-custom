@@ -20,3 +20,7 @@ Pipfile.lock
 *.log*
 *.ini
 *.db
+apk/
+.env
+.env.*
+!.env.example

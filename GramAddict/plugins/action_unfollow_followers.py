@@ -5,6 +5,7 @@ from colorama import Fore
 
 from GramAddict.core.decorators import run_safely
 from GramAddict.core.device_facade import DeviceFacade, Timeout
+from GramAddict.core.action_throttler import ActionType, get_throttler
 from GramAddict.core.plugin_loader import Plugin
 from GramAddict.core.resources import ClassName
 from GramAddict.core.resources import ResourceID as resources
@@ -489,6 +490,7 @@ class ActionUnfollowFollowers(Plugin):
                 logger.error("Cannot find Following button.")
                 save_crash(device)
             logger.debug("Unfollow button click.")
+            get_throttler().wait_if_needed(ActionType.UNFOLLOW)
             unfollow_button.click()
             logger.info(f"Unfollow @{username}.", extra={"color": f"{Fore.YELLOW}"})
 

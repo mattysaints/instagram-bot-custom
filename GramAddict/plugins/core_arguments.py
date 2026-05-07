@@ -283,6 +283,62 @@ class CoreArguments(Plugin):
                 "metavar": "1-2",
                 "default": "1",
             },
+            # ---- AI comments (Gemini) -----------------------------------------------
+            # Quando abilitato, prima di pescare un commento dal file txt il bot
+            # prova a generarne uno via Gemini API basandosi sulla caption del
+            # post. Su qualunque errore (no key, rete, rate-limit, safety block)
+            # cade automaticamente sul commento del txt: zero rischio di crash.
+            {
+                "arg": "--ai-comments-enabled",
+                "help": "enable AI-generated comments via Google Gemini (fallback to comments_list.txt on any error)",
+                "action": "store_true",
+            },
+            {
+                "arg": "--ai-comments-api-key",
+                "nargs": None,
+                "help": "Google Gemini API key. If unset, reads env GEMINI_API_KEY / GOOGLE_AI_API_KEY",
+                "metavar": "AIzaSy...",
+                "default": None,
+            },
+            {
+                "arg": "--ai-comments-model",
+                "nargs": None,
+                "help": "Gemini model id (default: gemini-2.5-flash-lite). Used as primary; fallback cascade kicks in automatically if it fails.",
+                "metavar": "gemini-2.5-flash-lite",
+                "default": "gemini-2.5-flash-lite",
+            },
+            {
+                "arg": "--ai-comments-models",
+                "nargs": None,
+                "help": (
+                    "OPTIONAL explicit fallback chain: comma-separated list of Gemini "
+                    "models to try in order. If set, OVERRIDES the default cascade. "
+                    "Example: 'gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash-8b'. "
+                    "Leave unset to use the smart default cascade."
+                ),
+                "metavar": "model1,model2,model3",
+                "default": None,
+            },
+            {
+                "arg": "--ai-comments-prompt-hint",
+                "nargs": None,
+                "help": "free-text hint to bias tone (e.g. 'fitness italian, supportive but not cheesy')",
+                "metavar": "...",
+                "default": None,
+            },
+            {
+                "arg": "--ai-comments-language",
+                "nargs": None,
+                "help": "output language for AI comments (default: Italian)",
+                "metavar": "Italian",
+                "default": "Italian",
+            },
+            {
+                "arg": "--ai-comments-fallback-to-file",
+                "help": "if AI generation fails, fall back to comments_list.txt (default: on). Set to false to skip the comment entirely on AI failure.",
+                "action": "store_true",
+            },
+            # -------------------------------------------------------------------------
             {
                 "arg": "--end-if-likes-limit-reached",
                 "help": "end session if likes limit is reached",
@@ -314,6 +370,129 @@ class CoreArguments(Plugin):
                 "help": "truncate the source list to a finite number of items",
                 "metavar": "2-4",
                 "default": "0",
+            },
+            {
+                "arg": "--scroll-skip-start",
+                "nargs": None,
+                "help": "skip a random number of items at the top of each source list (followers/likers/posts) so the bot doesn't always start from the same users. It can be a number (e.g. 20) or a range (e.g. 10-30).",
+                "metavar": "10-30",
+                "default": "0",
+            },
+            {
+                "arg": "--resume-from-last-position",
+                "help": "remember the last analyzed user (anchor) per source and, on the next run, scroll down until the anchor is found before starting to interact. Avoids re-processing the same users every session.",
+                "action": "store_true",
+            },
+            {
+                "arg": "--resume-anchor-search-limit",
+                "nargs": None,
+                "help": "max number of scrolls used to look for the saved anchor before falling back to --scroll-skip-start.",
+                "metavar": "30-60",
+                "default": "50",
+            },
+            {
+                "arg": "--resume-cooldown-days",
+                "nargs": None,
+                "help": "days to wait before re-exploring a source list once it has been fully exhausted (end of list reached).",
+                "metavar": "7-30",
+                "default": "14",
+            },
+            {
+                "arg": "--hot-zone-screens",
+                "nargs": None,
+                "help": "[hot-zone] consecutive screens with 0 fresh users that trigger a deep-jump (fling) to escape an already-explored segment. 0 to disable.",
+                "metavar": "3",
+                "default": "3",
+            },
+            {
+                "arg": "--hot-zone-jump-flings",
+                "nargs": None,
+                "help": "[hot-zone] number of consecutive flings performed to jump out of a hot zone (~30-50 users skipped per fling).",
+                "metavar": "4",
+                "default": "4",
+            },
+            {
+                "arg": "--hot-zone-max-jumps",
+                "nargs": None,
+                "help": "[hot-zone] max number of jump attempts on the same source before abandoning it for the next one.",
+                "metavar": "2",
+                "default": "2",
+            },
+            {
+                "arg": "--daily-follows-cap",
+                "nargs": None,
+                "help": "PERSISTENT daily cap on total follows across ALL sessions of the day (survives bot restarts). 0 to disable. When the cap is reached, sessions still run but with follow_limit clipped to 0.",
+                "metavar": "70",
+                "default": "0",
+            },
+            {
+                "arg": "--daily-likes-cap",
+                "nargs": None,
+                "help": "PERSISTENT daily cap on total likes across ALL sessions of the day. 0 to disable.",
+                "metavar": "150",
+                "default": "0",
+            },
+            {
+                "arg": "--daily-unfollows-cap",
+                "nargs": None,
+                "help": "PERSISTENT daily cap on total unfollows across ALL sessions of the day. 0 to disable.",
+                "metavar": "70",
+                "default": "0",
+            },
+            {
+                "arg": "--daily-comments-cap",
+                "nargs": None,
+                "help": "PERSISTENT daily cap on total comments across ALL sessions of the day. 0 to disable.",
+                "metavar": "10",
+                "default": "0",
+            },
+            {
+                "arg": "--daily-pm-cap",
+                "nargs": None,
+                "help": "PERSISTENT daily cap on total private messages across ALL sessions of the day. 0 to disable.",
+                "metavar": "5",
+                "default": "0",
+            },
+            {
+                "arg": "--action-throttle-enabled",
+                "help": "[throttle] enforce a minimum interval between consecutive actions of the same type to avoid burst patterns. true by default.",
+                "action": "store_true",
+                "default": True,
+            },
+            {
+                "arg": "--action-throttle-follow-min",
+                "nargs": None,
+                "help": "[throttle] minimum seconds between two consecutive follow actions. range supported (e.g. 25-60). 0 to disable.",
+                "metavar": "25-60",
+                "default": "25-60",
+            },
+            {
+                "arg": "--action-throttle-like-min",
+                "nargs": None,
+                "help": "[throttle] minimum seconds between two consecutive like actions. range supported (e.g. 8-20). 0 to disable.",
+                "metavar": "8-20",
+                "default": "8-20",
+            },
+            {
+                "arg": "--action-throttle-unfollow-min",
+                "nargs": None,
+                "help": "[throttle] minimum seconds between two consecutive unfollow actions.",
+                "metavar": "20-45",
+                "default": "20-45",
+            },
+            {
+                "arg": "--action-throttle-comment-min",
+                "nargs": None,
+                "help": "[throttle] minimum seconds between two consecutive comments.",
+                "metavar": "60-180",
+                "default": "60-180",
+            },
+            {
+                "arg": "--action-throttle-pm-min",
+                "nargs": None,
+                "help": "[throttle] minimum seconds between two consecutive private messages.",
+                "metavar": "120-300",
+                "default": "120-300",
             },
             {
                 "arg": "--shuffle-jobs",

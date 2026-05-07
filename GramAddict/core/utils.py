@@ -627,7 +627,15 @@ def append_to_file(filename: str, username: str) -> None:
         logger.error(f"Failed to append {username} to: {filename}. Exception: {e}")
 
 
-def sample_sources(sources, n_sources):
+def sample_sources(sources, n_sources, storage=None, job_name=None):
+    """Pick a random subset of ``sources``.
+
+    If ``storage`` and ``job_name`` are passed and SourceStats has signal for
+    the listed sources (i.e. enough follows recorded), the sampling is biased
+    by per-source follow-back rate so high-quality sources are picked more
+    often than dead ones. Falls back to uniform sampling when no signal is
+    available, preserving the original behavior.
+    """
     from random import sample
 
     sources_limit_input = n_sources.split("-")
@@ -643,7 +651,38 @@ def sample_sources(sources, n_sources):
         truncaded = sources
         shuffle(truncaded)
     else:
-        truncaded = sample(sources, sources_limit)
+        # Try weighted sampling driven by SourceStats; fall back to uniform.
+        truncaded = None
+        stats = getattr(storage, "source_stats", None) if storage is not None else None
+        if stats is not None and job_name:
+            try:
+                # Build the diagnostics string before sampling so the user can
+                # see why a given source is favored or penalized.
+                weights_dbg = []
+                for s in sources:
+                    w = stats.weight(job_name, s)
+                    rate = stats.fbr(job_name, s)
+                    done = stats.follows_done(job_name, s)
+                    weights_dbg.append(
+                        f"{s} w={w:.2f} fbr={rate if rate is not None else 'n/a'} done={done}"
+                    )
+                # Use weighted sample only if at least one source has non-neutral
+                # weight; otherwise log & fall back to plain sample for less
+                # noise in the logs.
+                non_neutral = any(
+                    abs(stats.weight(job_name, s) - 1.0) > 1e-3 for s in sources
+                )
+                if non_neutral:
+                    truncaded = stats.weighted_sample(job_name, sources, sources_limit)
+                    logger.info(
+                        f"[source-stats] Weighted sampling for {job_name}: "
+                        + " | ".join(weights_dbg)
+                    )
+            except Exception as e:
+                logger.debug(f"[source-stats] weighted_sample failed: {e}")
+                truncaded = None
+        if truncaded is None:
+            truncaded = sample(sources, sources_limit)
         logger.info(
             f"Source list truncated at {len(truncaded)} {'item' if len(truncaded)<=1 else 'items'}."
         )

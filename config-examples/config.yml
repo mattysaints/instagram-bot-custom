@@ -8,7 +8,7 @@
 # General Configuration
 ##############################################################################
 
-username: myusername # you have to put your IG name here!
+username: marramattia_fmgpro # you have to put your IG name here!
 # device: put_your_device_id_there # 'adb devices' in the console to know it.  It's needed only if you have more than 1 device connected
 app-id: com.instagram.android
 use-cloned-app: false
@@ -28,6 +28,22 @@ total-crashes-limit: 5
 count-app-crashes: false
 shuffle-jobs: true
 truncate-sources: 2-5
+# scroll-skip-start: 10-30 # skip a random N of items at the top of each source list (followers/likers/posts) so the bot doesn't always analyze the same users
+# resume-from-last-position: true # remember the last user analyzed per source and on the next run scroll until the anchor is found, then resume
+# resume-anchor-search-limit: 50 # max scrolls used to look for the saved anchor before falling back to scroll-skip-start
+# resume-cooldown-days: 14 # wait N days before re-exploring a source list once it has been fully exhausted
+# hot-zone-screens: 3 # [hot-zone] consecutive screens with 0 fresh users that trigger a deep-jump (fling) to escape an already-explored segment. 0 disables.
+# hot-zone-jump-flings: 4 # [hot-zone] number of consecutive flings per jump (~30-50 users skipped per fling)
+# hot-zone-max-jumps: 2 # [hot-zone] max jump attempts on the same source before abandoning it for the next one
+
+# Action burst guard: enforces a hard floor between consecutive actions of the
+# same kind to avoid burst patterns that look automated. Recommended ON.
+# action-throttle-enabled: true
+# action-throttle-follow-min: 25-60   # min seconds between two consecutive follows
+# action-throttle-like-min: 8-20      # min seconds between two consecutive likes
+# action-throttle-unfollow-min: 20-45
+# action-throttle-comment-min: 60-180
+# action-throttle-pm-min: 120-300
 
 ##############################################################################
 # Actions
@@ -117,6 +133,36 @@ total-interactions-limit: 280-300
 total-comments-limit: 3-5
 total-pm-limit: 3-5
 total-scraped-limit: 100-150
+
+##############################################################################
+# Daily Budget (PERSISTENT across bot restarts)
+# Per-session "total-*-limit" above are reset every time the bot starts.
+# These caps live in accounts/<user>/daily_budget.json and clip session
+# limits to what's left of the daily budget. Set to 0 to disable a cap.
+##############################################################################
+
+# daily-follows-cap: 70
+# daily-likes-cap: 150
+# daily-unfollows-cap: 70
+# daily-comments-cap: 0
+# daily-pm-cap: 0
+
+##############################################################################
+# AI Comments (Google Gemini) - OFF by default.
+# When enabled, the bot tries to generate a context-aware comment with
+# Gemini (using the post caption extracted from the IG UI). On ANY error
+# (no key, network, rate-limit, safety block, banned chars in output) it
+# falls back to comments_list.txt -> never crashes.
+# Get a free API key at https://aistudio.google.com/app/apikey or set the
+# env var GEMINI_API_KEY (preferred: avoids hard-coding secrets).
+##############################################################################
+
+# ai-comments-enabled: true
+# ai-comments-api-key: "AIzaSy..."          # optional: fallback to env GEMINI_API_KEY / GOOGLE_AI_API_KEY
+# ai-comments-model: gemini-2.5-flash-lite  # cheap & fast; bump to gemini-2.5-flash for higher quality
+# ai-comments-language: English             # output language for generated comments
+# ai-comments-prompt-hint: "supportive but not cheesy, casual register"
+# ai-comments-fallback-to-file: true        # on AI failure, fall back to comments_list.txt
 
 ##############################################################################
 # Ending Session Conditions

@@ -69,7 +69,7 @@ class InteractPlacePosts(Plugin):
             )
         ]
 
-        for source in sample_sources(sources, self.args.truncate_sources):
+        for source in sample_sources(sources, self.args.truncate_sources, storage=storage, job_name=plugin):
             (
                 active_limits_reached,
                 _,
