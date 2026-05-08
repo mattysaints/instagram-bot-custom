@@ -338,6 +338,72 @@ class CoreArguments(Plugin):
                 "help": "if AI generation fails, fall back to comments_list.txt (default: on). Set to false to skip the comment entirely on AI failure.",
                 "action": "store_true",
             },
+            # ---- AI direct messages (Gemini) ----------------------------------------
+            # Personalizza i DM del job dm-followback usando bio + nome + caption
+            # ultimo post del destinatario. Fallback su pm_list.txt in caso di
+            # errore (rete, rate-limit, safety block, output non conforme).
+            # Se ai-dm-enabled non e' settato, eredita da ai-comments-enabled.
+            {
+                "arg": "--ai-dm-enabled",
+                "help": "enable AI-generated personalized DMs via Google Gemini for the dm-followback job (fallback to pm_list.txt on any error). If unset, inherits ai-comments-enabled.",
+                "action": "store_true",
+            },
+            {
+                "arg": "--ai-dm-api-key",
+                "nargs": None,
+                "help": "Google Gemini API key for DMs. If unset, falls back to ai-comments-api-key, then env GEMINI_API_KEY / GOOGLE_AI_API_KEY.",
+                "metavar": "AIzaSy...",
+                "default": None,
+            },
+            {
+                "arg": "--ai-dm-model",
+                "nargs": None,
+                "help": "Gemini model id for DMs (default: inherits ai-comments-model). Used as primary; cascade kicks in on failure.",
+                "metavar": "gemini-2.5-flash-lite",
+                "default": None,
+            },
+            {
+                "arg": "--ai-dm-models",
+                "nargs": None,
+                "help": "OPTIONAL explicit fallback chain for DMs (comma-separated). Overrides default cascade.",
+                "metavar": "model1,model2,model3",
+                "default": None,
+            },
+            {
+                "arg": "--ai-dm-prompt-hint",
+                "nargs": None,
+                "help": "free-text hint about WHO writes the DM (e.g. 'personal trainer / coach in Fiorano Modenese, gym + online'). Critical for relevant personalization.",
+                "metavar": "...",
+                "default": None,
+            },
+            {
+                "arg": "--ai-dm-language",
+                "nargs": None,
+                "help": "output language for AI DMs (default: inherits ai-comments-language, then 'Italian').",
+                "metavar": "Italian",
+                "default": None,
+            },
+            {
+                "arg": "--ai-dm-allow-emoji",
+                "nargs": None,
+                "help": "allow up to 1-2 light emojis in AI DMs (default: true). Set to 'false' to forbid emojis entirely.",
+                "metavar": "true|false",
+                "default": "true",
+            },
+            {
+                "arg": "--ai-dm-fetch-bio",
+                "nargs": None,
+                "help": "extract the recipient bio from the open profile to feed the AI prompt (default: true). Set 'false' to skip (faster, less personalized).",
+                "metavar": "true|false",
+                "default": "true",
+            },
+            {
+                "arg": "--ai-dm-fallback-to-file",
+                "nargs": None,
+                "help": "if AI generation fails, fall back to pm_list.txt (default: true). Set 'false' to skip the DM entirely on AI failure.",
+                "metavar": "true|false",
+                "default": "true",
+            },
             # -------------------------------------------------------------------------
             {
                 "arg": "--end-if-likes-limit-reached",

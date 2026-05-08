@@ -22,7 +22,7 @@
 set -e
 cd "$(dirname "$0")"
 
-ACCOUNT="marramattia_fmgpro"
+ACCOUNT="simonebestagno"
 MODE="${1:-auto}"
 
 if [ "$MODE" = "auto" ]; then
