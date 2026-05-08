@@ -33,7 +33,7 @@ from typing import Optional
 
 import GramAddict  # noqa: F401  # bootstrap runtime env for IDE launches
 
-DEFAULT_CONFIG = "accounts/marramattia_fmgpro/config.yml"
+DEFAULT_CONFIG = "accounts/simonebestagno/config.yml"
 
 # Quanto aspettiamo (al massimo) che il device ADB indicato in config diventi
 # 'device' e abbia completato il boot. Se l'emulatore parte freddo serve

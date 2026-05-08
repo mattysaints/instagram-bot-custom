@@ -817,7 +817,16 @@ def _send_PM(
     my_username: str,
     swipe_amount: int,
     private: bool = False,
+    message_override: Optional[str] = None,
 ) -> bool:
+    """Apre la chat e invia un DM.
+
+    Args:
+        message_override: se passato (non None / non vuoto), usa questo testo
+            invece di estrarlo random da pm_list.txt. Pensato per i caller
+            che generano il messaggio via AI (es. dm_followback con ai_dm).
+            Su None/empty si torna al comportamento storico (random da file).
+    """
     universal_actions = UniversalActions(device)
     if private:
         options = device.find(
@@ -859,7 +868,10 @@ def _send_PM(
     )
 
     if message_box.exists():
-        message = load_random_message(my_username)
+        if message_override and str(message_override).strip():
+            message = str(message_override)
+        else:
+            message = load_random_message(my_username)
         if message is None:
             logger.warning(
                 "If you don't want to comment set 'pm-percentage: 0' in your config.yml."
