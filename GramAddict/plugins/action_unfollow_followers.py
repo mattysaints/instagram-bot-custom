@@ -1,5 +1,8 @@
 import logging
+import random
+from datetime import datetime
 from enum import Enum, unique
+from typing import Optional
 
 from colorama import Fore
 
@@ -14,6 +17,7 @@ from GramAddict.core.storage import FollowingStatus
 from GramAddict.core.utils import (
     get_value,
     inspect_current_view,
+    open_instagram_with_url,
     random_sleep,
     save_crash,
 )
@@ -95,6 +99,18 @@ class ActionUnfollowFollowers(Plugin):
                 "help": "unfollow users followed by the bot after x amount of days",
                 "metavar": "3",
                 "default": "0",
+            },
+            {
+                "arg": "--unfollow-via-search",
+                "nargs": None,
+                "help": (
+                    "instead of scrolling the Following list, look up each "
+                    "candidate (taken from interacted_users.json) one by one "
+                    "via the in-list search bar and unfollow them. Way faster "
+                    "on large following lists. Accepts true/false. Default: true."
+                ),
+                "metavar": "true",
+                "default": "true",
             },
         ]
 
@@ -194,6 +210,36 @@ class ActionUnfollowFollowers(Plugin):
             skipped_list_limit=skipped_list_limit,
             skipped_fling_limit=skipped_fling_limit,
         )
+
+        # Step 1 (preferred): drive unfollow by opening each candidate's
+        # profile via Instagram deep-link (https://www.instagram.com/<user>/)
+        # and unfollowing from the profile screen. Only meaningful when we
+        # restrict unfollows to users previously followed by the bot
+        # (otherwise we have no candidate list to iterate).
+        use_search = self._is_truthy(getattr(self.args, "unfollow_via_search", "true"))
+        if use_search and unfollow_restriction in (
+            UnfollowRestriction.FOLLOWED_BY_SCRIPT,
+            UnfollowRestriction.FOLLOWED_BY_SCRIPT_NON_FOLLOWERS,
+        ):
+            done = self.unfollow_via_search(
+                device,
+                count,
+                on_unfollow,
+                storage,
+                unfollow_restriction,
+                my_username,
+                job_name,
+            )
+            if done >= count:
+                return
+            # Some budget left -> fall through to scroll-based flow as backup
+            logger.info(
+                f"Deep-link unfollow done ({done}/{count}). "
+                "Falling back to scroll-based iteration for the remainder.",
+                extra={"color": f"{Fore.CYAN}"},
+            )
+            count -= done
+
         ProfileView(device).navigateToFollowing()
         self.iterate_over_followings(
             device,
@@ -205,6 +251,349 @@ class ActionUnfollowFollowers(Plugin):
             posts_end_detector,
             job_name,
         )
+
+    @staticmethod
+    def _is_truthy(val) -> bool:
+        if isinstance(val, bool):
+            return val
+        if val is None:
+            return False
+        return str(val).strip().lower() in ("1", "true", "yes", "y", "on")
+
+    def _build_unfollow_candidates(
+        self, storage, unfollow_restriction, max_candidates
+    ):
+        """
+        Return a shuffled list of usernames eligible for unfollow, drawn
+        from `storage.interacted_users`. Filters by following_status,
+        whitelist and unfollow-delay. Does NOT pre-check follow-back state
+        (that requires an in-app check) - we let the per-user flow do it.
+        """
+        delay_days = get_value(self.args.unfollow_delay, None, 0)
+        eligible_statuses = {
+            FollowingStatus.FOLLOWED,
+            FollowingStatus.REQUESTED,
+            # Re-try users we already attempted to unfollow in case of soft-ban
+            FollowingStatus.UNFOLLOWED,
+        }
+        candidates = []
+        for username, _ in storage.interacted_users.items():
+            if storage.is_user_in_whitelist(username):
+                continue
+            status = storage.get_following_status(username)
+            if status == FollowingStatus.NOT_IN_LIST:
+                continue
+            if status not in eligible_statuses:
+                continue
+            _, last_interaction = storage.check_user_was_interacted(username)
+            if not storage.can_be_unfollowed(last_interaction, delay_days):
+                continue
+            candidates.append((username, last_interaction or datetime.min))
+        # Oldest interactions first - those are the safer ones to drop.
+        candidates.sort(key=lambda x: x[1])
+        # But shuffle the head a bit so we don't always hit the very same users
+        # in the same order across sessions: shuffle the first 3*max window.
+        window = candidates[: max_candidates * 3]
+        random.shuffle(window)
+        rest = candidates[max_candidates * 3 :]
+        ordered = [u for u, _ in window + rest]
+        return ordered
+
+    def unfollow_via_search(
+        self,
+        device,
+        count,
+        on_unfollow,
+        storage,
+        unfollow_restriction,
+        my_username,
+        job_name,
+    ) -> int:
+        """
+        For each candidate username taken from interacted_users.json, open
+        their profile directly via Instagram deep-link
+        (https://www.instagram.com/<user>/) and perform the unfollow flow.
+        This sidesteps the in-list search bar (which is unreliable on
+        emulators) and avoids any scroll on the Following list.
+
+        Returns how many unfollows were performed.
+        """
+        candidates = self._build_unfollow_candidates(
+            storage, unfollow_restriction, count
+        )
+        if not candidates:
+            logger.info(
+                "No candidates available in interacted_users.json for search-based unfollow.",
+                extra={"color": f"{Fore.YELLOW}"},
+            )
+            return 0
+        logger.info(
+            f"Deep-link unfollow: {len(candidates)} candidates available, target {count}.",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+
+        unfollowed = 0
+        skipped_already_gone = 0
+        skipped_following_back = 0
+        skipped_other = 0
+        for username in candidates:
+            if unfollowed >= count:
+                break
+            if self.session_state.check_limit(
+                limit_type=self.session_state.Limit.UNFOLLOWS, output=True
+            ):
+                logger.info("Total unfollows limit reached. Finish.")
+                break
+
+            outcome = self._open_and_unfollow_one(
+                device,
+                username,
+                storage,
+                unfollow_restriction,
+                my_username,
+                job_name,
+            )
+            if outcome == "unfollowed":
+                storage.add_interacted_user(
+                    username,
+                    self.session_state.id,
+                    unfollowed=True,
+                    job_name=job_name,
+                    target=None,
+                )
+                on_unfollow()
+                unfollowed += 1
+            elif outcome == "not_in_list":
+                skipped_already_gone += 1
+            elif outcome == "follows_back":
+                skipped_following_back += 1
+            else:
+                skipped_other += 1
+        logger.info(
+            f"Deep-link unfollow finished: {unfollowed} unfollowed, "
+            f"{skipped_already_gone} already gone from your following list, "
+            f"{skipped_following_back} skipped because they follow you back, "
+            f"{skipped_other} other skips. Target was {count}.",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+        return unfollowed
+
+    def _open_profile_via_deeplink(self, device, username: str) -> bool:
+        """
+        Open the target user's profile by issuing an Instagram deep-link via
+        `am start`. Way more reliable than typing on the in-list search bar
+        on emulators. Returns True if the profile screen rendered.
+        """
+        url = f"https://www.instagram.com/{username}/"
+        if not open_instagram_with_url(url):
+            logger.warning(f"Deep-link to @{username} failed.")
+            return False
+        # Wait for the profile to render. We probe a few stable widgets that
+        # are always present on a profile page (own or someone else's).
+        for _ in range(3):
+            random_sleep(1, 2, modulable=False)
+            header = device.find(
+                resourceIdMatches=(
+                    f"{self.ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER}"
+                    f"|{self.ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER}"
+                )
+            )
+            if header.exists(Timeout.MEDIUM):
+                return True
+        logger.warning(
+            f"Profile of @{username} did not render after deep-link "
+            "(possibly account deleted, banned, or you got blocked)."
+        )
+        return False
+
+    def _profile_state(self, device):
+        """
+        Inspect the currently-open profile and return one of:
+            "following"    -> there's a "Following" / "Requested" button visible
+                              (you are following / have a pending request)
+            "not_following"-> there's a "Follow" / "Follow back" button (you
+                              are NOT following them)
+            "unknown"      -> couldn't determine (UI not loaded, weird state)
+        """
+        following_btn = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            clickable=True,
+            textMatches=FOLLOWING_REGEX,
+        )
+        if following_btn.exists(Timeout.SHORT):
+            return "following"
+        follow_btn = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            clickable=True,
+            textMatches="^Follow( back)?$",
+        )
+        if follow_btn.exists(Timeout.SHORT):
+            return "not_following"
+        return "unknown"
+
+    def _profile_follows_me(self, device) -> Optional[bool]:
+        """
+        Detect the "Follows you" badge that Instagram shows next to the
+        username on profiles of accounts that follow you back.
+
+        Returns:
+            True  -> "Follows you" badge present
+            False -> badge absent (target does NOT follow you)
+            None  -> could not determine
+        """
+        # The badge is a small TextView near the username header. The exact
+        # resource id is not exposed by IG API, so we rely on its English
+        # text. Multiple variants exist across IG versions.
+        for label in ("Follows you", "Follows You", "Follows you "):
+            badge = device.find(
+                className=ClassName.TEXT_VIEW,
+                text=label,
+            )
+            if badge.exists(Timeout.SHORT):
+                return True
+        # If the profile header rendered but no badge is present, the user
+        # does not follow us. We use the followers container as a sentinel
+        # to make sure we are actually on a profile.
+        sentinel = device.find(
+            resourceIdMatches=self.ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER
+        )
+        if sentinel.exists(Timeout.SHORT):
+            return False
+        return None
+
+    def _open_and_unfollow_one(
+        self,
+        device,
+        username,
+        storage,
+        unfollow_restriction,
+        my_username,
+        job_name,
+    ) -> str:
+        """
+        Open the candidate's profile via deep-link, decide whether they are
+        eligible to be unfollowed (depending on `unfollow_restriction`), and
+        do it.
+
+        Returns one of:
+            "unfollowed"     -> we actually unfollowed them (counts)
+            "not_in_list"    -> we are not following them anymore on IG
+                                (already unfollowed manually / blocked) -
+                                state reconciled, no count
+            "follows_back"   -> they follow us back; for non-followers job
+                                we skip - no count
+            "error"          -> UI failure / could not decide - no count
+        """
+        logger.info(
+            f"🔎 Opening @{username} profile (deep-link)...",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+        if not self._open_profile_via_deeplink(device, username):
+            return "error"
+
+        state = self._profile_state(device)
+        if state == "unknown":
+            logger.warning(
+                f"Could not detect Following/Follow button on @{username} "
+                "profile. Skipping (no state changes)."
+            )
+            return "error"
+        if state == "not_following":
+            logger.info(
+                f"@{username}: you are not following them anymore on Instagram. "
+                f"Reconciling local state.",
+                extra={"color": f"{Fore.YELLOW}"},
+            )
+            storage.add_interacted_user(
+                username,
+                self.session_state.id,
+                unfollowed=True,
+                job_name=job_name,
+                target=None,
+            )
+            return "not_in_list"
+
+        # state == "following" -> proceed
+        if unfollow_restriction == UnfollowRestriction.FOLLOWED_BY_SCRIPT_NON_FOLLOWERS:
+            follows_me = self._profile_follows_me(device)
+            if follows_me is True:
+                logger.info(
+                    f"Skip @{username}: they follow you back ('Follows you' badge present).",
+                    extra={"color": f"{Fore.YELLOW}"},
+                )
+                return "follows_back"
+            if follows_me is None:
+                logger.info(
+                    f"Skip @{username}: cannot determine follow-back state."
+                )
+                return "error"
+            # follows_me is False -> safe to unfollow
+
+        ok = self._do_unfollow_on_open_profile(device, username)
+        if ok:
+            logger.info(
+                f"✅ Unfollowed @{username}.",
+                extra={"color": f"{Fore.GREEN}"},
+            )
+            return "unfollowed"
+        return "error"
+
+    def _do_unfollow_on_open_profile(self, device: DeviceFacade, username: str) -> bool:
+        """
+        Press the Following button on the currently-open profile, confirm.
+        Does NOT navigate back: the deep-link flow opens a new profile each
+        time, so we leave the screen as-is.
+        Returns True on success.
+        """
+        unfollow_button = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            clickable=True,
+            textMatches=FOLLOWING_REGEX,
+        )
+        attempts = 2
+        for _ in range(attempts):
+            if unfollow_button.exists():
+                break
+            scrollable = device.find(classNameMatches=ClassName.VIEW_PAGER)
+            if scrollable.exists():
+                scrollable.scroll(Direction.UP)
+            unfollow_button = device.find(
+                classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+                clickable=True,
+                textMatches=FOLLOWING_REGEX,
+            )
+        if not unfollow_button.exists():
+            logger.error("Cannot find Following button on profile.")
+            save_crash(device)
+            return False
+        get_throttler().wait_if_needed(ActionType.UNFOLLOW)
+        unfollow_button.click()
+        logger.info(f"Unfollow @{username}.", extra={"color": f"{Fore.YELLOW}"})
+
+        confirm_unfollow_button = None
+        for _ in range(2):
+            confirm_unfollow_button = device.find(
+                resourceId=self.ResourceID.FOLLOW_SHEET_UNFOLLOW_ROW
+            )
+            if confirm_unfollow_button.exists(Timeout.SHORT):
+                break
+        if not confirm_unfollow_button or not confirm_unfollow_button.exists():
+            logger.error("Cannot confirm unfollow.")
+            save_crash(device)
+            return False
+        confirm_unfollow_button.click()
+        random_sleep(0, 1, modulable=False)
+
+        # Private-account extra confirm
+        private_unfollow_button = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            textMatches=UNFOLLOW_REGEX,
+        )
+        if private_unfollow_button.exists(Timeout.SHORT):
+            private_unfollow_button.click()
+
+        UniversalActions.detect_block(device)
+        return True
 
     def on_unfollow(self):
         self.state.unfollowed_count += 1
@@ -297,6 +686,7 @@ class ActionUnfollowFollowers(Plugin):
         prev_screen_iterated_followings = []
         while True:
             screen_iterated_followings = []
+            unfollows_in_this_view = 0
             logger.info("Iterate over visible followings.")
             user_list = device.find(
                 resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
@@ -399,6 +789,7 @@ class ActionUnfollowFollowers(Plugin):
                         )
                         on_unfollow()
                         unfollowed_count += 1
+                        unfollows_in_this_view += 1
                         total_unfollows_limit_reached = self.session_state.check_limit(
                             limit_type=self.session_state.Limit.UNFOLLOWS,
                             output=True,
@@ -407,6 +798,15 @@ class ActionUnfollowFollowers(Plugin):
                         return
                 else:
                     logger.debug(f"Already checked {username}.")
+
+            # Track empty views (no unfollow performed) to bail out of dead-scroll loops
+            # (e.g. Instagram "Latest" sort that does not load older follows past a cap).
+            if unfollows_in_this_view == 0:
+                posts_end_detector.notify_skipped_all()
+                if posts_end_detector.is_skipped_limit_reached():
+                    return
+            else:
+                posts_end_detector.reset_skipped_all()
 
             if screen_iterated_followings != prev_screen_iterated_followings:
                 prev_screen_iterated_followings = screen_iterated_followings
@@ -535,8 +935,24 @@ class ActionUnfollowFollowers(Plugin):
         return True
 
     def check_is_follower(self, device, username, my_username):
+        """
+        Legacy follow-back check used by the scroll-based fallback flow.
+        Opens the target's Following tab and looks up my_username among the
+        first visible rows. Not 100% reliable on big lists (false negatives
+        possible), but kept for backward compatibility.
+
+        For the deep-link flow we use `_profile_follows_me` instead, which
+        looks at the "Follows you" badge on the target's profile header.
+
+        Returns:
+            True  -> the target follows me back
+            False -> the target does NOT follow me back (or my_username not
+                     in the first visible rows)
+            None  -> could not determine
+        """
         logger.info(
-            f"Check if @{username} is following you.", extra={"color": f"{Fore.GREEN}"}
+            f"Check if @{username} is following you.",
+            extra={"color": f"{Fore.GREEN}"},
         )
 
         if not ProfileView(device).navigateToFollowing():
@@ -557,10 +973,9 @@ class ActionUnfollowFollowers(Plugin):
             logger.info("Back to the profile.")
             device.back()
             return result
-        else:
-            logger.info("Can't load profile followers in time. Skip.")
-            device.back()
-            return None
+        logger.info("Can't load profile followers in time. Skip.")
+        device.back()
+        return None
 
 
 @unique
