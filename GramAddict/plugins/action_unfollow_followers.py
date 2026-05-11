@@ -477,28 +477,34 @@ class ActionUnfollowFollowers(Plugin):
         """
         Ground-truth follow-back check (language-independent).
 
+        To know whether the TARGET follows ME, we look at the people the
+        target is following (their "Following" tab) and search for my
+        username there. If I appear, they follow me.
+
         From the currently-open profile of the target user:
-          1. Open their Followers tab
+          1. Open their Following tab
           2. Type `my_username` in the in-list search bar
           3. Look for a row whose username TextView equals `my_username`
           4. Navigate back to the profile
 
         Returns:
-            True  -> my_username appears in target's followers (they follow us)
-            False -> target's followers loaded but my_username NOT present
+            True  -> my_username appears in target's following list
+                    (they follow us)
+            False -> target's following list loaded but my_username NOT
+                    present (they do NOT follow us)
             None  -> UI failure, could not determine (caller should skip)
         """
         if not my_username:
             return None
 
         logger.info(
-            f"🔎 Checking if @{my_username} is in their followers list...",
+            f"🔎 Checking if @{my_username} is in their FOLLOWING list...",
             extra={"color": f"{Fore.CYAN}"},
         )
 
-        # 1. Open Followers tab on the currently-open profile
-        if not ProfileView(device).navigateToFollowers():
-            logger.warning("Could not open target's Followers tab.")
+        # 1. Open Following tab on the currently-open profile
+        if not ProfileView(device).navigateToFollowing():
+            logger.warning("Could not open target's Following tab.")
             return None
 
         # Wait for the followers list to render at least one row
@@ -618,7 +624,7 @@ class ActionUnfollowFollowers(Plugin):
             if follows_me is True:
                 logger.info(
                     f"Skip @{username}: they follow you back "
-                    f"(@{my_username} found in their followers list).",
+                    f"(@{my_username} found in their following list).",
                     extra={"color": f"{Fore.YELLOW}"},
                 )
                 return "follows_back"
@@ -630,7 +636,7 @@ class ActionUnfollowFollowers(Plugin):
             # follows_me is False -> safe to unfollow
             logger.info(
                 f"@{username} does NOT follow you back "
-                f"(@{my_username} absent from their followers). Proceeding to unfollow.",
+                f"(@{my_username} absent from their following). Proceeding to unfollow.",
                 extra={"color": f"{Fore.CYAN}"},
             )
 
