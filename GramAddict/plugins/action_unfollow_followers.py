@@ -473,35 +473,92 @@ class ActionUnfollowFollowers(Plugin):
             return "not_following"
         return "unknown"
 
-    def _profile_follows_me(self, device) -> Optional[bool]:
+    def _profile_follows_me(self, device, my_username: str) -> Optional[bool]:
         """
-        Detect the "Follows you" badge that Instagram shows next to the
-        username on profiles of accounts that follow you back.
+        Ground-truth follow-back check (language-independent).
+
+        From the currently-open profile of the target user:
+          1. Open their Followers tab
+          2. Type `my_username` in the in-list search bar
+          3. Look for a row whose username TextView equals `my_username`
+          4. Navigate back to the profile
 
         Returns:
-            True  -> "Follows you" badge present
-            False -> badge absent (target does NOT follow you)
-            None  -> could not determine
+            True  -> my_username appears in target's followers (they follow us)
+            False -> target's followers loaded but my_username NOT present
+            None  -> UI failure, could not determine (caller should skip)
         """
-        # The badge is a small TextView near the username header. The exact
-        # resource id is not exposed by IG API, so we rely on its English
-        # text. Multiple variants exist across IG versions.
-        for label in ("Follows you", "Follows You", "Follows you "):
-            badge = device.find(
-                className=ClassName.TEXT_VIEW,
-                text=label,
-            )
-            if badge.exists(Timeout.SHORT):
-                return True
-        # If the profile header rendered but no badge is present, the user
-        # does not follow us. We use the followers container as a sentinel
-        # to make sure we are actually on a profile.
-        sentinel = device.find(
-            resourceIdMatches=self.ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER
+        if not my_username:
+            return None
+
+        logger.info(
+            f"🔎 Checking if @{my_username} is in their followers list...",
+            extra={"color": f"{Fore.CYAN}"},
         )
-        if sentinel.exists(Timeout.SHORT):
-            return False
-        return None
+
+        # 1. Open Followers tab on the currently-open profile
+        if not ProfileView(device).navigateToFollowers():
+            logger.warning("Could not open target's Followers tab.")
+            return None
+
+        # Wait for the followers list to render at least one row
+        any_row = device.find(
+            resourceId=self.ResourceID.FOLLOW_LIST_USERNAME,
+            className=ClassName.TEXT_VIEW,
+        )
+        if not any_row.exists(Timeout.LONG):
+            logger.warning("Followers list did not load in time.")
+            # Try to go back so the caller stays on a sane screen
+            try:
+                device.back()
+            except Exception:
+                pass
+            return None
+
+        # 2. Use the in-list search bar to filter to exactly my_username.
+        #    This is a single-username query (deterministic) - far faster
+        #    and more reliable than scrolling the whole followers list.
+        result: Optional[bool] = None
+        try:
+            search_field = device.find(
+                resourceId=self.ResourceID.ROW_SEARCH_EDIT_TEXT,
+                className=ClassName.EDIT_TEXT,
+            )
+            if search_field.exists(Timeout.SHORT):
+                search_field.click()
+                random_sleep(0, 1, modulable=False)
+                try:
+                    search_field.set_text(my_username)
+                except Exception:
+                    # Fallback: rely on adb input. set_text is preferred
+                    # because it pastes atomically and triggers the filter.
+                    try:
+                        device.deviceV2.send_keys(my_username, clear=True)
+                    except Exception:
+                        logger.warning(
+                            "Could not type my username in followers search bar; "
+                            "falling back to first-rows scan."
+                        )
+                random_sleep(1, 2, modulable=False)
+
+            # 3. After filtering (or on the unfiltered list as fallback),
+            #    look for a row with exactly my_username.
+            my_row = device.find(
+                resourceId=self.ResourceID.FOLLOW_LIST_USERNAME,
+                className=ClassName.TEXT_VIEW,
+                text=my_username,
+            )
+            result = bool(my_row.exists(Timeout.SHORT))
+        finally:
+            # 4. Always go back to the profile so the caller can press
+            #    Following / continue the flow.
+            try:
+                device.back()
+                random_sleep(0, 1, modulable=False)
+            except Exception:
+                pass
+
+        return result
 
     def _open_and_unfollow_one(
         self,
@@ -557,10 +614,11 @@ class ActionUnfollowFollowers(Plugin):
 
         # state == "following" -> proceed
         if unfollow_restriction == UnfollowRestriction.FOLLOWED_BY_SCRIPT_NON_FOLLOWERS:
-            follows_me = self._profile_follows_me(device)
+            follows_me = self._profile_follows_me(device, my_username)
             if follows_me is True:
                 logger.info(
-                    f"Skip @{username}: they follow you back ('Follows you' badge present).",
+                    f"Skip @{username}: they follow you back "
+                    f"(@{my_username} found in their followers list).",
                     extra={"color": f"{Fore.YELLOW}"},
                 )
                 return "follows_back"
@@ -570,6 +628,11 @@ class ActionUnfollowFollowers(Plugin):
                 )
                 return "error"
             # follows_me is False -> safe to unfollow
+            logger.info(
+                f"@{username} does NOT follow you back "
+                f"(@{my_username} absent from their followers). Proceeding to unfollow.",
+                extra={"color": f"{Fore.CYAN}"},
+            )
 
         ok = self._do_unfollow_on_open_profile(device, username)
         if ok:
