@@ -980,6 +980,17 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
     if not session_state.check_limit(
         limit_type=session_state.Limit.FOLLOWS, output=False
     ):
+        # Hard safety: never re-follow a user we already unfollowed before
+        # (either by the bot or reconciled from a manual unfollow). This is
+        # a last-line-of-defense check; handle_sources should normally skip
+        # these users much earlier in the pipeline.
+        storage = getattr(session_state, "storage", None)
+        if storage is not None and storage.was_unfollowed_before(username):
+            logger.info(
+                f"@{username}: previously unfollowed - refusing to follow again. Skip.",
+                extra={"color": f"{Fore.YELLOW}"},
+            )
+            return False
         follow_chance = randint(1, 100)
         if follow_chance > follow_percentage:
             return False

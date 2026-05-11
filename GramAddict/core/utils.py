@@ -185,13 +185,54 @@ def get_instagram_version():
 
 
 def open_instagram_with_url(url) -> bool:
+    """
+    Open an https://www.instagram.com/... URL directly inside the Instagram
+    app, bypassing the Android "Open with..." chooser. We do this by issuing
+    the VIEW intent with the package explicitly pinned to `app_id` and the
+    BROWSABLE category set, which is exactly how the system would route the
+    intent if the user had previously selected "Always" on the chooser.
+    """
     logger.info(f"Open Instagram app with url: {url}")
-    cmd = f"adb{'' if configs.device_id is None else ' -s ' + configs.device_id} shell am start -a android.intent.action.VIEW -d {url}"
+    device_arg = "" if configs.device_id is None else f" -s {configs.device_id}"
+    pkg = app_id or "com.instagram.android"
+    # Quote the URL so that any '&' / '?' is not interpreted by the remote
+    # shell. Single-quoting also protects against future url-template changes.
+    quoted_url = f"'{url}'"
+    cmd = (
+        f"adb{device_arg} shell am start"
+        f" -a android.intent.action.VIEW"
+        f" -c android.intent.category.BROWSABLE"
+        f" -p {pkg}"
+        f" -d {quoted_url}"
+    )
     cmd_res = subprocess.run(cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding="utf8")
     err = cmd_res.stderr.strip()
+    out = (cmd_res.stdout or "").strip()
     random_sleep()
     if err:
-        logger.debug(err)
+        logger.debug(f"open_instagram_with_url stderr: {err}")
+    # `am start` prints "Error: ..." on stdout when it fails to resolve the
+    # intent (e.g. the activity is not exported or the package is wrong).
+    # Detect those cases and retry once without the package pin as a last
+    # resort - this preserves backward compatibility on exotic IG forks.
+    if "Error:" in out or "Activity not started" in out and "Error" in out:
+        logger.warning(
+            f"Pinned deep-link failed ({out!r}); retrying without explicit package."
+        )
+        fallback_cmd = (
+            f"adb{device_arg} shell am start"
+            f" -a android.intent.action.VIEW"
+            f" -d {quoted_url}"
+        )
+        cmd_res = subprocess.run(
+            fallback_cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding="utf8"
+        )
+        err = cmd_res.stderr.strip()
+        if err:
+            logger.debug(f"open_instagram_with_url fallback stderr: {err}")
+            return False
+    elif err:
+        # stderr present and we did not get a recoverable stdout error
         return False
     return True
 

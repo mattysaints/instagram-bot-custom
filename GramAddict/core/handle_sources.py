@@ -229,14 +229,19 @@ def handle_blogger(
     else:
         interacted, interacted_when = storage.check_user_was_interacted(blogger)
         if interacted:
-            can_reinteract = storage.can_be_reinteract(
-                interacted_when, get_value(self.args.can_reinteract_after, None, 0)
-            )
-            logger.info(
-                f"@{blogger}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-            )
-            if can_reinteract:
-                can_interact = True
+            if storage.was_unfollowed_before(blogger):
+                logger.info(
+                    f"@{blogger}: previously unfollowed - will NOT be re-followed. Skip."
+                )
+            else:
+                can_reinteract = storage.can_be_reinteract(
+                    interacted_when, get_value(self.args.can_reinteract_after, None, 0)
+                )
+                logger.info(
+                    f"@{blogger}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                )
+                if can_reinteract:
+                    can_interact = True
         else:
             can_interact = True
 
@@ -536,15 +541,20 @@ def handle_likers(
                             interacted_when,
                         ) = storage.check_user_was_interacted(username)
                         if interacted:
-                            can_reinteract = storage.can_be_reinteract(
-                                interacted_when,
-                                get_value(self.args.can_reinteract_after, None, 0),
-                            )
-                            logger.info(
-                                f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-                            )
-                            if can_reinteract:
-                                can_interact = True
+                            if storage.was_unfollowed_before(username):
+                                logger.info(
+                                    f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
+                                )
+                            else:
+                                can_reinteract = storage.can_be_reinteract(
+                                    interacted_when,
+                                    get_value(self.args.can_reinteract_after, None, 0),
+                                )
+                                logger.info(
+                                    f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                                )
+                                if can_reinteract:
+                                    can_interact = True
                         else:
                             can_interact = True
 
@@ -739,18 +749,24 @@ def handle_posts(
                             username
                         )
                         if interacted:
-                            can_reinteract = storage.can_be_reinteract(
-                                interacted_when,
-                                get_value(self.args.can_reinteract_after, None, 0),
-                            )
-                            logger.info(
-                                f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-                            )
-                            if can_reinteract:
-                                can_interact = True
-                                nr_consecutive_already_interacted = 0
-                            else:
+                            if storage.was_unfollowed_before(username):
+                                logger.info(
+                                    f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
+                                )
                                 nr_consecutive_already_interacted += 1
+                            else:
+                                can_reinteract = storage.can_be_reinteract(
+                                    interacted_when,
+                                    get_value(self.args.can_reinteract_after, None, 0),
+                                )
+                                logger.info(
+                                    f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                                )
+                                if can_reinteract:
+                                    can_interact = True
+                                    nr_consecutive_already_interacted = 0
+                                else:
+                                    nr_consecutive_already_interacted += 1
                         else:
                             can_interact = True
                             nr_consecutive_already_interacted = 0
@@ -1096,17 +1112,23 @@ def iterate_over_followers(
                         username
                     )
                     if interacted:
-                        can_reinteract = storage.can_be_reinteract(
-                            interacted_when,
-                            get_value(self.args.can_reinteract_after, None, 0),
-                        )
-                        logger.info(
-                            f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-                        )
-                        if can_reinteract:
-                            can_interact = True
-                        else:
+                        if storage.was_unfollowed_before(username):
+                            logger.info(
+                                f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
+                            )
                             screen_skipped_followers_count += 1
+                        else:
+                            can_reinteract = storage.can_be_reinteract(
+                                interacted_when,
+                                get_value(self.args.can_reinteract_after, None, 0),
+                            )
+                            logger.info(
+                                f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                            )
+                            if can_reinteract:
+                                can_interact = True
+                            else:
+                                screen_skipped_followers_count += 1
                     else:
                         can_interact = True
                         screen_fresh_count += 1

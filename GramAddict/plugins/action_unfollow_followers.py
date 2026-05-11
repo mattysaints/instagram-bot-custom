@@ -388,6 +388,11 @@ class ActionUnfollowFollowers(Plugin):
         if not open_instagram_with_url(url):
             logger.warning(f"Deep-link to @{username} failed.")
             return False
+        # Some emulators / OEM ROMs still pop up the "Open with..." chooser
+        # the very first time even when we pin the package. Auto-dismiss it
+        # by picking Instagram + "Always" - after the first time the system
+        # remembers the choice and the chooser stops appearing.
+        self._dismiss_open_with_chooser(device)
         # Wait for the profile to render. We probe a few stable widgets that
         # are always present on a profile page (own or someone else's).
         for _ in range(3):
@@ -405,6 +410,43 @@ class ActionUnfollowFollowers(Plugin):
             "(possibly account deleted, banned, or you got blocked)."
         )
         return False
+
+    def _dismiss_open_with_chooser(self, device) -> None:
+        """
+        If the Android "Open with..." disambiguation dialog appeared, pick
+        Instagram and tell the system to ALWAYS use it for future deep-links.
+        No-op when the dialog is not on screen.
+        """
+        chooser = device.find(
+            resourceIdMatches=(
+                "android:id/resolver_list"
+                "|com.android.internal:id/resolver_list"
+                "|android:id/contentPanel"
+            )
+        )
+        if not chooser.exists(Timeout.SHORT):
+            return
+        logger.info(
+            "Detected Android 'Open with...' chooser - selecting Instagram (Always).",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+        # Tap on the Instagram entry in the list (case-insensitive match).
+        ig_entry = device.find(textMatches="(?i)^Instagram$")
+        if ig_entry.exists(Timeout.SHORT):
+            ig_entry.click()
+            random_sleep(0, 1, modulable=False)
+        # Press the "Always" button so the chooser doesn't reappear next time.
+        always_btn = device.find(
+            resourceIdMatches=(
+                "android:id/button_always"
+                "|com.android.internal:id/button_always"
+            )
+        )
+        if not always_btn.exists(Timeout.SHORT):
+            always_btn = device.find(textMatches="(?i)^Always$")
+        if always_btn.exists(Timeout.SHORT):
+            always_btn.click()
+            random_sleep(0, 1, modulable=False)
 
     def _profile_state(self, device):
         """
