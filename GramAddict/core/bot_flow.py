@@ -254,6 +254,11 @@ def start_bot(**kwargs):
             f"There is/are {len(jobs_list)-len(unfollow_jobs)} active-job(s) and {len(unfollow_jobs)} unfollow-job(s) scheduled for this session."
         )
         storage = Storage(session_state.my_username)
+        # Expose storage on the session so deep code paths (e.g. the follow
+        # action inside core/interaction.py) can run the "never re-follow
+        # previously unfollowed users" safety check without having to thread
+        # storage through every plugin signature.
+        session_state.storage = storage
         filters = Filter(storage)
 
         # Daily budget: persistent counter shared across ALL sessions of the

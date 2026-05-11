@@ -149,6 +149,15 @@ class Storage:
         else:
             return FollowingStatus[user[USER_FOLLOWING_STATUS].upper()]
 
+    def was_unfollowed_before(self, username) -> bool:
+        """
+        Return True when we previously unfollowed this user (either via the
+        bot or reconciled because we found we were no longer following them
+        on Instagram). Used as a hard-skip rule: once unfollowed, we never
+        want to follow the user again, regardless of `can_reinteract_after`.
+        """
+        return self.get_following_status(username) == FollowingStatus.UNFOLLOWED
+
     def add_filter_user(self, username, profile_data, skip_reason=None):
         user = profile_data.__dict__
         user["follow_button_text"] = (
