@@ -513,10 +513,20 @@ class ActionUnfollowFollowers(Plugin):
             className=ClassName.TEXT_VIEW,
         )
         if not any_row.exists(Timeout.LONG):
-            logger.warning("Followers list did not load in time.")
+            logger.warning("Following list did not load in time.")
             # Try to go back so the caller stays on a sane screen
             try:
-                device.back()
+                profile_sentinel_id = (
+                    f"{self.ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER}"
+                    f"|{self.ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER}"
+                )
+                for _ in range(3):
+                    if device.find(
+                        resourceIdMatches=profile_sentinel_id
+                    ).exists(Timeout.SHORT):
+                        break
+                    device.back()
+                    random_sleep(0, 1, modulable=False)
             except Exception:
                 pass
             return None
@@ -556,11 +566,26 @@ class ActionUnfollowFollowers(Plugin):
             )
             result = bool(my_row.exists(Timeout.SHORT))
         finally:
-            # 4. Always go back to the profile so the caller can press
-            #    Following / continue the flow.
+            # 4. Always navigate back to the profile so the caller can press
+            #    "Following" and continue the unfollow flow.
+            #    The keyboard may still be open after set_text; the first
+            #    `back` typically closes the keyboard, the second leaves
+            #    the Following list and returns to the profile header.
+            #    We verify by probing a profile-header sentinel and issue
+            #    extra `back` taps if needed (capped to avoid runaway).
             try:
-                device.back()
-                random_sleep(0, 1, modulable=False)
+                profile_sentinel_id = (
+                    f"{self.ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER}"
+                    f"|{self.ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER}"
+                )
+                for _ in range(4):
+                    on_profile = device.find(
+                        resourceIdMatches=profile_sentinel_id
+                    ).exists(Timeout.SHORT)
+                    if on_profile:
+                        break
+                    device.back()
+                    random_sleep(0, 1, modulable=False)
             except Exception:
                 pass
 
@@ -639,6 +664,21 @@ class ActionUnfollowFollowers(Plugin):
                 f"(@{my_username} absent from their following). Proceeding to unfollow.",
                 extra={"color": f"{Fore.CYAN}"},
             )
+            # Re-verify we're back on the profile (not on the Following
+            # list / keyboard / some other screen) before pressing the
+            # Following button. If we're not, reopen the profile.
+            recheck = self._profile_state(device)
+            if recheck != "following":
+                logger.info(
+                    f"Not on @{username} profile after follow-back check "
+                    f"(state={recheck}); reopening via deep-link."
+                )
+                if not self._open_profile_via_deeplink(device, username):
+                    return "error"
+                # We just verified they don't follow us a moment ago;
+                # confirm the profile shows "Following" before clicking.
+                if self._profile_state(device) != "following":
+                    return "error"
 
         ok = self._do_unfollow_on_open_profile(device, username)
         if ok:
