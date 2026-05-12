@@ -24,7 +24,12 @@ def check_if_english(device):
         logger.warning(
             "Failed to check your Instagram language. Be sure to set it to English or the bot won't work!"
         )
-    elif post == "posts" and follower == "followers" and following == "following":
+    elif (
+        post == "posts"
+        and follower == "followers"
+        # IG >= 400 ha rinominato la label "following" in "friends" nel profilo proprio.
+        and following in ("following", "friends")
+    ):
         logger.debug("Instagram in English.")
     else:
         logger.error("Please change the language manually to English!")

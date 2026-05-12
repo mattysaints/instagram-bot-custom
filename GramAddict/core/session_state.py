@@ -16,6 +16,66 @@ def _safe_int(val, default=0):
         return default
 
 
+# Mapping da datetime.weekday() (0=lunedi) alle key accettate in config.
+# Accettiamo sia "mon/tue/.../sun" sia "monday/tuesday/..." case-insensitive.
+_WEEKDAY_ALIASES = [
+    ("mon", "monday"),
+    ("tue", "tuesday"),
+    ("wed", "wednesday"),
+    ("thu", "thursday"),
+    ("fri", "friday"),
+    ("sat", "saturday"),
+    ("sun", "sunday"),
+]
+
+
+def _resolve_weekday_multiplier(raw) -> float:
+    """Parse di una stringa "mon:1.0,tue:1.1,...".
+
+    Ritorna il multiplier (>0) per il giorno corrente, oppure 1.0 se non
+    impostato/malformato/manca la key di oggi.
+
+    Tollerante: ignora token malformati silenziosamente (logghiamo a
+    DEBUG, non rumoroso). Non solleva mai: in caso di edge case strani
+    il bot deve girare come prima.
+    """
+    if raw is None or str(raw).strip() == "":
+        return 1.0
+    try:
+        text = str(raw).strip()
+        # supporta sia "mon:1.0,tue:1.1" sia "mon=1.0;tue=1.1" sia mix
+        # con spazi. Splittiamo permissivamente.
+        normalized = (
+            text.replace(";", ",")
+            .replace("=", ":")
+            .replace(" ", "")
+        )
+        today_idx = datetime.now().weekday()  # 0=lun, 6=dom
+        short_key, long_key = _WEEKDAY_ALIASES[today_idx]
+        for token in normalized.split(","):
+            if ":" not in token:
+                continue
+            k, v = token.split(":", 1)
+            k = k.lower()
+            if k in (short_key, long_key):
+                try:
+                    mult = float(v)
+                except ValueError:
+                    logger.debug(
+                        f"[daily-budget] weekday multiplier '{v}' is not "
+                        f"a number, ignoring."
+                    )
+                    return 1.0
+                # clamp di sanita': 0.1 .. 3.0 (oltre = quasi sicuro typo)
+                if mult <= 0:
+                    return 1.0
+                return max(0.1, min(3.0, mult))
+        return 1.0
+    except Exception as e:
+        logger.debug(f"[daily-budget] weekday parse failed: {e}")
+        return 1.0
+
+
 class SessionState:
     id = None
     args = {}
@@ -132,13 +192,35 @@ class SessionState:
         if daily_budget is None:
             return
 
+        # Apply weekday-specific multiplier BEFORE caching the caps. Idea:
+        # users set their base daily-*-cap in config and optionally a
+        # weekday modifier (`daily-caps-weekday-multiplier`) tipo
+        # "mon:1.0,tue:1.1,wed:1.1,thu:1.1,fri:0.9,sat:0.6,sun:0.5".
+        # Si pesca la chiave dell'oggi (locale) e si moltiplicano tutti i
+        # cap di un fattore unico. Cosi' weekend = bot piu' calmo, picco
+        # martedi'-giovedi' (giorni a piu' traffico IG = bot meno
+        # visibile). Se la stringa e' vuota / malformata, multiplier=1.0.
+        weekday_mult = _resolve_weekday_multiplier(
+            getattr(self.args, "daily_caps_weekday_multiplier", None)
+        )
+
+        def _scale(val: int) -> int:
+            if val <= 0:
+                return val  # 0 means "disabled" -> stay disabled
+            return max(1, int(round(val * weekday_mult)))
+
         caps = {
-            "follows": _safe_int(getattr(self.args, "daily_follows_cap", 0)),
-            "likes": _safe_int(getattr(self.args, "daily_likes_cap", 0)),
-            "unfollows": _safe_int(getattr(self.args, "daily_unfollows_cap", 0)),
-            "comments": _safe_int(getattr(self.args, "daily_comments_cap", 0)),
-            "pms": _safe_int(getattr(self.args, "daily_pm_cap", 0)),
+            "follows": _scale(_safe_int(getattr(self.args, "daily_follows_cap", 0))),
+            "likes": _scale(_safe_int(getattr(self.args, "daily_likes_cap", 0))),
+            "unfollows": _scale(_safe_int(getattr(self.args, "daily_unfollows_cap", 0))),
+            "comments": _scale(_safe_int(getattr(self.args, "daily_comments_cap", 0))),
+            "pms": _scale(_safe_int(getattr(self.args, "daily_pm_cap", 0))),
         }
+        if weekday_mult != 1.0:
+            logger.info(
+                f"[daily-budget] Weekday multiplier today: x{weekday_mult:.2f} "
+                f"-> caps scaled accordingly."
+            )
         # If user disabled all caps, nothing to do.
         if not any(v > 0 for v in caps.values()):
             return

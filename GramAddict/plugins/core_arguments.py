@@ -520,6 +520,20 @@ class CoreArguments(Plugin):
                 "default": "0",
             },
             {
+                "arg": "--daily-caps-weekday-multiplier",
+                "nargs": None,
+                "help": (
+                    "Optional weekday-specific multiplier applied to ALL daily-*-cap "
+                    "values. Format: 'mon:1.0,tue:1.1,wed:1.1,thu:1.1,fri:0.9,sat:0.6,sun:0.5'. "
+                    "Missing days default to 1.0. Used to be calmer on weekends "
+                    "(less organic IG traffic = bot more visible) and slightly more "
+                    "active on Tue-Thu peak days. Multiplier is clamped 0.1..3.0. "
+                    "Leave empty to disable."
+                ),
+                "metavar": "mon:1.0,tue:1.1,...",
+                "default": "",
+            },
+            {
                 "arg": "--action-throttle-enabled",
                 "help": "[throttle] enforce a minimum interval between consecutive actions of the same type to avoid burst patterns. true by default.",
                 "action": "store_true",
