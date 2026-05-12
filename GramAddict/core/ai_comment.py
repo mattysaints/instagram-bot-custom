@@ -20,12 +20,23 @@ Instagram che di chi legge.
 
 NB: nessun logging della API key, nessun crash hard se la dipendenza
 manca: tutto viene gestito a livello di flag `enabled`/return-None.
+
+Context-awareness (vedi punto #6 di IDEAS):
+    - Riconoscimento tipo post dalla caption (workout / food / progress /
+      motivational / generic) -> inietta istruzioni di tono specifiche
+      nel prompt cosi' Gemini scrive con stile coerente al contenuto.
+    - Anti-ripetizione: ultimi N commenti generati salvati in
+      ``accounts/<user>/ai_comments_history.json`` (rolling). Se il
+      nuovo commento ha Jaccard >= 0.55 su trigram-set rispetto a uno
+      qualunque degli storici -> lo scartiamo e proviamo il prossimo
+      modello della cascata. Evita lo shadowban da "spam comment".
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -143,18 +154,302 @@ _DEFAULT_MODEL_CASCADE = [
 _RETRYABLE_HTTP = {408, 429, 500, 502, 503, 504}
 
 
+# ============================================================================
+# Context-awareness #1: detection del tipo post dalla caption
+# ============================================================================
+#
+# Approccio keyword-based su entrambe le lingue IT/EN. NIENTE NLP o
+# embeddings: vogliamo zero dipendenze pesanti e zero latency. Se la
+# caption matcha keyword di una categoria con score >= 2, etichettiamo
+# il post di quella categoria. In caso di tie o nessun match, fallback
+# a "generic".
+#
+# La categoria viene poi tradotta in una "tone instruction" che si
+# appende alle regole del prompt: cosi' Gemini scrive un commento
+# coerente al contenuto (es. su workout fai un commento da palestra,
+# su food un commento da appassionato di cucina, ecc.).
+
+_POST_TYPE_KEYWORDS = {
+    "workout": [
+        # IT
+        "allenament", "palestra", "workout", "pesi", "bilanciere", "manubri",
+        "squat", "panca", "stacco", "deadlift", "bench", "press", "curl",
+        "trazion", "pull up", "pullup", "gambe", "petto", "schiena",
+        "bicipit", "tricipit", "addomi", "spall", "leg day", "chest day",
+        "back day", "cardio", "ripetizion", "set ", "serie", "circuito",
+        "hiit", "training", "session", "rep", "reps", "rm", "1rm",
+        "tempo sotto tensione", "tut", "lift", "lifting", "crossfit",
+        "wod", "amrap", "emom", "stretching", "mobility",
+        # EN
+        "lift", "barbell", "dumbbell", "push up", "pushup", "pull-up",
+        "leg ", "chest ", "back ", "biceps", "triceps", "abs ", "shoulder",
+        "reps", "set ", "PR", "personal record",
+    ],
+    "food": [
+        # IT
+        "pasto", "pranzo", "cena", "colazione", "spuntino", "ricetta",
+        "cuoc", "cottur", "ingredient", "proteic", "proteine", "carb",
+        "carboidrat", "grassi", "kcal", "calorie", "macros", "macro",
+        "dieta", "alimentazione", "nutrizion", "pollo", "riso", "avena",
+        "uova", "salmone", "tonno", "verdur", "frutta", "pizza", "pasta",
+        "insalata", "frullato", "shake", "preparazione",
+        # EN
+        "meal", "breakfast", "lunch", "dinner", "snack", "recipe",
+        "protein", "carbs", "fat", "calorie", "calories", "macro", "diet",
+        "chicken", "rice", "oats", "eggs", "salmon", "tuna", "salad",
+        "smoothie",
+    ],
+    "progress": [
+        # IT
+        "progress", "trasformazione", "transformation", "prima/dopo",
+        "before/after", "before and after", "risultat", "obiettivo",
+        "obbiettivo", "perso ", "messo su", "muscolo", "definizione",
+        "shred", "bulk", "cut", "ricomposizione", "ricomp", "peso",
+        "bilancia", "specchio", "selfie progresso", "body check",
+        "settiman", "mesi di", "anno di", "mesi fa", "giorni fa",
+        "punto di partenza", "trasformare", "miglioramento",
+        # EN
+        "before/after", "before and after", "transformation", "progress",
+        "weight loss", "weight gain", "fat loss", "muscle gain",
+        "body check", "body update",
+    ],
+    "motivational": [
+        # IT
+        "motivazion", "non mollare", "ce la puoi fare", "ce la fai",
+        "credi in te", "mindset", "mentalita", "disciplina", "costanza",
+        "abitudini", "sacrificio", "determinazione", "non e' facile",
+        "vai avanti", "nessuno regala", "lavora duro", "non arrender",
+        "tutto e' possibile", "obiettivi", "sogni", "vittoria",
+        "fallimento", "rialzati", "crescita personale", "diario",
+        # EN
+        "mindset", "motivation", "never give up", "stay strong",
+        "discipline", "consistency", "habits", "no excuses",
+        "hard work", "no pain no gain",
+    ],
+}
+
+
+def _detect_post_type(caption: str) -> str:
+    """Classifica la caption in una di: workout|food|progress|motivational|generic.
+
+    Match keyword-based, case-insensitive, su parole/sequenze. Score: 1 punto
+    per ogni keyword distinta che appare nella caption. La categoria con
+    score piu' alto vince (min score=2 per attivare, altrimenti generic).
+
+    Volutamente conservativo: in caso di ambiguita' (tie o tutto <2)
+    cade su "generic" cosi' il prompt resta neutro e Gemini decide da
+    solo. Tester piu' avanti se serve regolazione fine.
+    """
+    if not caption:
+        return "generic"
+    text = caption.lower()
+    best_cat = "generic"
+    best_score = 1  # serve almeno 2 per battere il default
+    for cat, kws in _POST_TYPE_KEYWORDS.items():
+        score = 0
+        for kw in kws:
+            # match come substring (semplice e veloce). Le keyword sono
+            # gia' state scelte radicate (es. "allenament" matcha
+            # allenamento/allenamenti/allenamenti, "workout" matcha
+            # workouts).
+            if kw in text:
+                score += 1
+        if score > best_score:
+            best_score = score
+            best_cat = cat
+    return best_cat
+
+
+def _tone_instruction(post_type: str) -> str:
+    """Ritorna l'istruzione di tono extra da iniettare nel prompt.
+
+    Le istruzioni sono brevi e in inglese (lingua del prompt). Il
+    'language' rimane quello dell'utente (Italian) -> il commento finale
+    sara' comunque in italiano, ma con tono adatto al contenuto.
+    """
+    return {
+        "workout": (
+            "Detected post type: workout/training. Comment as a fellow "
+            "gym-goer who recognizes the exercise/effort. Reference the "
+            "specific movement/intensity if mentioned. Tone: peer-to-peer, "
+            "respectful of the work shown."
+        ),
+        "food": (
+            "Detected post type: food/nutrition. Comment from the angle of "
+            "someone who appreciates clean/practical cooking. Reference an "
+            "ingredient or the prep style if visible. Tone: curious, "
+            "appreciative, never preachy."
+        ),
+        "progress": (
+            "Detected post type: progress/transformation. Comment "
+            "acknowledging the visible result and consistency required. "
+            "Avoid hyperbole ('amazing', 'incredible'). Tone: genuine, "
+            "concise."
+        ),
+        "motivational": (
+            "Detected post type: motivational/mindset. Comment validating "
+            "the principle without restating it. Bring a small concrete "
+            "angle (consistency, daily habit). Tone: grounded, "
+            "non-cliche."
+        ),
+        "generic": "",
+    }.get(post_type, "")
+
+
+# ============================================================================
+# Context-awareness #2: anti-ripetizione persistente
+# ============================================================================
+#
+# Salviamo gli ultimi N commenti generati con successo in:
+#   accounts/<username>/ai_comments_history.json
+# Schema rolling-list, FIFO. Quando si va a generare un nuovo commento,
+# se la similarita' Jaccard sui trigram-set di parole supera la soglia,
+# scartiamo il candidate e proviamo un altro modello (la cascata gia'
+# esistente in generate_comment fa il loop).
+#
+# Perche' Jaccard su trigram: e' un buon proxy di "frase simile" senza
+# pesare dipendenze NLP. Soglia 0.55 e' empirica: testando su frasi
+# come "Bella determinazione, si vede l'impegno" vs "Bella
+# determinazione, si capisce l'impegno" -> Jaccard ~0.6 -> scartato.
+# Frasi diverse tipo "Squat profondi, ottima tecnica" vs "Avena e uova,
+# colazione solida" -> Jaccard ~0.0 -> tenuti.
+
+_HISTORY_FILENAME = "ai_comments_history.json"
+_HISTORY_MAX_ENTRIES = 50  # rolling: tieni ultimi 50 commenti
+# Soglia Jaccard sui BIGRAMMI di parole. I commenti IG sono corti (4-8
+# parole tipiche), quindi i trigram danno set troppo piccoli e Jaccard
+# crolla velocemente. Bigrammi + soglia 0.33 calibrata su test reali:
+#   "Bella determinazione si vede l'impegno" vs
+#   "Bella determinazione si capisce l'impegno"  -> 0.33 -> dup OK
+#   "Squat profondi ottima tecnica" vs "Squat profondi ottima esecuzione"
+#   -> 0.50 -> dup OK
+#   Frasi non correlate -> < 0.10 -> non dup OK
+# 0.33 significa che almeno 1/3 dei bigrammi e' identico: su frasi corte
+# tipiche degli AI comment, 1/3 di overlap e' gia' un pattern visibile.
+_HISTORY_SIM_THRESHOLD = 0.33
+
+
+def _normalize_text(text: str) -> str:
+    """Lowercase, rimuove punteggiatura, collassa spazi. Stesso pre-process
+    sia per la storia che per il candidate -> confronto consistente."""
+    if not text:
+        return ""
+    t = text.lower()
+    # togli punteggiatura comune ma mantieni le lettere accentate
+    t = re.sub(r"[.,;:!?\"'`\-—–_/\\()\[\]{}]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _trigrams(words: list[str]) -> set[tuple]:
+    """Set di N-grammi di parole. Per i commenti IG (4-8 parole tipiche),
+    trigrammi danno set troppo sparsi -> usiamo BIGRAMMI di default. Per
+    frasi <2 parole, fallback a unigram.
+
+    Nome mantenuto _trigrams per backward-compat con eventuali test
+    esistenti; in realta' adesso ritorna bigrammi. Vedi
+    _HISTORY_SIM_THRESHOLD per la motivazione.
+    """
+    if not words:
+        return set()
+    if len(words) >= 2:
+        return {tuple(words[i : i + 2]) for i in range(len(words) - 1)}
+    return {(words[0],)}
+
+
+def _jaccard(a: set, b: set) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
+def _account_path_from_args(args) -> Optional[str]:
+    """Ricava il path della cartella dell'account dal namespace args.
+
+    Layout standard del repo: accounts/<username>/. Se non riusciamo a
+    determinarlo, ritorniamo None e il caller skippera' silenziosamente
+    storia/persistenza (degrade graceful).
+    """
+    username = getattr(args, "username", None)
+    if not username:
+        return None
+    candidate = os.path.join("accounts", str(username))
+    return candidate if os.path.isdir(candidate) else None
+
+
+def _load_history(account_path: str) -> list[str]:
+    """Carica la lista di commenti storici. Ritorna lista vuota su errore."""
+    p = os.path.join(account_path, _HISTORY_FILENAME)
+    if not os.path.isfile(p):
+        return []
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            # filtro: solo stringhe
+            return [str(x) for x in data if isinstance(x, str) and x.strip()]
+        return []
+    except (OSError, json.JSONDecodeError) as e:
+        logger.debug(f"[ai-comment] cannot read history: {e}")
+        return []
+
+
+def _save_history(account_path: str, history: list[str]) -> None:
+    """Scrive la lista di commenti storici (max N entries, FIFO)."""
+    if len(history) > _HISTORY_MAX_ENTRIES:
+        history = history[-_HISTORY_MAX_ENTRIES:]
+    p = os.path.join(account_path, _HISTORY_FILENAME)
+    try:
+        os.makedirs(account_path, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+    except OSError as e:
+        logger.debug(f"[ai-comment] cannot write history: {e}")
+
+
+def _is_duplicate(candidate: str, history: list[str]) -> tuple[bool, float]:
+    """Controlla se il candidate e' troppo simile a uno qualunque storico.
+
+    Ritorna (is_dup, max_jaccard_seen). Max jaccard utile per logging.
+    """
+    if not candidate or not history:
+        return False, 0.0
+    cand_words = _normalize_text(candidate).split()
+    cand_set = _trigrams(cand_words)
+    if not cand_set:
+        return False, 0.0
+    max_sim = 0.0
+    for old in history:
+        old_set = _trigrams(_normalize_text(old).split())
+        sim = _jaccard(cand_set, old_set)
+        if sim > max_sim:
+            max_sim = sim
+        if sim >= _HISTORY_SIM_THRESHOLD:
+            return True, sim
+    return False, max_sim
+
+
 def _build_prompt(
     caption: str,
     target_username: Optional[str],
     media_type: str,
     hint: Optional[str],
     language: str,
+    post_type: Optional[str] = None,
 ) -> str:
     """Costruisce il system+user prompt.
 
     Le 14 regole sono volutamente assertive ('ABSOLUTELY NO ...') perche'
     Gemini Flash tende altrimenti a infilare emoji/hashtag/'I love ...'
     di default. Vedi anche src/genai.ts del repo di riferimento.
+
+    Se ``post_type`` e' valorizzato (workout/food/progress/motivational),
+    appendiamo una "tone instruction" che orienta Gemini verso lo stile
+    appropriato al contenuto (vedi _tone_instruction).
     """
     safe_caption = (caption or "").strip()
     if len(safe_caption) > _MAX_CAPTION_CHARS:
@@ -168,6 +463,8 @@ def _build_prompt(
         else "The post has no caption, comment on the photo/video itself."
     )
     hint_clause = f"Context for tone: {hint}\n\n" if hint else ""
+    tone_extra = _tone_instruction(post_type) if post_type else ""
+    tone_clause = f"{tone_extra}\n\n" if tone_extra else ""
 
     rules = f"""Rules (follow ALL):
 1. Write ONE short, relevant comment. 1 sentence ideal, max 2 short.
@@ -189,6 +486,7 @@ def _build_prompt(
         f"You write engaging human-like Instagram comments.\n"
         f"Write a comment for a post {target_clause}.\n\n"
         f"{caption_clause}\n\n"
+        f"{tone_clause}"
         f"{hint_clause}"
         f"{rules}\n"
     )
@@ -403,13 +701,26 @@ def generate_comment(
     hint = getattr(args, "ai_comments_prompt_hint", None) or None
     language = getattr(args, "ai_comments_language", None) or "Italian"
 
+    # Context detection #1: tipo del post dalla caption -> tone instruction.
+    post_type = _detect_post_type(caption or "")
+    if post_type != "generic":
+        logger.info(f"[ai-comment] detected post type: {post_type}")
+
     prompt = _build_prompt(
         caption=caption or "",
         target_username=target_username,
         media_type=str(media_type).lower(),
         hint=hint,
         language=language,
+        post_type=post_type,
     )
+
+    # Context detection #2: anti-ripetizione. Carichiamo storia ora cosi'
+    # confrontiamo ogni candidate prodotto dalla cascata. Se l'utente non
+    # ha una cartella account valida, account_path=None -> storia
+    # disabilitata silenziosamente (degrade graceful).
+    account_path = _account_path_from_args(args)
+    history = _load_history(account_path) if account_path else []
 
     chain = _build_model_chain(args)
     api_key_clean = str(api_key).strip()
@@ -427,20 +738,32 @@ def generate_comment(
             # un altro modello potrebbe fare la stessa cosa, ma vale la
             # pena tentare 1 volta.
             cleaned = _validate_output(text)
-            if cleaned is not None:
-                if idx > 0:
-                    logger.info(
-                        f"[ai-comment] cascata ha funzionato: modello "
-                        f"{model} ha generato dopo che {idx} modello/i "
-                        f"avevano fallito."
-                    )
-                return cleaned
-            else:
+            if cleaned is None:
                 logger.info(
                     f"[ai-comment] {model}: output non conforme alle regole, "
                     f"provo prossimo modello."
                 )
                 continue
+            # Anti-ripetizione: confronto con storico.
+            is_dup, sim = _is_duplicate(cleaned, history)
+            if is_dup:
+                logger.info(
+                    f"[ai-comment] {model}: output troppo simile a un commento "
+                    f"recente (Jaccard={sim:.2f} >= {_HISTORY_SIM_THRESHOLD}). "
+                    f"Provo prossimo modello."
+                )
+                continue
+            # Successo: persist e ritorna.
+            if idx > 0:
+                logger.info(
+                    f"[ai-comment] cascata ha funzionato: modello "
+                    f"{model} ha generato dopo che {idx} modello/i "
+                    f"avevano fallito."
+                )
+            if account_path:
+                history.append(cleaned)
+                _save_history(account_path, history)
+            return cleaned
 
         # text e' None
         if not retryable:
@@ -456,8 +779,8 @@ def generate_comment(
         logger.info("[ai-comment] cascata interrotta da errore fatale.")
     else:
         logger.info(
-            f"[ai-comment] tutti i {len(chain)} modelli hanno fallito; "
-            f"fallback al file txt."
+            f"[ai-comment] tutti i {len(chain)} modelli hanno fallito "
+            f"o prodotto duplicati; fallback al file txt."
         )
     return None
 

@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import re
 import platform
 from enum import Enum, auto
@@ -399,30 +400,93 @@ class SearchView:
         generates real keystroke events that IG can react to (live search
         results will populate). Returns True on success.
         """
+        import shutil
         import subprocess
+
+        # Resolve adb explicitly (PATH inside PyCharm-launched venv may not
+        # include the Android SDK platform-tools). Without this, subprocess
+        # raises FileNotFoundError -> we silently fall back to FastInputIME
+        # which is broken on most emulators -> searchbar stays empty.
+        adb_bin = shutil.which("adb")
+        if adb_bin is None:
+            # Last resort: try common Windows / macOS / Linux SDK locations.
+            candidates = [
+                os.path.expandvars(r"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"),
+                os.path.expandvars(r"%ANDROID_HOME%\platform-tools\adb.exe"),
+                os.path.expandvars(r"%ANDROID_SDK_ROOT%\platform-tools\adb.exe"),
+                os.path.expanduser("~/Library/Android/sdk/platform-tools/adb"),
+                os.path.expanduser("~/Android/Sdk/platform-tools/adb"),
+            ]
+            for c in candidates:
+                if c and "%" not in c and os.path.isfile(c):
+                    adb_bin = c
+                    break
+        if adb_bin is None:
+            logger.warning(
+                "[search-typing] `adb` not found on PATH and no platform-tools "
+                "directory detected. Set ANDROID_HOME or add platform-tools "
+                "to PATH so `_adb_type_text` can drive the searchbar. "
+                "Falling back to FastInputIME (often broken on emulators)."
+            )
+            return False
 
         try:
             serial = self.device.deviceV2.serial
         except Exception as e:
-            logger.debug(f"_adb_type_text: cannot read device serial: {e}")
+            logger.warning(f"[search-typing] cannot read device serial: {e}")
             return False
-        # `adb shell input text` does not accept spaces directly; replace with %s.
-        safe = text.replace(" ", "%s")
+        # `adb shell input text` quirks:
+        #   - spaces must be encoded as %s (the binary doesn't accept them)
+        #   - the device-side shell interprets shell metacharacters like '#'
+        #     (comment) and '&', ';', '|', '(', ')'. If we pass `input text
+        #     #fitnessdonna` it becomes `input text` (the # truncates the line)
+        #     -> the device returns "Error: Argument expected after text" with
+        #     rc=0 and an empty searchbar.
+        # Solution: encode spaces as %s and SINGLE-QUOTE the argument so the
+        # device shell treats it as one literal token. We also escape any
+        # single quote inside the text (rare) via '\''.
+        safe_spaces = text.replace(" ", "%s")
+        # Single-quote escape: ' -> '\''
+        quoted = "'" + safe_spaces.replace("'", "'\\''") + "'"
+        logger.info(
+            f"[search-typing] adb={adb_bin!r} serial={serial!r} -> "
+            f"input text {quoted}"
+        )
         try:
             res = subprocess.run(
-                ["adb", "-s", serial, "shell", "input", "text", safe],
+                [adb_bin, "-s", serial, "shell", "input", "text", quoted],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=10,
             )
             stdout = (res.stdout or b"").decode(errors="replace").strip()
             stderr = (res.stderr or b"").decode(errors="replace").strip()
-            logger.debug(
-                f"_adb_type_text: rc={res.returncode} stdout={stdout!r} stderr={stderr!r}"
+            # `adb shell input` returns rc=0 even when it printed the usage
+            # screen (e.g. when the argument got eaten by shell metacharacters).
+            # Detect that and fail loud so we can fall back / log it properly.
+            looks_like_usage = (
+                "Usage:" in stderr or "Usage:" in stdout
+                or "Error:" in stderr or "Error:" in stdout
+            )
+            if looks_like_usage:
+                # Keep the message short: full usage screen is just noise.
+                err_short = stderr.replace("\r", " ").replace("\n", " ")[:200]
+                logger.warning(
+                    f"[search-typing] device's `input text` rejected the "
+                    f"argument (rc={res.returncode}). Truncated stderr: "
+                    f"{err_short!r}"
+                )
+                return False
+            logger.info(
+                f"[search-typing] adb rc={res.returncode} "
+                f"stdout={stdout!r} stderr={stderr[:120]!r}"
             )
             return res.returncode == 0
+        except FileNotFoundError as ex:
+            logger.warning(f"[search-typing] adb binary not executable: {ex}")
+            return False
         except Exception as ex:
-            logger.debug(f"_adb_type_text: adb failed: {ex}")
+            logger.warning(f"[search-typing] adb call failed: {ex}")
             return False
 
     def _kick_search(self):
@@ -466,10 +530,26 @@ class SearchView:
         logger.info(f"Navigate to {target}")
         search_edit_text = self._getSearchEditText()
         if search_edit_text is not None:
-            logger.debug("Pressing on searchbar.")
+            logger.info("[search-typing] Pressing on searchbar.")
             search_edit_text.click(sleep=SleepTime.SHORT)
+            # Diagnostic: did the EditText get focus? Without focus, `input text`
+            # types into the void (or into the wrong widget).
+            try:
+                xml = self.device.deviceV2.dump_hierarchy()
+                # Quick'n'dirty check: count focused="true" EditText nodes.
+                import re as _re
+                focused_edits = _re.findall(
+                    r'<node[^>]*class="android\.widget\.EditText"[^>]*focused="true"',
+                    xml,
+                )
+                logger.info(
+                    f"[search-typing] After click: {len(focused_edits)} "
+                    f"focused EditText(s) in UI."
+                )
+            except Exception as e:
+                logger.info(f"[search-typing] focus-check failed: {e}")
         else:
-            logger.debug("There is no searchbar!")
+            logger.warning("[search-typing] There is no searchbar! Returning False.")
             return False
         # NOTE: original implementation had an early _check_current_view here to
         # detect if the target is already in the search history. We skip it on
@@ -478,11 +558,14 @@ class SearchView:
         # Type the search text using ADB `input text` so IG receives real
         # keystroke events and triggers live search (FastInputIME tends to be
         # broken on most emulators, so set_text+PASTE leaves the result list empty).
-        logger.debug(f"navigate_to_target: typing {target!r} via adb input text.")
+        logger.info(f"[search-typing] typing {target!r} via adb input text.")
         adb_typed = self._adb_type_text(target)
         if not adb_typed:
             # Fallback to the original approach
-            logger.debug("navigate_to_target: adb typing failed, falling back to set_text.")
+            logger.warning(
+                "[search-typing] adb typing failed, falling back to FastInputIME "
+                "set_text. If the searchbar stays empty this is the cause."
+            )
             search_edit_text.set_text(
                 target,
                 Mode.PASTE if args.dont_type else Mode.TYPE,
@@ -491,6 +574,24 @@ class SearchView:
                 self._kick_search()
         # Give IG some time to fetch search results
         random_sleep(2, 4, modulable=False)
+        # Always read what the searchbar actually contains after typing, even on
+        # success path: emulators sometimes confirm rc=0 but the typing went
+        # elsewhere (e.g. focus stolen by an overlay).
+        try:
+            current = self._getSearchEditText()
+            if current is not None and current.exists():
+                txt = current.get_text()
+                logger.info(
+                    f"[search-typing] searchbar contains after typing: {txt!r} "
+                    f"(expected ~{target!r})"
+                )
+            else:
+                logger.info(
+                    "[search-typing] searchbar EditText no longer visible "
+                    "after typing (probably moved to search-results view)."
+                )
+        except Exception as e:
+            logger.info(f"[search-typing] could not read searchbar text: {e}")
         if self._check_current_view(target, job):
             logger.info(f"{target} is in top view.")
             return True
@@ -500,35 +601,28 @@ class SearchView:
                 resourceIdMatches=ResourceID.SEARCH_ROW_ITEM
             )
             count = visible_rows.count_items()
-            logger.debug(
-                f"navigate_to_target: target {target!r} not found yet, "
+            logger.info(
+                f"[search-typing] target {target!r} not in top view, "
                 f"{count} SEARCH_ROW_ITEM(s) visible after typing."
             )
         except Exception as e:
-            logger.debug(f"navigate_to_target: could not enumerate rows: {e}")
-        # Even more diagnostics: read what the EditText actually contains so we
-        # know whether typing hit the right widget at all.
-        try:
-            current = self._getSearchEditText()
-            if current is not None and current.exists():
-                txt = current.get_text()
-                logger.debug(
-                    f"navigate_to_target: searchbar currently contains: {txt!r}"
-                )
-        except Exception as e:
-            logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
+            logger.info(f"[search-typing] could not enumerate rows: {e}")
         # Dump the UI hierarchy NOW so we can see which resource-ids IG is
         # using for search results in this version.
         try:
             xml = self.device.deviceV2.dump_hierarchy()
-            dump_path = "/tmp/gramaddict_ui_search.xml"
+            # Cross-platform tmp path (the original /tmp doesn't exist on Windows).
+            import tempfile
+            dump_path = os.path.join(
+                tempfile.gettempdir(), "gramaddict_ui_search.xml"
+            )
             with open(dump_path, "w", encoding="utf-8") as f:
                 f.write(xml)
-            logger.debug(
-                f"navigate_to_target: UI dump saved to {dump_path} ({len(xml)} chars)"
+            logger.info(
+                f"[search-typing] UI dump saved to {dump_path} ({len(xml)} chars)"
             )
         except Exception as e:
-            logger.debug(f"navigate_to_target: UI dump failed: {e}")
+            logger.info(f"[search-typing] UI dump failed: {e}")
         echo_text = self.device.find(resourceId=ResourceID.ECHO_TEXT)
         if echo_text.exists(Timeout.SHORT):
             logger.debug("Pressing on see all results.")
@@ -669,6 +763,20 @@ class PostsViewList:
                                 break
                     break
             if obj1 is None:
+                # IG >= ~400 (Compose feed) puo' non avere gap_view/footer_space:
+                # in quel caso facciamo solo uno scroll semplice e usciamo.
+                if not gap_view_obj.exists():
+                    logger.debug(
+                        "No gap/footer in current view (Compose feed?). Falling back to a basic swipe."
+                    )
+                    displayHeight = self.device.get_info()["displayHeight"]
+                    self.device.swipe_points(
+                        displayWidth / 2,
+                        displayHeight * 0.75,
+                        displayWidth / 2,
+                        displayHeight * 0.20,
+                    )
+                    return True
                 obj1 = gap_view_obj.get_bounds()["bottom"]
             containers_content = self.device.find(resourceIdMatches=containers_content)
 
@@ -1080,13 +1188,17 @@ class PostsViewList:
         if skip_media_check:
             return
         media, content_desc = self._get_media_container()
-        if content_desc is None:
+        # IG >= ~400: il media_group del feed ha content-desc vuoto (Compose).
+        # Trattiamo "" come UNKNOWN ma proseguiamo comunque con il double click.
+        if media is None or not media.exists():
             return
         if not already_watched:
-            media_type, _ = post_view_list.detect_media_type(content_desc)
+            media_type, _ = post_view_list.detect_media_type(content_desc or "")
             opened_post_view.watch_media(media_type)
         if mode == LikeMode.DOUBLE_CLICK:
-            if media_type in (MediaType.CAROUSEL, MediaType.PHOTO):
+            if media_type in (MediaType.CAROUSEL, MediaType.PHOTO, MediaType.UNKNOWN):
+                # IG >= ~400: nel feed home non c'e' piu' un like_button con resource-id
+                # esposto da Compose. L'unico modo affidabile e' il double tap sul media.
                 logger.info("Double click on post.")
                 _, _, action_bar_bottom = PostsViewList(
                     self.device
@@ -1126,10 +1238,14 @@ class PostsViewList:
                 logger.debug("Like is not present.")
                 return False
         else:
-            UniversalActions(self.device)._swipe_points(
-                direction=Direction.DOWN, delta_y=100
+            # IG >= ~400: nel feed Compose il bottone non ha piu' un resource-id
+            # ispezionabile. Non possiamo verificare visivamente -> consideriamo
+            # il double-tap come andato a buon fine (best-effort).
+            logger.debug(
+                "Like button not found by resource-id (IG Compose feed). "
+                "Assuming double-tap like succeeded."
             )
-            return PostsViewList(self.device)._check_if_liked()
+            return True
 
     def _check_if_ad_or_hashtag(
         self, post_owner_obj

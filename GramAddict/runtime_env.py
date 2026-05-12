@@ -88,17 +88,49 @@ def _ensure_adb_on_path() -> None:
         return
 
 
+def _adb_filenames() -> tuple[str, ...]:
+    # Su Windows l'eseguibile e' adb.exe, su Unix e' adb (no estensione).
+    return ("adb.exe", "adb") if os.name == "nt" else ("adb",)
+
+
 def _candidate_adb_paths() -> Iterable[Path]:
+    names = _adb_filenames()
+
+    # 1) Variabili d'ambiente esplicite
     for env_name in ("ANDROID_SDK_ROOT", "ANDROID_HOME"):
         raw = os.environ.get(env_name)
         if not raw:
             continue
         base = Path(raw).expanduser()
-        yield base / "platform-tools" / "adb"
-        yield base / "adb"
+        for name in names:
+            yield base / "platform-tools" / name
+            yield base / name
 
     home = Path.home()
-    yield home / "Library" / "Android" / "sdk" / "platform-tools" / "adb"
-    yield home / "Android" / "Sdk" / "platform-tools" / "adb"
+
+    # 2) macOS
+    for name in names:
+        yield home / "Library" / "Android" / "sdk" / "platform-tools" / name
+
+    # 3) Linux / Windows user-local installation di Android Studio
+    for name in names:
+        # Windows: %LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            yield Path(local_appdata) / "Android" / "Sdk" / "platform-tools" / name
+        # Linux/Windows generico in home: ~/Android/Sdk/platform-tools/adb(.exe)
+        yield home / "Android" / "Sdk" / "platform-tools" / name
+        # Variante "AppData/Local/Android/Sdk" anche per profili senza LOCALAPPDATA
+        yield home / "AppData" / "Local" / "Android" / "Sdk" / "platform-tools" / name
+
+    # 4) Linux/macOS system-wide
     yield Path("/opt/homebrew/bin/adb")
     yield Path("/usr/local/bin/adb")
+
+    # 5) Windows system-wide (Android Studio o standalone platform-tools)
+    if os.name == "nt":
+        for name in names:
+            yield Path(r"C:\Android\Sdk\platform-tools") / name
+            yield Path(r"C:\Program Files\Android\Android Studio\platform-tools") / name
+            yield Path(r"C:\Program Files (x86)\Android\android-sdk\platform-tools") / name
+

@@ -324,6 +324,19 @@ class ActionUnfollowFollowers(Plugin):
                         logger.info(f"@{username} is in whitelist. Skip.")
                         continue
 
+                    # Engagement-protect: soft-whitelist dinamica popolata
+                    # da engaged_users.json (script esterni / cron). Idea:
+                    # anche se l'utente non e' nella whitelist statica, se
+                    # ti mette like / commenta / ti ha scritto, NON
+                    # unfolloware. Politica conservativa: meglio tenere
+                    # un follow "in piu'" che perdere un cliente reale.
+                    if _is_engaged(username, storage.account_path):
+                        logger.info(
+                            f"@{username} is in engaged_users.json "
+                            f"(active engagement). Skip unfollow."
+                        )
+                        continue
+
                     if unfollow_restriction in [
                         UnfollowRestriction.FOLLOWED_BY_SCRIPT,
                         UnfollowRestriction.FOLLOWED_BY_SCRIPT_NON_FOLLOWERS,
