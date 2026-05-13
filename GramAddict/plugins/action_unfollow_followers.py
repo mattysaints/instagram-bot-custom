@@ -546,37 +546,89 @@ class ActionUnfollowFollowers(Plugin):
         # 2. Use the in-list search bar to filter to exactly my_username.
         #    This is a single-username query (deterministic) - far faster
         #    and more reliable than scrolling the whole followers list.
+        #
+        #    IMPORTANT: Instagram shows "mutual / people you know" at the top
+        #    of the target's Following list. If we don't filter, we'd find
+        #    our OWN username there as a suggestion and conclude "they follow
+        #    us" even when they don't. So we REQUIRE the search bar to be
+        #    actually filtered before accepting a positive match.
         result: Optional[bool] = None
         try:
             search_field = device.find(
                 resourceId=self.ResourceID.ROW_SEARCH_EDIT_TEXT,
                 className=ClassName.EDIT_TEXT,
             )
+            filter_applied = False
             if search_field.exists(Timeout.SHORT):
                 search_field.click()
                 random_sleep(0, 1, modulable=False)
+                # Try set_text first (atomic paste, triggers live-filter)
                 try:
                     search_field.set_text(my_username)
                 except Exception:
-                    # Fallback: rely on adb input. set_text is preferred
-                    # because it pastes atomically and triggers the filter.
                     try:
                         device.deviceV2.send_keys(my_username, clear=True)
                     except Exception:
                         logger.warning(
-                            "Could not type my username in followers search bar; "
-                            "falling back to first-rows scan."
+                            "Could not type my username in following search bar."
                         )
                 random_sleep(1, 2, modulable=False)
 
-            # 3. After filtering (or on the unfiltered list as fallback),
-            #    look for a row with exactly my_username.
-            my_row = device.find(
-                resourceId=self.ResourceID.FOLLOW_LIST_USERNAME,
-                className=ClassName.TEXT_VIEW,
-                text=my_username,
-            )
-            result = bool(my_row.exists(Timeout.SHORT))
+                # Readback: confirm the EditText actually contains our query.
+                try:
+                    typed = (search_field.get_text() or "").strip().lstrip("@")
+                except Exception:
+                    typed = ""
+                if typed.casefold() == my_username.casefold():
+                    filter_applied = True
+                else:
+                    logger.warning(
+                        f"Search bar readback mismatch (got='{typed}', "
+                        f"expected='{my_username}'). Cannot trust filter."
+                    )
+
+            if not filter_applied:
+                # Without a working filter we cannot trust the visible rows
+                # (top of list may include our own username as "mutual /
+                # people you may know"). Skip the candidate this round.
+                logger.warning(
+                    "Following-list search bar could not be filtered; "
+                    "skipping follow-back decision (no action this round)."
+                )
+                result = None
+            else:
+                # 3. After confirmed filtering, look for a row with exactly
+                #    my_username. We also verify that the visible row count
+                #    after filtering is small (<=3): if the list is still
+                #    showing many rows, the live-filter didn't kick in.
+                visible_rows = device.find(
+                    resourceId=self.ResourceID.FOLLOW_LIST_USERNAME,
+                    className=ClassName.TEXT_VIEW,
+                )
+                try:
+                    row_count = visible_rows.count_items()
+                except Exception:
+                    row_count = None
+
+                my_row = device.find(
+                    resourceId=self.ResourceID.FOLLOW_LIST_USERNAME,
+                    className=ClassName.TEXT_VIEW,
+                    text=my_username,
+                )
+                found = bool(my_row.exists(Timeout.SHORT))
+
+                if found and row_count is not None and row_count > 3:
+                    # Filter likely not applied even though readback said so;
+                    # we may be matching a "mutual" suggestion at top of an
+                    # unfiltered list. Be conservative: treat as unknown.
+                    logger.warning(
+                        f"Search readback OK but {row_count} rows still "
+                        "visible (filter did not converge). Skipping "
+                        "follow-back decision."
+                    )
+                    result = None
+                else:
+                    result = found
         finally:
             # 4. Always navigate back to the profile so the caller can press
             #    "Following" and continue the unfollow flow.
