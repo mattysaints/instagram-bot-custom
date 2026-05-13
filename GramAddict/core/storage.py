@@ -158,6 +158,41 @@ class Storage:
         """
         return self.get_following_status(username) == FollowingStatus.UNFOLLOWED
 
+    def mark_unfollow_check(self, username, outcome):
+        """
+        Record that we just probed this user with the unfollow flow and
+        decided NOT to unfollow them (because they follow us back, or the
+        profile check failed). We store a timestamp + the outcome so the
+        candidates builder can throttle re-checks and avoid hammering the
+        same profiles every session.
+
+        Does NOT touch `following_status` - the user is still FOLLOWED in
+        terms of our local state.
+        """
+        user = self.interacted_users.get(username)
+        if user is None:
+            return
+        user["last_unfollow_check"] = datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S.%f"
+        )
+        user["last_unfollow_check_outcome"] = outcome
+        self._update_file()
+
+    def get_last_unfollow_check(self, username):
+        """Return (datetime, outcome) or (None, None) if never probed."""
+        user = self.interacted_users.get(username)
+        if user is None:
+            return None, None
+        ts = user.get("last_unfollow_check")
+        if not ts:
+            return None, None
+        try:
+            return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f"), user.get(
+                "last_unfollow_check_outcome"
+            )
+        except ValueError:
+            return None, None
+
     def add_filter_user(self, username, profile_data, skip_reason=None):
         user = profile_data.__dict__
         user["follow_button_text"] = (
