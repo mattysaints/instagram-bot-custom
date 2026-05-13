@@ -270,6 +270,10 @@ class ActionUnfollowFollowers(Plugin):
         (that requires an in-app check) - we let the per-user flow do it.
         """
         delay_days = get_value(self.args.unfollow_delay, None, 0)
+        # Throttle re-checks: if we already probed a user in the last
+        # RECHECK_DAYS days and decided NOT to unfollow them (because they
+        # follow us back, or the UI check failed), skip them this session.
+        RECHECK_DAYS = 5
         eligible_statuses = {
             FollowingStatus.FOLLOWED,
             FollowingStatus.REQUESTED,
@@ -287,6 +291,12 @@ class ActionUnfollowFollowers(Plugin):
                 continue
             _, last_interaction = storage.check_user_was_interacted(username)
             if not storage.can_be_unfollowed(last_interaction, delay_days):
+                continue
+            # Skip users we already probed recently and decided to keep
+            last_check, _ = storage.get_last_unfollow_check(username)
+            if last_check is not None and (
+                datetime.now() - last_check
+            ).days < RECHECK_DAYS:
                 continue
             candidates.append((username, last_interaction or datetime.min))
         # Oldest interactions first - those are the safer ones to drop.
@@ -366,8 +376,10 @@ class ActionUnfollowFollowers(Plugin):
             elif outcome == "not_in_list":
                 skipped_already_gone += 1
             elif outcome == "follows_back":
+                storage.mark_unfollow_check(username, "follows_back")
                 skipped_following_back += 1
             else:
+                storage.mark_unfollow_check(username, "error")
                 skipped_other += 1
         logger.info(
             f"Deep-link unfollow finished: {unfollowed} unfollowed, "
