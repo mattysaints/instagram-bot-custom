@@ -797,7 +797,10 @@ class Filter:
             if bool(a_dict):
                 max_alph = max(a_dict, key=lambda k: a_dict[k])
         except Exception as e:
-            logger.error(f"Cannot determine primary alphabet. Error: {e}")
+            # Stesso pattern di _find_language: bio degeneri (emoji-only,
+            # numeri, simboli) fanno fallire la detection. Non e' un errore
+            # del bot. Downgrade ERROR -> DEBUG.
+            logger.debug(f"Cannot determine primary alphabet. Error: {e}")
 
         return max_alph
 
@@ -812,7 +815,13 @@ class Filter:
                 results.append(detect(biography))
             language = max(results, key=results.count)
         except Exception as e:
-            logger.error(f"Cannot determine primary language. Error: {e}")
+            # Downgrade ERROR -> DEBUG: succede normalmente su bio con solo
+            # emoji/numeri/caratteri senza features linguistiche (es. "🔥💪",
+            # "2003", "@username"). Non e' un errore del bot ma una
+            # limitazione di langdetect su input degeneri. La logica di
+            # filtro a monte gestisce gia' language="" come "non
+            # determinabile" e procede di conseguenza.
+            logger.debug(f"Cannot determine primary language. Error: {e}")
         return language
 
     @staticmethod
