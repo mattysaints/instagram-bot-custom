@@ -28,3 +28,9 @@ apk/
 .env
 .env.*
 !.env.example
+
+# Local debug artifacts (ignored 2026-05-14)
+apk_cache/
+ui_*.xml
+ui_profile_ids.txt
+$null
