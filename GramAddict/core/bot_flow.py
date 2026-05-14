@@ -181,27 +181,58 @@ def start_bot(**kwargs):
         profile_view = ProfileView(device)
         account_view = AccountView(device)
         tab_bar_view = TabBarView(device)
-        try:
-            account_view.navigate_to_main_account()
-            check_if_english(device)
-            if configs.args.username is not None:
-                success = account_view.changeToUsername(configs.args.username)
-                if not success:
-                    logger.error(
-                        f"Not able to change to {configs.args.username}, abort!"
+        # Retry transitorio: dopo un downgrade APK / primo cold-start, IG
+        # puo' perdere il foreground per qualche secondo (popup di sistema,
+        # init dei moduli, dialog "what's new"). Il decorator
+        # @check_if_ig_is_opened solleva subito AppHasCrashed -> il bot
+        # uscirebbe alla prima sessione senza fare nulla. Riproviamo fino
+        # a 3 volte chiudendo/riaprendo IG prima di abbandonare.
+        init_attempts = 3
+        init_ok = False
+        last_init_error = None
+        for init_try in range(1, init_attempts + 1):
+            try:
+                account_view.navigate_to_main_account()
+                check_if_english(device)
+                if configs.args.username is not None:
+                    success = account_view.changeToUsername(configs.args.username)
+                    if not success:
+                        logger.error(
+                            f"Not able to change to {configs.args.username}, abort!"
+                        )
+                        save_crash(device)
+                        device.back()
+                        break
+                account_view.refresh_account()
+                (
+                    session_state.my_username,
+                    session_state.my_posts_count,
+                    session_state.my_followers_count,
+                    session_state.my_following_count,
+                ) = profile_view.getProfileInfo()
+                init_ok = True
+                break
+            except Exception as e:
+                last_init_error = e
+                logger.warning(
+                    f"Init attempt {init_try}/{init_attempts} failed: {e}"
+                )
+                if init_try < init_attempts:
+                    logger.info(
+                        "Restarting Instagram and retrying...",
+                        extra={"color": f"{Fore.YELLOW}"},
                     )
-                    save_crash(device)
-                    device.back()
-                    break
-            account_view.refresh_account()
-            (
-                session_state.my_username,
-                session_state.my_posts_count,
-                session_state.my_followers_count,
-                session_state.my_following_count,
-            ) = profile_view.getProfileInfo()
-        except Exception as e:
-            logger.error(f"Exception: {e}")
+                    try:
+                        close_instagram(device)
+                    except Exception:
+                        pass
+                    sleep(3)
+                    if not open_instagram(device):
+                        logger.error("Cannot reopen Instagram, abort.")
+                        break
+                    sleep(5)
+        if not init_ok:
+            logger.error(f"Exception: {last_init_error}")
             save_crash(device)
             break
 
