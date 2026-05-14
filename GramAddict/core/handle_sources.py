@@ -6,7 +6,7 @@ from os import path
 from atomicwrites import atomic_write
 from colorama import Fore
 
-from GramAddict.core.device_facade import Direction, Timeout
+from GramAddict.core.device_facade import DeviceFacade, Direction, Timeout
 from GramAddict.core.navigation import (
     nav_to_blogger,
     nav_to_feed,
@@ -1061,11 +1061,32 @@ def iterate_over_followers(
         row_height, n_users = inspect_current_view(user_list)
         try:
             for item in user_list:
-                cur_row_height = item.get_height()
+                try:
+                    cur_row_height = item.get_height()
+                except DeviceFacade.JsonRpcError as _ui_err:
+                    # La row è scomparsa dalla UI tra l'inspect_current_view e
+                    # l'iterazione (refresh IG, scroll automatico, row riciclata).
+                    # Trattiamo come "fine schermo visibile" e usciamo dal for
+                    # in modo pulito invece di crashare l'intera sessione.
+                    logger.info(
+                        "A follower row vanished from UI mid-iteration (likely refresh). "
+                        "Treating as end of visible screen.",
+                        extra={"color": f"{Fore.GREEN}"},
+                    )
+                    logger.debug(f"Row vanished detail: {_ui_err}")
+                    break
                 if cur_row_height < row_height:
                     continue
-                user_info_view = item.child(index=1)
-                user_name_view = user_info_view.child(index=0).child()
+                try:
+                    user_info_view = item.child(index=1)
+                    user_name_view = user_info_view.child(index=0).child()
+                except DeviceFacade.JsonRpcError as _ui_err:
+                    logger.info(
+                        "A follower row child node vanished mid-read. Skipping row.",
+                        extra={"color": f"{Fore.GREEN}"},
+                    )
+                    logger.debug(f"Child vanished detail: {_ui_err}")
+                    continue
                 if not user_name_view.exists():
                     logger.info(
                         "Next item not found: probably reached end of the screen.",
@@ -1139,6 +1160,17 @@ def iterate_over_followers(
                 "Cannot get next item: probably reached end of the screen.",
                 extra={"color": f"{Fore.GREEN}"},
             )
+        except DeviceFacade.JsonRpcError as _ui_err:
+            # Safety net: una row volatile (INSTANCE=N inesistente, refresh
+            # della lista, view tree non sincronizzato) ci ha portati fuori
+            # dal for. Equivale a "fine schermo visibile", proseguiamo con
+            # lo scroll della pagina successiva.
+            logger.info(
+                "Followers iteration interrupted by a UI desync. "
+                "Treating as end of visible screen and continuing.",
+                extra={"color": f"{Fore.GREEN}"},
+            )
+            logger.debug(f"Iteration desync detail: {_ui_err}")
 
         # --- Hot-zone detector: troppi schermi consecutivi senza utenti FRESH ---
         if hot_zone_enabled and len(screen_iterated_followers) > 0:
