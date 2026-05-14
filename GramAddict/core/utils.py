@@ -186,7 +186,15 @@ def get_instagram_version():
 
 def open_instagram_with_url(url) -> bool:
     logger.info(f"Open Instagram app with url: {url}")
-    cmd = f"adb{'' if configs.device_id is None else ' -s ' + configs.device_id} shell am start -a android.intent.action.VIEW -d {url}"
+    # Forziamo il package handler a com.instagram.android (-p flag) cosi'
+    # Android NON mostra il chooser "Open with..." quando ci sono piu' app
+    # registrate per https://instagram.com/* (es. browser, app cloned).
+    # In questo modo il deeplink va SEMPRE dentro Instagram nativo.
+    pkg_flag = " -p com.instagram.android"
+    cmd = (
+        f"adb{'' if configs.device_id is None else ' -s ' + configs.device_id} "
+        f"shell am start -a android.intent.action.VIEW -d {url}{pkg_flag}"
+    )
     cmd_res = subprocess.run(cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding="utf8")
     err = cmd_res.stderr.strip()
     random_sleep()
