@@ -8,12 +8,14 @@
 #
 # In aggiunta (lancio MANUALE quando vuoi):
 #   ./run-bot.sh unfollow-followers   # sgancia chi ti ha seguito indietro ma sono passati >= 7gg dal mio follow
+#   ./run-bot.sh unfollow-old         # sgancia TUTTI i followati dal bot da >= 2 giorni (pulizia periodica)
 #
 # Uso:
 #   ./run-bot.sh                       # auto: usa il giorno odierno
 #   ./run-bot.sh follow                # forza follow
 #   ./run-bot.sh unfollow              # forza unfollow non-followers @3gg
 #   ./run-bot.sh unfollow-followers    # forza unfollow followers @7gg (manuale)
+#   ./run-bot.sh unfollow-old          # forza unfollow TUTTI i followati >= 2gg (pulizia)
 #
 # Cron suggerito (lancio automatico alle 09:00):
 #   0 9 * * *  cd /Users/mattia/PycharmProjects/bot && ./run-bot.sh >> logs/cron.log 2>&1
@@ -47,8 +49,12 @@ case "$MODE" in
         CONFIG="accounts/${ACCOUNT}/config-unfollow-followers.yml"
         echo "[$(date '+%F %T')] >>> Modalita': UNFOLLOW FOLLOWERS @7gg  (config-unfollow-followers.yml)"
         ;;
+    unfollow-old)
+        CONFIG="accounts/${ACCOUNT}/config-unfollow-old.yml"
+        echo "[$(date '+%F %T')] >>> Modalita': UNFOLLOW OLD (tutti i followati >= 2gg)  (config-unfollow-old.yml)"
+        ;;
     *)
-        echo "Uso: $0 [auto|follow|unfollow|unfollow-followers]" >&2
+        echo "Uso: $0 [auto|follow|unfollow|unfollow-followers|unfollow-old]" >&2
         exit 1
         ;;
 esac
