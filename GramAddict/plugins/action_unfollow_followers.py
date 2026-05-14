@@ -6,6 +6,7 @@ from colorama import Fore
 from GramAddict.core.decorators import run_safely
 from GramAddict.core.device_facade import DeviceFacade, Timeout
 from GramAddict.core.action_throttler import ActionType, get_throttler
+from GramAddict.core.engagement_protect import is_engaged
 from GramAddict.core.plugin_loader import Plugin
 from GramAddict.core.resources import ClassName
 from GramAddict.core.resources import ResourceID as resources
@@ -14,6 +15,7 @@ from GramAddict.core.storage import FollowingStatus
 from GramAddict.core.utils import (
     get_value,
     inspect_current_view,
+    open_instagram_with_url,
     random_sleep,
     save_crash,
 )
@@ -187,6 +189,34 @@ class ActionUnfollowFollowers(Plugin):
         my_username,
         job_name,
     ):
+        # 2026-05-14: Per i job che agiscono SOLO su utenti gia' followati dal
+        # bot (lista in interacted_users.json), saltiamo completamente la
+        # navigazione/scroll della lista following di Instagram e apriamo
+        # ogni candidato direttamente via deeplink instagram://user. Vantaggi:
+        #   1) Niente scroll lunghissimo della lista following (1000+ voci)
+        #      che spesso triggera il "Cannot iterate over the list anymore"
+        #      = soft-ban segnale.
+        #   2) Pattern piu' "umano": apri profilo X, unfollow, esci, apri
+        #      profilo Y, unfollow, ecc. (come farebbe una persona da una
+        #      cronologia/note esterne).
+        #   3) Funziona anche se IG cambia il layout della lista following.
+        # Per gli "ANY*" (unfollow di chi non hai mai seguito col bot) serve
+        # ancora la lista (non abbiamo alternativa).
+        if unfollow_restriction in (
+            UnfollowRestriction.FOLLOWED_BY_SCRIPT,
+            UnfollowRestriction.FOLLOWED_BY_SCRIPT_NON_FOLLOWERS,
+        ):
+            self.iterate_via_deeplink(
+                device,
+                count,
+                on_unfollow,
+                storage,
+                unfollow_restriction,
+                my_username,
+                job_name,
+            )
+            return
+
         skipped_list_limit = get_value(self.args.skipped_list_limit, None, 15)
         skipped_fling_limit = get_value(self.args.fling_when_skipped, None, 0)
         posts_end_detector = ScrollEndDetector(
@@ -205,6 +235,196 @@ class ActionUnfollowFollowers(Plugin):
             posts_end_detector,
             job_name,
         )
+
+    def iterate_via_deeplink(
+        self,
+        device,
+        count,
+        on_unfollow,
+        storage,
+        unfollow_restriction,
+        my_username,
+        job_name,
+    ):
+        """Unfollow per ogni candidato in interacted_users.json aprendo il
+        profilo via deeplink (instagram://user?username=X) invece di scrollare
+        la lista following dell'app.
+
+        Selezione candidati:
+          - following_status in (FOLLOWED, REQUESTED)
+          - can_be_unfollowed(last_interaction, unfollow-delay) == True
+          - non in whitelist statica (whitelist.txt)
+          - non in engaged_users.json (soft-whitelist dinamica)
+          - se restriction == FOLLOWED_BY_SCRIPT_NON_FOLLOWERS: skip se IG
+            mostra che ti segue (controllo fatto sul profilo aperto)
+
+        Ordine: dal piu' vecchio al piu' nuovo last_interaction (default),
+        oppure inverso se sort_followers_newest_to_oldest=True.
+        """
+        from datetime import datetime
+
+        unfollow_delay_days = get_value(self.args.unfollow_delay, None, 0)
+        only_non_followers = (
+            unfollow_restriction
+            == UnfollowRestriction.FOLLOWED_BY_SCRIPT_NON_FOLLOWERS
+        )
+
+        # Costruisci lista candidati ordinata per last_interaction
+        candidates = []
+        for username, user in storage.interacted_users.items():
+            try:
+                fs_str = user.get("following_status", "")
+                if not fs_str:
+                    continue
+                fs = FollowingStatus[fs_str.upper()]
+            except (KeyError, AttributeError):
+                continue
+            if fs not in (FollowingStatus.FOLLOWED, FollowingStatus.REQUESTED):
+                continue
+            try:
+                last = datetime.strptime(
+                    user["last_interaction"], "%Y-%m-%d %H:%M:%S.%f"
+                )
+            except (KeyError, ValueError):
+                continue
+            if not storage.can_be_unfollowed(last, unfollow_delay_days):
+                continue
+            if storage.is_user_in_whitelist(username):
+                continue
+            if is_engaged(username, storage.account_path):
+                continue
+            candidates.append((username, last))
+
+        candidates.sort(
+            key=lambda x: x[1],
+            reverse=bool(self.args.sort_followers_newest_to_oldest),
+        )
+
+        logger.info(
+            f"[deeplink-unfollow] Found {len(candidates)} candidate(s) to unfollow "
+            f"(unfollow-delay={unfollow_delay_days}d, target this session={count}).",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+        if not candidates:
+            logger.info("Nothing to unfollow. Finish.")
+            return
+
+        unfollowed_count = 0
+        for username, _ in candidates:
+            if unfollowed_count >= count:
+                logger.info(
+                    f"Reached session unfollow target ({count}). Stop.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return
+
+            url = f"https://www.instagram.com/{username}/"
+            if not open_instagram_with_url(url):
+                logger.warning(f"Cannot open deeplink for @{username}, skip.")
+                continue
+            random_sleep()
+
+            unfollowed = self._unfollow_current_profile(
+                device, username, my_username, only_non_followers
+            )
+            if unfollowed:
+                storage.add_interacted_user(
+                    username,
+                    self.session_state.id,
+                    unfollowed=True,
+                    job_name=job_name,
+                    target=None,
+                )
+                on_unfollow()
+                unfollowed_count += 1
+                if self.session_state.check_limit(
+                    limit_type=self.session_state.Limit.UNFOLLOWS,
+                    output=True,
+                ):
+                    logger.info(
+                        "Session unfollows limit reached. Stop.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    return
+
+    def _unfollow_current_profile(
+        self,
+        device: DeviceFacade,
+        username: str,
+        my_username: str,
+        only_non_followers: bool,
+    ) -> bool:
+        """Aspetta che il profilo aperto via deeplink sia caricato, controlla
+        opzionalmente che l'utente NON ti segua (per FOLLOWED_BY_SCRIPT_NON_FOLLOWERS),
+        clicca 'Following' e conferma. Riusa la stessa logica di do_unfollow
+        ma adattata al fatto che ci troviamo gia' sul ProfileView.
+        """
+        # Verifica che il ProfileView sia caricato
+        unfollow_button = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            clickable=True,
+            textMatches=FOLLOWING_REGEX,
+        )
+        if not unfollow_button.exists(Timeout.LONG):
+            logger.warning(
+                f"@{username}: cannot find 'Following/Requested' button on profile (account may be deleted, suspended or you no longer follow). Skip."
+            )
+            return False
+
+        if only_non_followers:
+            is_following_you = self.check_is_follower(device, username, my_username)
+            if is_following_you is None:
+                logger.info(f"@{username}: cannot determine follow-back status. Skip.")
+                return False
+            if is_following_you:
+                logger.info(
+                    f"Skip @{username}: this user is following you back."
+                )
+                return False
+            # check_is_follower fa device.back() -> torna al profilo, ricarica button
+            unfollow_button = device.find(
+                classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+                clickable=True,
+                textMatches=FOLLOWING_REGEX,
+            )
+            if not unfollow_button.exists(Timeout.MEDIUM):
+                logger.warning(
+                    f"@{username}: 'Following' button gone after follower check. Skip."
+                )
+                return False
+
+        logger.debug("Unfollow button click.")
+        get_throttler().wait_if_needed(ActionType.UNFOLLOW)
+        unfollow_button.click()
+        logger.info(f"Unfollow @{username}.", extra={"color": f"{Fore.YELLOW}"})
+
+        confirm_unfollow_button = None
+        for _ in range(2):
+            confirm_unfollow_button = device.find(
+                resourceId=self.ResourceID.FOLLOW_SHEET_UNFOLLOW_ROW
+            )
+            if confirm_unfollow_button.exists(Timeout.SHORT):
+                break
+
+        if not confirm_unfollow_button or not confirm_unfollow_button.exists():
+            logger.error(f"@{username}: cannot confirm unfollow.")
+            save_crash(device)
+            return False
+        logger.debug("Confirm unfollow.")
+        confirm_unfollow_button.click()
+        random_sleep(0, 1, modulable=False)
+
+        # Conferma extra per profili privati
+        private_unfollow_button = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            textMatches=UNFOLLOW_REGEX,
+        )
+        if private_unfollow_button.exists(Timeout.SHORT):
+            logger.debug("Confirm unfollow private account.")
+            private_unfollow_button.click()
+
+        UniversalActions.detect_block(device)
+        return True
 
     def on_unfollow(self):
         self.state.unfollowed_count += 1
@@ -330,7 +550,7 @@ class ActionUnfollowFollowers(Plugin):
                     # ti mette like / commenta / ti ha scritto, NON
                     # unfolloware. Politica conservativa: meglio tenere
                     # un follow "in piu'" che perdere un cliente reale.
-                    if _is_engaged(username, storage.account_path):
+                    if is_engaged(username, storage.account_path):
                         logger.info(
                             f"@{username} is in engaged_users.json "
                             f"(active engagement). Skip unfollow."
