@@ -26,18 +26,38 @@ def create_device(device_id, app_id):
 
 
 def get_device_info(device):
-    logger.debug(
-        f"Phone Name: {device.get_info()['productName']}, SDK Version: {device.get_info()['sdkInt']}"
+    # The first JSON-RPC call right after an atx-agent restart can fail with a
+    # ProxyError ("Cannot connect to proxy") because the agent is not yet ready
+    # to answer. Retry a few times before giving up to avoid crashing the bot
+    # at the start of a new session.
+    last_err = None
+    for attempt in range(5):
+        try:
+            info = device.get_info()
+            logger.debug(
+                f"Phone Name: {info['productName']}, SDK Version: {info['sdkInt']}"
+            )
+            if int(info["sdkInt"]) < 19:
+                logger.warning("Only Android 4.4+ (SDK 19+) devices are supported!")
+            logger.debug(
+                f"Screen dimension: {info['displayWidth']}x{info['displayHeight']}"
+            )
+            logger.debug(
+                f"Screen resolution: {info['displaySizeDpX']}x{info['displaySizeDpY']}"
+            )
+            logger.debug(f"Device ID: {device.deviceV2.serial}")
+            return
+        except Exception as e:
+            last_err = e
+            logger.warning(
+                f"get_device_info: attempt {attempt + 1}/5 failed ({type(e).__name__}: {e}). "
+                f"Retrying in 2s..."
+            )
+            sleep(2.0)
+    logger.error(
+        f"get_device_info: device did not respond after retries (last error: {last_err}). "
+        f"Continuing without device info."
     )
-    if int(device.get_info()["sdkInt"]) < 19:
-        logger.warning("Only Android 4.4+ (SDK 19+) devices are supported!")
-    logger.debug(
-        f"Screen dimension: {device.get_info()['displayWidth']}x{device.get_info()['displayHeight']}"
-    )
-    logger.debug(
-        f"Screen resolution: {device.get_info()['displaySizeDpX']}x{device.get_info()['displaySizeDpY']}"
-    )
-    logger.debug(f"Device ID: {device.deviceV2.serial}")
 
 
 class Timeout(Enum):
