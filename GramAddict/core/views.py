@@ -404,10 +404,11 @@ class SearchView:
         try:
             serial = self.device.deviceV2.serial
         except Exception as e:
-            logger.debug(f"_adb_type_text: cannot read device serial: {e}")
+            logger.warning(f"⌨️  adb-type: cannot read device serial: {e}")
             return False
         # `adb shell input text` does not accept spaces directly; replace with %s.
         safe = text.replace(" ", "%s")
+        logger.info(f"⌨️  adb-type: sending {text!r} ({len(text)} chars) to focused EditText via 'adb shell input text'")
         try:
             res = subprocess.run(
                 ["adb", "-s", serial, "shell", "input", "text", safe],
@@ -417,12 +418,14 @@ class SearchView:
             )
             stdout = (res.stdout or b"").decode(errors="replace").strip()
             stderr = (res.stderr or b"").decode(errors="replace").strip()
-            logger.debug(
-                f"_adb_type_text: rc={res.returncode} stdout={stdout!r} stderr={stderr!r}"
-            )
-            return res.returncode == 0
+            ok = res.returncode == 0
+            if ok:
+                logger.info(f"⌨️  adb-type: OK (rc=0). stdout={stdout!r} stderr={stderr!r}")
+            else:
+                logger.warning(f"⌨️  adb-type: FAILED rc={res.returncode} stdout={stdout!r} stderr={stderr!r}")
+            return ok
         except Exception as ex:
-            logger.debug(f"_adb_type_text: adb failed: {ex}")
+            logger.warning(f"⌨️  adb-type: exception while running adb: {ex}")
             return False
 
     def _kick_search(self):
@@ -466,10 +469,10 @@ class SearchView:
         logger.info(f"Navigate to {target}")
         search_edit_text = self._getSearchEditText()
         if search_edit_text is not None:
-            logger.debug("Pressing on searchbar.")
+            logger.info("⌨️  Searchbar trovata, clicco per dare focus.")
             search_edit_text.click(sleep=SleepTime.SHORT)
         else:
-            logger.debug("There is no searchbar!")
+            logger.warning("⌨️  Nessuna searchbar visibile: impossibile digitare.")
             return False
         # NOTE: original implementation had an early _check_current_view here to
         # detect if the target is already in the search history. We skip it on
@@ -478,19 +481,35 @@ class SearchView:
         # Type the search text using ADB `input text` so IG receives real
         # keystroke events and triggers live search (FastInputIME tends to be
         # broken on most emulators, so set_text+PASTE leaves the result list empty).
-        logger.debug(f"navigate_to_target: typing {target!r} via adb input text.")
         adb_typed = self._adb_type_text(target)
         if not adb_typed:
             # Fallback to the original approach
-            logger.debug("navigate_to_target: adb typing failed, falling back to set_text.")
+            mode_name = "PASTE (dont_type=true)" if args.dont_type else "TYPE keystroke"
+            logger.warning(
+                f"⌨️  adb-type fallita, fallback a set_text({mode_name})."
+            )
             search_edit_text.set_text(
                 target,
                 Mode.PASTE if args.dont_type else Mode.TYPE,
             )
             if args.dont_type:
+                logger.info("⌨️  Kick-search: invio SPACE+BACKSPACE per forzare live-filter.")
                 self._kick_search()
         # Give IG some time to fetch search results
         random_sleep(2, 4, modulable=False)
+        # Readback: verify what the searchbar actually contains right now.
+        try:
+            current = self._getSearchEditText()
+            if current is not None and current.exists():
+                seen = current.get_text() or ""
+                if seen.strip().lower() == target.strip().lower():
+                    logger.info(f"⌨️  Searchbar OK: contiene {seen!r}.")
+                else:
+                    logger.warning(
+                        f"⌨️  Searchbar MISMATCH: atteso {target!r} ma trovato {seen!r}."
+                    )
+        except Exception as e:
+            logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
         if self._check_current_view(target, job):
             logger.info(f"{target} is in top view.")
             return True
@@ -500,9 +519,9 @@ class SearchView:
                 resourceIdMatches=ResourceID.SEARCH_ROW_ITEM
             )
             count = visible_rows.count_items()
-            logger.debug(
-                f"navigate_to_target: target {target!r} not found yet, "
-                f"{count} SEARCH_ROW_ITEM(s) visible after typing."
+            logger.info(
+                f"🔍 navigate_to_target: target {target!r} non in top view; "
+                f"{count} riga/righe SEARCH_ROW_ITEM visibili dopo la digitazione."
             )
         except Exception as e:
             logger.debug(f"navigate_to_target: could not enumerate rows: {e}")
