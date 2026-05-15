@@ -493,6 +493,35 @@ def restart_atx_agent(device):
     except subprocess.CalledProcessError as e:
         logger.error(f"Error occurred while restarting atx-agent: {e}")
 
+    # Wait until the uiautomator2 JSON-RPC endpoint is responsive again before
+    # the next session tries to call it (otherwise get_device_info raises a
+    # ProxyError and crashes the whole bot process).
+    _wait_for_atx_agent_ready(device)
+
+
+def _wait_for_atx_agent_ready(device, max_wait_s: int = 30):
+    """Poll atx-agent / uiautomator2 until it answers, or give up gracefully."""
+    deadline = time.time() + max_wait_s
+    attempt = 0
+    last_err = None
+    while time.time() < deadline:
+        attempt += 1
+        try:
+            # Lightweight probe: ask uiautomator2 for device info.
+            _ = device.deviceV2.info
+            logger.info(
+                f"atx-agent is responsive again (after {attempt} probe(s))."
+            )
+            return True
+        except Exception as e:
+            last_err = e
+            sleep(1.0)
+    logger.warning(
+        f"atx-agent did not become responsive within {max_wait_s}s "
+        f"(last error: {last_err}). Continuing anyway."
+    )
+    return False
+
 
 def _restore_keyboard(device):
     logger.debug("Back to default keyboard!")
