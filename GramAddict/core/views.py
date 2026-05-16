@@ -250,18 +250,23 @@ class HashTagView:
         if obj.exists(Timeout.LONG):
             logger.debug("RecyclerView exists.")
         else:
-            logger.debug("RecyclerView doesn't exists.")
+            logger.warning("⚠️  RecyclerView non trovata — hashtag page non caricata o layout cambiato.")
         return obj
 
     def _getFistImageView(self, recycler):
-        obj = recycler.child(
-            resourceIdMatches=ResourceID.IMAGE_BUTTON,
-        )
-        if obj.exists(Timeout.LONG):
-            logger.debug("First image in view exists.")
-        else:
-            logger.debug("First image in view doesn't exists.")
-        return obj
+        # Tentativo 1: IMAGE_BUTTON (layout classico)
+        obj = recycler.child(resourceIdMatches=ResourceID.IMAGE_BUTTON)
+        if obj.exists(Timeout.MEDIUM):
+            logger.debug("First image in view exists (IMAGE_BUTTON).")
+            return obj
+        # Fallback: qualunque child cliccabile nel recycler (layout nuovo IG)
+        logger.warning("⚠️  IMAGE_BUTTON non trovato nel RecyclerView — provo fallback su child cliccabile.")
+        obj_fallback = recycler.child(clickable=True)
+        if obj_fallback.exists(Timeout.SHORT):
+            logger.info("🔄 Fallback: trovato child cliccabile nel RecyclerView.")
+            return obj_fallback
+        logger.warning("⚠️  Nessun child cliccabile trovato nel RecyclerView.")
+        return obj  # ritorna l'obj originale (non esiste) per mantenere compatibilità check .exists()
 
     def _getRecentTab(self):
         obj = self.device.find(
@@ -292,13 +297,18 @@ class PlacesView:
         return obj
 
     def _getFistImageView(self, recycler):
-        obj = recycler.child(
-            resourceIdMatches=ResourceID.IMAGE_BUTTON,
-        )
-        if obj.exists(Timeout.LONG):
-            logger.debug("First image in view exists.")
-        else:
-            logger.debug("First image in view doesn't exists.")
+        # Tentativo 1: IMAGE_BUTTON (layout classico)
+        obj = recycler.child(resourceIdMatches=ResourceID.IMAGE_BUTTON)
+        if obj.exists(Timeout.MEDIUM):
+            logger.debug("First image in view exists (IMAGE_BUTTON).")
+            return obj
+        # Fallback: qualunque child cliccabile nel recycler (layout nuovo IG)
+        logger.warning("⚠️  IMAGE_BUTTON non trovato nel RecyclerView (PlacesView) — provo fallback su child cliccabile.")
+        obj_fallback = recycler.child(clickable=True)
+        if obj_fallback.exists(Timeout.SHORT):
+            logger.info("🔄 Fallback PlacesView: trovato child cliccabile nel RecyclerView.")
+            return obj_fallback
+        logger.warning("⚠️  Nessun child cliccabile trovato nel RecyclerView (PlacesView).")
         return obj
 
     def _getRecentTab(self):
@@ -830,7 +840,16 @@ class PostsViewList:
                 resourceId=ResourceID.ROW_FEED_TEXTVIEW_LIKES,
                 className=ClassName.TEXT_VIEW,
             )
-            if " Liked by" in likes_view.get_text():
+            if not likes_view.exists():
+                logger.warning("⚠️  open_likers_container: likes_view non trovata — skip apertura likers.")
+                return
+            try:
+                likes_text = likes_view.get_text() or ""
+            except Exception as e:
+                logger.warning(f"⚠️  open_likers_container: get_text() fallita ({e}) — fallback click diretto.")
+                likes_view.click()
+                return
+            if " Liked by" in likes_text:
                 post_liked_by_a_following = True
             elif likes_view.child().count_items() < 2:
                 likes_view.click()
@@ -897,7 +916,15 @@ class PostsViewList:
             current_job, Owner.GET_NAME
         )
         has_tags = self._has_tags()
+        max_swipes = 8  # fallback: evita loop infinito se la descrizione non appare mai
+        swipe_count = 0
         while True:
+            if swipe_count >= max_swipes:
+                logger.warning(
+                    f"⚠️  _check_if_last_post: raggiunto limite {max_swipes} swipe senza trovare descrizione. "
+                    "Esco con post 'non duplicato' per evitare loop infinito."
+                )
+                return False, last_description or "", username, is_ad, is_hashtag, has_tags
             post_description = self.device.find(
                 index=-1,
                 resourceIdMatches=ResourceID.ROW_FEED_TEXT,
@@ -930,6 +957,7 @@ class PostsViewList:
                     universal_actions._swipe_points(
                         direction=Direction.DOWN, delta_y=200
                     )
+                    swipe_count += 1
                     continue
                 row_feed_profile_header = self.device.find(
                     resourceId=ResourceID.ROW_FEED_PROFILE_HEADER
@@ -949,6 +977,7 @@ class PostsViewList:
                     f"Can't find the description of {username}'s post, try to swipe a little bit down."
                 )
                 universal_actions._swipe_points(direction=Direction.DOWN, delta_y=200)
+                swipe_count += 1
 
     def _if_action_bar_is_over_obj_swipe(self, obj):
         """do a swipe of the amount of the action bar"""
