@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -119,7 +120,7 @@ _MAX_CAPTION_CHARS = 800
 # Se l'API risponde piu' lentamente di questo, abbandoniamo: meglio
 # usare un commento dal file txt che far aspettare il bot per minuti
 # (il bot deve restare "umano" nei tempi di risposta).
-_REQUEST_TIMEOUT_S = 12
+_REQUEST_TIMEOUT_S = 8
 
 # Cascata di modelli di fallback. Se il primo (configurato dall'utente)
 # fallisce con un errore "transitorio" (rate-limit, 5xx, timeout, blocco
@@ -196,11 +197,12 @@ def _build_prompt(
 
 def _sanitize_output(text: str) -> str:
     """Rimuove rumore comune dei modelli: virgolette wrap, prefissi tipo
-    'Comment:', newline interni, spazi doppi, e taglia a 220 char (limite
-    morbido: commenti piu' lunghi sembrano scripted)."""
+    'Comment:', newline interni, spazi doppi, tag HTML, e taglia a 220 char."""
     if not text:
         return ""
     t = text.strip()
+    # rimuovi tag HTML (es. </blockquote>, <br>, ecc.)
+    t = re.sub(r"<[^>]+>", "", t).strip()
     # rimuovi un eventuale wrap di virgolette singole/doppie/back-tick
     for q in ('"', "'", "`"):
         if len(t) >= 2 and t.startswith(q) and t.endswith(q):
@@ -247,7 +249,7 @@ def _call_gemini(
             "temperature": 0.9,
             "topP": 1.0,
             "topK": 40,
-            "maxOutputTokens": 80,
+            "maxOutputTokens": 120,
         },
         # Filtri di sicurezza: lasciamo i default (BLOCK_MEDIUM_AND_ABOVE).
     }
