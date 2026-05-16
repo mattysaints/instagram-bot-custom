@@ -1574,6 +1574,10 @@ class OpenedPostView:
         )
         liked = False
         full_screen, obj = self._is_video_in_fullscreen()
+        if not full_screen:
+            logger.warning("❌ like_video: video NON in fullscreen — impossibile eseguire il like. "
+                           "Probabile cambio layout Reel/IGTV o post non caricato.")
+            return False
         if full_screen:
             logger.info("Liking video.")
             obj.double_click()
@@ -1588,17 +1592,20 @@ class OpenedPostView:
                     like_button.click()
                     UniversalActions.detect_block(self.device)
                 else:
-                    logger.error("We are seeing another video.")
+                    logger.error("❌ like_video: like_button non trovato — probabile layout Reel diverso (UFI_STACK assente).")
                 liked, _ = self._is_video_liked()
+            if not liked:
+                logger.warning("❌ like_video: like video fallito dopo double-click + fallback heart.")
         return liked
 
     def _getListViewLikers(self):
-        for _ in range(2):
+        for attempt in range(2):
             obj = self.device.find(resourceId=ResourceID.LIST)
             if obj.exists(Timeout.LONG):
+                logger.info(f"📋 Lista likers caricata (tentativo {attempt+1}/2).")
                 return obj
-            logger.debug("Can't find likers list, try again..")
-        logger.error("Can't load likers list..")
+            logger.warning(f"⚠️  Lista likers non trovata (tentativo {attempt+1}/2), riprovo...")
+        logger.error("❌ Lista likers NON caricata dopo 2 tentativi. Il post verrà saltato.")
         return None
 
     def _getUserContainer(self):
