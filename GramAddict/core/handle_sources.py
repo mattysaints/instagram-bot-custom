@@ -434,11 +434,35 @@ def handle_likers(
     post_description = ""
     nr_same_post = 0
     nr_same_posts_max = 3
+    consecutive_errors = 0
+    max_consecutive_errors = 3
     while True:
-        flag, post_description, _, _, _, _ = PostsViewList(device)._check_if_last_post(
-            post_description, current_job
-        )
-        has_likers, number_of_likers = PostsViewList(device)._find_likers_container()
+        try:
+            flag, post_description, _, _, _, _ = PostsViewList(device)._check_if_last_post(
+                post_description, current_job
+            )
+            has_likers, number_of_likers = PostsViewList(device)._find_likers_container()
+            consecutive_errors = 0  # reset su successo
+        except Exception as e:
+            consecutive_errors += 1
+            logger.warning(
+                f"⚠️  handle_likers: eccezione durante check post di {target!r} "
+                f"({consecutive_errors}/{max_consecutive_errors}): {e}"
+            )
+            if consecutive_errors >= max_consecutive_errors:
+                logger.error(
+                    f"❌ handle_likers: troppi errori consecutivi su {target!r}. Abbandono sorgente."
+                )
+                try:
+                    device.back()
+                except Exception:
+                    pass
+                return False
+            try:
+                PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+            except Exception:
+                pass
+            continue
         if flag:
             nr_same_post += 1
             logger.info(f"Warning: {nr_same_post}/{nr_same_posts_max} repeated posts.")
@@ -523,8 +547,10 @@ def handle_likers(
             opened = False
             user_container = OpenedPostView(device)._getUserContainer()
             if user_container is None:
-                logger.warning("Likers list didn't load :(")
-                return
+                logger.warning(f"⚠️  Lista likers scomparsa durante iterazione di {target!r}. Torno ai post.")
+                device.back()
+                PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                break
             row_height, n_users = inspect_current_view(user_container)
             try:
                 for item in user_container:
