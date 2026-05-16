@@ -71,10 +71,13 @@ def nav_to_hashtag_or_place(device, target, current_job):
     if current_job.endswith("recent"):
         logger.info("Switching to Recent tab.")
         recent_tab = TargetView(device)._getRecentTab()
-        if recent_tab.exists(Timeout.MEDIUM):
+        if recent_tab.exists(Timeout.TINY):
             recent_tab.click()
         else:
-            return False
+            logger.info(
+                "Recent tab is not available in this Instagram layout. "
+                "Continuing with the currently visible hashtag/place posts."
+            )
 
         if UniversalActions(device)._check_if_no_posts():
             UniversalActions(device)._reload_page()

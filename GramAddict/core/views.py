@@ -1,6 +1,7 @@
 import datetime
 import logging
 import re
+import shlex
 import platform
 from enum import Enum, auto
 from random import choice, randint, uniform
@@ -44,6 +45,25 @@ def load_config(config):
 def case_insensitive_re(str_list):
     strings = str_list if isinstance(str_list, str) else "|".join(str_list)
     return f"(?i)({strings})"
+
+
+def adb_input_text_command_arg(text: str) -> str:
+    """
+    Build the remote shell argument for `adb shell input text`.
+
+    adb forwards the shell command to Android's /system/bin/sh, where values
+    such as #hashtags would otherwise be interpreted as comments.
+    """
+    safe = text.replace(" ", "%s")
+    return shlex.quote(safe)
+
+
+def adb_input_text_stderr_is_failure(stderr: str) -> bool:
+    stderr_lower = (stderr or "").lower()
+    return (
+        "error: invalid arguments for command: text" in stderr_lower
+        or "usage: input" in stderr_lower
+    )
 
 
 class TabBarTabs(Enum):
@@ -248,7 +268,7 @@ class HashTagView:
             className=ClassName.TEXT_VIEW,
             textMatches=case_insensitive_re(TabBarText.RECENT_CONTENT_DESC),
         )
-        if obj.exists(Timeout.LONG):
+        if obj.exists(Timeout.TINY):
             logger.debug("Recent Tab exists.")
         else:
             logger.debug("Recent Tab doesn't exists.")
@@ -282,10 +302,15 @@ class PlacesView:
         return obj
 
     def _getRecentTab(self):
-        return self.device.find(
+        obj = self.device.find(
             className=ClassName.TEXT_VIEW,
             textMatches=case_insensitive_re(TabBarText.RECENT_CONTENT_DESC),
         )
+        if obj.exists(Timeout.TINY):
+            logger.debug("Recent Tab exists.")
+        else:
+            logger.debug("Recent Tab doesn't exists.")
+        return obj
 
     def _getInformBody(self):
         return self.device.find(
@@ -406,19 +431,23 @@ class SearchView:
         except Exception as e:
             logger.warning(f"⌨️  adb-type: cannot read device serial: {e}")
             return False
-        # `adb shell input text` does not accept spaces directly; replace with %s.
-        safe = text.replace(" ", "%s")
         logger.info(f"⌨️  adb-type: sending {text!r} ({len(text)} chars) to focused EditText via 'adb shell input text'")
         try:
             res = subprocess.run(
-                ["adb", "-s", serial, "shell", "input", "text", safe],
+                [
+                    "adb",
+                    "-s",
+                    serial,
+                    "shell",
+                    f"input text {adb_input_text_command_arg(text)}",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=10,
             )
             stdout = (res.stdout or b"").decode(errors="replace").strip()
             stderr = (res.stderr or b"").decode(errors="replace").strip()
-            ok = res.returncode == 0
+            ok = res.returncode == 0 and not adb_input_text_stderr_is_failure(stderr)
             if ok:
                 logger.info(f"⌨️  adb-type: OK (rc=0). stdout={stdout!r} stderr={stderr!r}")
             else:
