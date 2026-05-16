@@ -428,7 +428,9 @@ def handle_likers(
         or current_job != "blogger-post-likers"
         and not nav_to_hashtag_or_place(device, target, current_job)
     ):
+        logger.warning(f"⛔ handle_likers: navigazione fallita per {target!r} ({current_job}). Sorgente saltata.")
         return False
+    logger.info(f"📋 handle_likers: inizio scansione likers di {target!r} ({current_job})")
     post_description = ""
     nr_same_post = 0
     nr_same_posts_max = 3
@@ -454,8 +456,15 @@ def handle_likers(
             and profile_filter.is_num_likers_in_range(number_of_likers)
             and number_of_likers != 1
         ):
+            logger.info(f"👍 Post di {target!r}: {number_of_likers} likers — apro lista.")
             PostsViewList(device).open_likers_container()
         else:
+            if not has_likers:
+                logger.info(f"⏭️  Post di {target!r}: nessun likers visibile — skip post.")
+            elif number_of_likers == 1:
+                logger.info(f"⏭️  Post di {target!r}: solo 1 liker — skip post.")
+            else:
+                logger.info(f"⏭️  Post di {target!r}: {number_of_likers} likers fuori range filtro — skip post.")
             PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
             continue
 
@@ -463,7 +472,9 @@ def handle_likers(
 
         likes_list_view = OpenedPostView(device)._getListViewLikers()
         if likes_list_view is None:
-            return
+            logger.warning(f"⚠️  Lista likers non caricata per post di {target!r}. Passo al post successivo.")
+            PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+            continue
         prev_screen_iterated_likers = []
 
         # --- Random skip start on likers list ---
