@@ -273,7 +273,9 @@ class ActionUnfollowFollowers(Plugin):
         # Throttle re-checks: if we already probed a user in the last
         # RECHECK_DAYS days and decided NOT to unfollow them (because they
         # follow us back, or the UI check failed), skip them this session.
-        RECHECK_DAYS = 5
+        # Abbassato da 5 a 2: con 5gg e backlog di ~100 utenti si svuotava
+        # la coda in 1 sessione e poi rimaneva a 0 candidati per 5 giorni.
+        RECHECK_DAYS = 2
         eligible_statuses = {
             FollowingStatus.FOLLOWED,
             FollowingStatus.REQUESTED,
@@ -281,24 +283,39 @@ class ActionUnfollowFollowers(Plugin):
             FollowingStatus.UNFOLLOWED,
         }
         candidates = []
+        skipped_whitelist = 0
+        skipped_status = 0
+        skipped_delay = 0
+        skipped_recheck = 0
         for username, _ in storage.interacted_users.items():
             if storage.is_user_in_whitelist(username):
+                skipped_whitelist += 1
                 continue
             status = storage.get_following_status(username)
             if status == FollowingStatus.NOT_IN_LIST:
+                skipped_status += 1
                 continue
             if status not in eligible_statuses:
+                skipped_status += 1
                 continue
             _, last_interaction = storage.check_user_was_interacted(username)
             if not storage.can_be_unfollowed(last_interaction, delay_days):
+                skipped_delay += 1
                 continue
             # Skip users we already probed recently and decided to keep
             last_check, _ = storage.get_last_unfollow_check(username)
             if last_check is not None and (
                 datetime.now() - last_check
             ).days < RECHECK_DAYS:
+                skipped_recheck += 1
                 continue
             candidates.append((username, last_interaction or datetime.min))
+        logger.info(
+            f"🔍 unfollow candidates: {len(candidates)} OK | "
+            f"skip_status={skipped_status} skip_delay={skipped_delay} "
+            f"skip_recheck={skipped_recheck}(RECHECK={RECHECK_DAYS}d) "
+            f"skip_whitelist={skipped_whitelist}"
+        )
         # Oldest interactions first - those are the safer ones to drop.
         candidates.sort(key=lambda x: x[1])
         # But shuffle the head a bit so we don't always hit the very same users
