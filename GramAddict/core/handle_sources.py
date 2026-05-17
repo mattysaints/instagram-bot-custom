@@ -721,6 +721,23 @@ def handle_posts(
     # --- Random skip start on posts (hashtag/place). Disabled for feed. ---
     if current_job != "feed":
         skip_n = _get_scroll_skip_start(self.args, "posts")
+        # Per sorgenti vergini (mai visitate) cappare lo skip a max 5:
+        # non ha senso saltare 75 post su un hashtag mai visto prima.
+        if skip_n > 0:
+            try:
+                rec = storage.get_explored_segments_record(current_job, target) if hasattr(storage, "get_explored_segments_record") else None
+                rec_iters = rec.get("total_iterations", 0) if rec else 0
+                rec_anchor = rec.get("last_anchor") if rec else None
+                is_virgin = rec_iters == 0 and rec_anchor is None
+                if is_virgin and skip_n > 5:
+                    logger.info(
+                        f"[skip-start] Prima visita a {target}: capping skip "
+                        f"{skip_n} -> 5 (sorgente vergine, non ha senso saltare post non visti).",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    skip_n = 5
+            except Exception as e:
+                logger.debug(f"skip-start cap (posts) check failed: {e}")
         if skip_n > 0:
             logger.info(
                 f"Skipping first {skip_n} posts of {target} (random start).",
