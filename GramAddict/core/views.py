@@ -1328,6 +1328,12 @@ class AccountView:
                 return True
             logger.debug(f"You're logged as {current_profile_name.strip()}")
             selector = self.device.find(resourceId=ResourceID.ACTION_BAR_TITLE_CHEVRON)
+            if not selector.exists(Timeout.SHORT):
+                logger.warning(
+                    "Account switcher chevron not found (single account or new IG UI). "
+                    "Assuming current account is correct and skipping account switch."
+                )
+                return True
             selector.click()
             if self._find_username(username):
                 if action_bar is not None:
