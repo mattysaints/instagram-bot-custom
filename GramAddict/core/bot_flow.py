@@ -206,7 +206,14 @@ def start_bot(**kwargs):
                 save_crash(device)
             except Exception as save_e:
                 logger.warning(f"save_crash failed (device unreachable?): {save_e}")
-            break
+            # Do NOT break: retry the session loop after a short sleep.
+            # A break here would terminate the entire bot process.
+            # Transient device errors (RemoteDisconnected, AdbTimeout) during
+            # the setup phase should be recovered by restarting the loop.
+            logger.info("Setup phase failed, retrying after 30s...")
+            from time import sleep as _sleep
+            _sleep(30)
+            continue
 
         if (
             session_state.my_username is None
