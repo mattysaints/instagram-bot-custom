@@ -4,10 +4,17 @@ import traceback
 from datetime import datetime
 from http.client import HTTPException, RemoteDisconnected
 from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import ReadTimeout as RequestsReadTimeout
 from socket import timeout
 
 from colorama import Fore, Style
 from uiautomator2.exceptions import UiObjectNotFoundError, GatewayError
+
+try:
+    from adbutils.errors import AdbTimeout, AdbError
+except ImportError:
+    AdbTimeout = OSError
+    AdbError = OSError
 
 from GramAddict.core.device_facade import DeviceFacade
 from GramAddict.core.report import print_full_report
@@ -77,8 +84,11 @@ def run_safely(device, device_id, sessions, session_state, screen_record, config
                 HTTPException,
                 RemoteDisconnected,
                 RequestsConnectionError,
+                RequestsReadTimeout,
                 GatewayError,
                 OSError,
+                AdbTimeout,
+                AdbError,
                 timeout,
                 UiObjectNotFoundError,
             ):
@@ -95,11 +105,20 @@ def run_safely(device, device_id, sessions, session_state, screen_record, config
                     logger.critical(
                         f"'{exception_line}' -> This kind of exception will stop the bot (no restart)."
                     )
-                logger.info(
-                    f"List of running apps: {', '.join(device.deviceV2.app_list_running())}"
-                )
-                save_crash(device)
-                close_instagram(device)
+                try:
+                    logger.info(
+                        f"List of running apps: {', '.join(device.deviceV2.app_list_running())}"
+                    )
+                except Exception:
+                    logger.warning("Could not list running apps (device unreachable).")
+                try:
+                    save_crash(device)
+                except Exception as se:
+                    logger.warning(f"save_crash failed in except handler: {se}")
+                try:
+                    close_instagram(device)
+                except Exception:
+                    pass
                 print_full_report(sessions, configs.args.scrape_to_file)
                 sessions.persist(directory=session_state.my_username)
                 raise e from e
@@ -139,11 +158,25 @@ def restart(
             )
             stop_bot(device, sessions, session_state)
         logger.info("Something unexpected happened. Let's try again.")
-    close_instagram(device)
-    check_if_crash_popup_is_there(device)
+    try:
+        close_instagram(device)
+    except Exception as e:
+        logger.warning(f"close_instagram failed during restart: {e}")
+    try:
+        check_if_crash_popup_is_there(device)
+    except Exception:
+        pass
     random_sleep()
-    if not open_instagram(device):
+    try:
+        opened = open_instagram(device)
+    except Exception as e:
+        logger.warning(f"open_instagram failed during restart: {e}")
+        opened = False
+    if not opened:
         print_full_report(sessions, configs.args.scrape_to_file)
         sessions.persist(directory=session_state.my_username)
         sys.exit(2)
-    TabBarView(device).navigateToProfile()
+    try:
+        TabBarView(device).navigateToProfile()
+    except Exception as e:
+        logger.warning(f"navigateToProfile failed during restart: {e}")
