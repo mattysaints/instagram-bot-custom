@@ -104,6 +104,11 @@ def _seek_anchor_in_followers(
 
     Returns (found: bool, anchor: Optional[str], scrolls_done: int).
     Stops early if the list does not advance (end reached / list shorter than anchor position).
+
+    NOTE: when the anchor is found we do NOT scroll past it. The main iteration
+    loop will process the current screen starting from wherever the anchor appears,
+    so no users are skipped. (Previously an extra scroll was done here, losing the
+    first screenful of fresh users after the anchor position.)
     """
     if not anchors:
         return False, None, 0
@@ -130,12 +135,14 @@ def _seek_anchor_in_followers(
 
             for name in visible_usernames:
                 if name in anchors_set:
-                    # uno scroll extra per saltare oltre l'anchor stesso
-                    list_view.scroll(Direction.DOWN)
-                    random_sleep(0.3, 0.8, modulable=False)
+                    # Anchor found on this screen. Do NOT scroll further: the main
+                    # iteration loop starts from the current visible screen, which
+                    # includes users right after the anchor position.
+                    # (The anchor itself will be skipped by the "already interacted"
+                    # check in the main loop, costing at most 1 row read.)
                     return True, name, i + 1
 
-            # se non muove piu', siamo a fondo lista
+            # se non muove piu', siamo a fondo lista -> anchor superato o lista corta
             if first_username is not None and prev_first == first_username:
                 return False, None, i
             prev_first = first_username
@@ -997,6 +1004,16 @@ def iterate_over_followers(
                             )
                             explored.reset_anchor_misses(current_job, target)
                             resumed_from_anchor = True
+                            # Do one extra scroll so the first iterated screen
+                            # is the one AFTER the anchor position, not the
+                            # screen containing the (already-seen) anchor user.
+                            # This avoids the "first screen post-resume is all
+                            # already-interacted" hot-zone false positive.
+                            try:
+                                list_view.scroll(Direction.DOWN)
+                                random_sleep(0.3, 0.7, modulable=False)
+                            except Exception as _se:
+                                logger.debug(f"[resume] post-anchor scroll failed: {_se}")
                         else:
                             misses = explored.register_anchor_miss(
                                 current_job, target
@@ -1059,6 +1076,20 @@ def iterate_over_followers(
                         extra={"color": f"{Fore.CYAN}"},
                     )
                     skip_n = capped
+                elif not is_virgin and rec_anchor is None:
+                    # Anchor miss: anchor was reset after consecutive misses.
+                    # The source has been visited before but the previous anchor
+                    # username disappeared (user deleted/blocked/left followers).
+                    # Use half the configured skip to land roughly mid-list without
+                    # risking "List didn't move" on short followers lists.
+                    halved = max(10, skip_n // 2)
+                    if halved < skip_n:
+                        logger.info(
+                            f"[skip-start] @{target} anchor reset (missed too many times): "
+                            f"halving skip {skip_n} -> {halved} to avoid overshooting.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                        skip_n = halved
             except Exception as e:
                 logger.debug(f"first-time skip cap check failed: {e}")
         if skip_n > 0:
@@ -1118,12 +1149,17 @@ def iterate_over_followers(
     )
     consecutive_zero_fresh = 0
     jumps_done = 0
+    # Track how many screens contain ONLY permanently-skipped users (unfollowed,
+    # blacklisted). These do not count toward the hot-zone "already interacted"
+    # detection — they are structurally unavoidable and will always be there.
+    screen_permanent_skip_count = 0
 
     while True:
         logger.info("Iterate over visible followers.")
         screen_iterated_followers = []
         screen_skipped_followers_count = 0
         screen_fresh_count = 0
+        screen_permanent_skips = 0  # unfollowed / blacklisted on this screen
         scroll_end_detector.notify_new_page()
         user_list = device.find(
             resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
@@ -1161,6 +1197,8 @@ def iterate_over_followers(
                 can_interact = False
                 if storage.is_user_in_blacklist(username):
                     logger.info(f"@{username} is in blacklist. Skip.")
+                    screen_skipped_followers_count += 1
+                    screen_permanent_skips += 1
                 else:
                     interacted, interacted_when = storage.check_user_was_interacted(
                         username
@@ -1171,6 +1209,8 @@ def iterate_over_followers(
                                 f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
                             )
                             screen_skipped_followers_count += 1
+                            # Permanently unavailable: does NOT drive hot-zone
+                            screen_permanent_skips += 1
                         else:
                             can_reinteract = storage.can_be_reinteract(
                                 interacted_when,
@@ -1205,6 +1245,21 @@ def iterate_over_followers(
                             target=target,
                             on_interaction=on_interaction,
                         ):
+                            # Session limit reached mid-screen: save the last
+                            # interacted username as anchor so next session
+                            # resumes from here (not just from end of screen).
+                            if (
+                                not is_myself
+                                and explored is not None
+                                and _resume_enabled(self.args)
+                            ):
+                                try:
+                                    explored.set_anchor(current_job, target, username)
+                                    logger.debug(
+                                        f"[resume] Saved mid-screen anchor @{username} before session end."
+                                    )
+                                except Exception as _ae:
+                                    logger.debug(f"set_anchor (mid-screen) failed: {_ae}")
                             return
                     if element_opened:
                         logger.info("Back to followers list")
@@ -1219,11 +1274,29 @@ def iterate_over_followers(
         # --- Hot-zone detector: troppi schermi consecutivi senza utenti FRESH ---
         if hot_zone_enabled and len(screen_iterated_followers) > 0:
             if screen_fresh_count == 0:
-                consecutive_zero_fresh += 1
-                logger.info(
-                    f"[hot-zone] No fresh users on this screen ({consecutive_zero_fresh}/{hz_screens_threshold}).",
-                    extra={"color": f"{Fore.CYAN}"},
+                # Distinguish: screen with ONLY permanently-skipped users
+                # (previously unfollowed / blacklisted) is not a "hot zone" —
+                # it is a structural dead zone that exists in every pass and does
+                # not indicate we're stuck in a recently-interacted region.
+                # Only count screens where the skips are "already interacted"
+                # (temporary) as hot-zone evidence.
+                transient_skips = screen_skipped_followers_count - screen_permanent_skips
+                all_permanent = (
+                    screen_permanent_skips == len(screen_iterated_followers)
+                    or (screen_permanent_skips > 0 and transient_skips == 0)
                 )
+                if all_permanent:
+                    logger.debug(
+                        f"[hot-zone] Screen has only permanently-skipped users "
+                        f"({screen_permanent_skips} unfollowed/blacklisted). "
+                        f"Not counting toward hot-zone."
+                    )
+                else:
+                    consecutive_zero_fresh += 1
+                    logger.info(
+                        f"[hot-zone] No fresh users on this screen ({consecutive_zero_fresh}/{hz_screens_threshold}).",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
             else:
                 if consecutive_zero_fresh > 0 or jumps_done > 0:
                     logger.info(

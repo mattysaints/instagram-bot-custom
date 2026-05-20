@@ -2,11 +2,12 @@ import logging
 import sys
 import traceback
 from datetime import datetime
-from http.client import HTTPException
+from http.client import HTTPException, RemoteDisconnected
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from socket import timeout
 
 from colorama import Fore, Style
-from uiautomator2.exceptions import UiObjectNotFoundError
+from uiautomator2.exceptions import UiObjectNotFoundError, GatewayError
 
 from GramAddict.core.device_facade import DeviceFacade
 from GramAddict.core.report import print_full_report
@@ -74,6 +75,10 @@ def run_safely(device, device_id, sessions, session_state, screen_record, config
                 DeviceFacade.JsonRpcError,
                 IndexError,
                 HTTPException,
+                RemoteDisconnected,
+                RequestsConnectionError,
+                GatewayError,
+                OSError,
                 timeout,
                 UiObjectNotFoundError,
             ):
@@ -114,10 +119,16 @@ def restart(
 ):
     if print_traceback:
         logger.error(traceback.format_exc())
-        save_crash(device)
-    logger.info(
-        f"List of running apps: {', '.join(device.deviceV2.app_list_running())}."
-    )
+        try:
+            save_crash(device)
+        except Exception as e:
+            logger.warning(f"save_crash failed during restart (device unreachable?): {e}")
+    try:
+        logger.info(
+            f"List of running apps: {', '.join(device.deviceV2.app_list_running())}."
+        )
+    except Exception:
+        logger.warning("Could not list running apps (device unreachable).")
     if configs.args.count_app_crashes or normal_crash:
         session_state.totalCrashes += 1
         if session_state.check_limit(

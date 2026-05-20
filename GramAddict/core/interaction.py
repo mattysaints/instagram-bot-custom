@@ -658,6 +658,14 @@ def _comment(
                         logger.debug(f"[ai-comment] caption extraction skipped: {e}")
 
                 logger.info("Open comments of post.")
+                # Re-check existence: between the first check and the click
+                # the button may have scrolled off screen or IG refreshed the
+                # post view, causing a JsonRpcError on a stale selector.
+                if not comment_button.exists():
+                    logger.info(
+                        "Comment button disappeared before click, skipping comment.",
+                    )
+                    break
                 comment_button.click()
                 comment_box = device.find(
                     resourceId=ResourceID.LAYOUT_COMMENT_THREAD_EDITTEXT,

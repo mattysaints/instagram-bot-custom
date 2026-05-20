@@ -202,7 +202,10 @@ def start_bot(**kwargs):
             ) = profile_view.getProfileInfo()
         except Exception as e:
             logger.error(f"Exception: {e}")
-            save_crash(device)
+            try:
+                save_crash(device)
+            except Exception as save_e:
+                logger.warning(f"save_crash failed (device unreachable?): {save_e}")
             break
 
         if (
