@@ -1,0 +1,1235 @@
+{
+  "version": 1,
+  "sources": {
+    "blogger-followers": {
+      "gymloversandfit": {
+        "last_anchor": "giovi97_photographer",
+        "anchors_history": [
+          "angela_e_luca",
+          "giovi97_photographer",
+          "simona.colavitto",
+          "bley_staffordshire",
+          "s.a.r.a.i.13"
+        ],
+        "last_seen_at": "2026-05-04T19:22:10",
+        "total_iterations": 131,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0
+      },
+      "rhinonation.co.uk": {
+        "last_anchor": "francesco.for90",
+        "anchors_history": [
+          "ylenia_11",
+          "manuelscavello",
+          "healthy_olos",
+          "salvo_california",
+          "lucywiwo"
+        ],
+        "last_seen_at": "2026-05-04T21:51:02",
+        "total_iterations": 31,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0
+      },
+      "gymitabody": {
+        "last_anchor": "acquaself_lavanderie",
+        "anchors_history": [
+          "vincenzo_gallo1997",
+          "viobarbie",
+          "dollsisters699",
+          "massaggicatania",
+          "emanueladamanti_smm"
+        ],
+        "last_seen_at": "2026-05-08T09:57:02",
+        "total_iterations": 77,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "gzannotti": {
+        "last_anchor": "fitfran__",
+        "anchors_history": [
+          "alvzxa",
+          "ele.spataro",
+          "beingmerika",
+          "alunni_paolacci_nicola",
+          "beatricemazzolenii"
+        ],
+        "last_seen_at": "2026-05-04T22:16:06",
+        "total_iterations": 47,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0
+      },
+      "malatidipalestraofficial": {
+        "last_anchor": "ariannaa_mori",
+        "anchors_history": [
+          "pravettoni.daniele",
+          "fendi_belt_7",
+          "pravettoni.daniele",
+          "lalunafitt",
+          "ilariamariamorena"
+        ],
+        "last_seen_at": "2026-05-21T12:56:34",
+        "total_iterations": 371,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "fmgshows_italy": {
+        "last_anchor": "joeythepowercoach",
+        "anchors_history": [
+          "idakaipl",
+          "otty_ifbbpro",
+          "digimoni_ita.fit",
+          "fratini.silvia",
+          "new.me.chronicles"
+        ],
+        "last_seen_at": "2026-05-08T09:58:05",
+        "total_iterations": 148,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "ifbbproitaly": {
+        "last_anchor": "bbenepp_",
+        "anchors_history": [
+          "aurelio_ricciardi_pt",
+          "http_alisss",
+          "aurelio_ricciardi_pt",
+          "greg_fernandes2026",
+          "aurelio_ricciardi_pt"
+        ],
+        "last_seen_at": "2026-05-20T09:38:45",
+        "total_iterations": 83,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "giulia_befierce": {
+        "last_anchor": "jeancloud9025",
+        "anchors_history": [
+          "rebouillatvalentin",
+          "jeancloud9025",
+          "rosi.leslie",
+          "_alinalapina_",
+          "icufi2026"
+        ],
+        "last_seen_at": "2026-05-08T09:49:06",
+        "total_iterations": 370,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "pieronocerino1": {
+        "last_anchor": "costimassimiliano",
+        "anchors_history": [
+          "_ale_t98",
+          "dario_scale",
+          "_giopasq",
+          "francesco_sessego",
+          "_ale_t98"
+        ],
+        "last_seen_at": "2026-05-09T19:30:09",
+        "total_iterations": 12,
+        "exhausted_at": "2026-05-20T22:15:54",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "andrea.presti_ifbbpro": {
+        "last_anchor": "eleonoragandinii",
+        "anchors_history": [
+          "tooturnghimi",
+          "lucadvt.fit",
+          "eleonoragandinii",
+          "tachipirinaletale",
+          "lucadvt.fit"
+        ],
+        "last_seen_at": "2026-05-07T14:06:21",
+        "total_iterations": 29,
+        "exhausted_at": "2026-05-08T11:24:55",
+        "consecutive_anchor_misses": 1,
+        "consecutive_empty_first_visits": 0
+      },
+      "npc_italy": {
+        "last_anchor": "luigi.dimatteo_fit",
+        "anchors_history": [
+          "camifit_ifbbpro",
+          "daniele.gherpelli_ifbb",
+          "aryrusso97_dancer",
+          "ulises36",
+          "silviaanselmi_"
+        ],
+        "last_seen_at": "2026-05-19T20:32:04",
+        "total_iterations": 58,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "andrea_mammoli": {
+        "last_anchor": "lucagenga",
+        "anchors_history": [
+          "nova.fit47",
+          "omarelcangri1998",
+          "carpediem.999_",
+          "salmankhan938994",
+          "diego.210925"
+        ],
+        "last_seen_at": "2026-05-08T12:08:53",
+        "total_iterations": 17,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "vitastrong_ita": {
+        "last_anchor": "vivamove_italia",
+        "anchors_history": [
+          "_._juliettee",
+          "vivamove_italia",
+          "federica.scorrano",
+          "emanuelaesposito_8",
+          "maxperformancelab"
+        ],
+        "last_seen_at": "2026-05-10T17:55:33",
+        "total_iterations": 34,
+        "exhausted_at": "2026-05-19T23:20:07",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "ludovico.lemme": {
+        "last_anchor": "andreafilistad22",
+        "anchors_history": [
+          "andreafilistad22",
+          "gianlucabadinimassoterapista",
+          "_angela_pintaudi_",
+          "andreafilistad22",
+          "federicaoggianoferrara"
+        ],
+        "last_seen_at": "2026-05-19T23:10:12",
+        "total_iterations": 51,
+        "exhausted_at": "2026-05-19T23:10:26",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "basicc99": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 1
+      },
+      "bodyfitproathletes": {
+        "last_anchor": "mr_paswanupdate",
+        "anchors_history": [
+          "missfit1138",
+          "alejocontentopapito",
+          "twissted_trigger",
+          "hartmanbernard",
+          "arcanemedia.uk"
+        ],
+        "last_seen_at": "2026-05-08T13:48:01",
+        "total_iterations": 9,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "giusepperomanocoach": {
+        "last_anchor": "rosario_platania_pt",
+        "anchors_history": [
+          "luca.zardo83",
+          "fra_chiavs",
+          "batgymbro2000",
+          "luca.zardo83",
+          "mvit497"
+        ],
+        "last_seen_at": "2026-05-14T20:23:57",
+        "total_iterations": 25,
+        "exhausted_at": "2026-05-18T13:36:18",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "excellentstyle.fitness": {
+        "last_anchor": "_miriana.coach_",
+        "anchors_history": [
+          "dr_sportcenter",
+          "giugiak_ifbb",
+          "francescaperpetua",
+          "_sharon_ifbb_"
+        ],
+        "last_seen_at": "2026-05-08T16:44:02",
+        "total_iterations": 5,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "manuel_santalucia_ifbbpro": {
+        "last_anchor": "tobiunbreakable",
+        "anchors_history": [
+          "shadowcazzz",
+          "heyjotwa",
+          "adl_coach",
+          "annanardella_pt",
+          "heyjotwa"
+        ],
+        "last_seen_at": "2026-05-17T15:22:38",
+        "total_iterations": 18,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "danielgoss_ifbbpro": {
+        "last_anchor": "yakovenko_03",
+        "anchors_history": [
+          "abduul_jab69",
+          "artem_artemich",
+          "_davidcap_",
+          "artem_artemich",
+          "assu.sarracino"
+        ],
+        "last_seen_at": "2026-05-15T16:33:59",
+        "total_iterations": 42,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "giusi.cesarini": {
+        "last_anchor": "sabri.manzoni",
+        "anchors_history": [
+          "mirianaa.romano",
+          "who_is_michele_",
+          "sabri.manzoni",
+          "sergioperezmartinez1990",
+          "md.saidur166"
+        ],
+        "last_seen_at": "2026-05-13T14:50:36",
+        "total_iterations": 18,
+        "exhausted_at": "2026-05-13T14:51:01",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "wabbaitalia": {
+        "last_anchor": "ghizzonicarlo",
+        "anchors_history": [
+          "bargioboy",
+          "lorenzopattaropt",
+          "chihuahuas599",
+          "lorenzopattaropt",
+          "hubenykulturista"
+        ],
+        "last_seen_at": "2026-05-19T11:54:56",
+        "total_iterations": 70,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "fit.italia": {
+        "last_anchor": "tzn468",
+        "anchors_history": [
+          "fitempirebuilder",
+          "katahero",
+          "rinocastaldi",
+          "wildeor_._",
+          "hamdi_hussein_mido"
+        ],
+        "last_seen_at": "2026-05-15T19:58:52",
+        "total_iterations": 10,
+        "exhausted_at": "2026-05-15T19:59:09",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "alex__zuccaro": {
+        "last_anchor": "alessioprincipato_coach_",
+        "anchors_history": [
+          "ice_thom_",
+          "alessioprincipato_coach_",
+          "mar_tarm",
+          "quarto_dora_italiano",
+          "giorgianafb"
+        ],
+        "last_seen_at": "2026-05-15T10:43:04",
+        "total_iterations": 13,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "edwin_underwood": {
+        "last_anchor": "viron_streetwear",
+        "anchors_history": [
+          "abdou_fit22",
+          "fede___ika",
+          "_meechforein.8fs",
+          "fede___ika",
+          "_pietra1020_"
+        ],
+        "last_seen_at": "2026-05-10T21:25:16",
+        "total_iterations": 8,
+        "exhausted_at": "2026-05-19T19:55:50",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "anna.ladurner.ifbbpro": {
+        "last_anchor": "draxfit_de",
+        "anchors_history": [
+          "la.diet.sagrawa",
+          "katrin.stubenruss",
+          "g_1982__",
+          "katrin.stubenruss",
+          "kyra.apex"
+        ],
+        "last_seen_at": "2026-05-16T15:14:55",
+        "total_iterations": 148,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "punzetti_sara_ifbbpro": {
+        "last_anchor": "paolaciravolo.fit",
+        "anchors_history": [
+          "_claudia_araujo58",
+          "norbert21366",
+          "tosiospetros",
+          "paolaciravolo.fit",
+          "55huseyincelik"
+        ],
+        "last_seen_at": "2026-05-17T18:02:45",
+        "total_iterations": 13,
+        "exhausted_at": "2026-05-17T18:02:59",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "afmi2_segrate": {
+        "last_anchor": "mroczny_cichy",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-21T12:57:30",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "asteroidi_official": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 1
+      },
+      "sara.evangelista": {
+        "last_anchor": "selinascmd",
+        "anchors_history": [
+          "lorenzo_casalini",
+          "selinascmd",
+          "ignaciocopany",
+          "panos89siarkos",
+          "orlagiuse6"
+        ],
+        "last_seen_at": "2026-05-16T18:03:47",
+        "total_iterations": 119,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "alex_ifbb_pro": {
+        "last_anchor": "amor19_76",
+        "anchors_history": [
+          "moio248",
+          "desy_cusenza",
+          "coschignano_damiano",
+          "turbofamily_official_a.s.d",
+          "christian_volpe17"
+        ],
+        "last_seen_at": "2026-05-20T09:50:44",
+        "total_iterations": 23,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "filipposoa": {
+        "last_anchor": "francesco1010010",
+        "anchors_history": [
+          "melissafiore.pt",
+          "mk.ii.mmviii",
+          "anar.chiia",
+          "francesco1010010",
+          "gab_odd"
+        ],
+        "last_seen_at": "2026-05-13T11:35:14",
+        "total_iterations": 9,
+        "exhausted_at": "2026-05-13T11:35:30",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "space.gym.official": {
+        "last_anchor": "francesco.maglione.9619",
+        "anchors_history": [
+          "aanthon85",
+          "guglielmo6267",
+          "andrea_trippolini",
+          "gas14995",
+          "andrea_trippolini"
+        ],
+        "last_seen_at": "2026-05-20T23:46:51",
+        "total_iterations": 237,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "beverlyhills_fitnessclub": {
+        "last_anchor": "angelicaolmeda__",
+        "anchors_history": [
+          "scalo_667",
+          "filippo.bacchini",
+          "peppe_mannoni",
+          "_dani.montanari_",
+          "_gianni_mazzotti_"
+        ],
+        "last_seen_at": "2026-05-16T18:34:37",
+        "total_iterations": 99,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "marcogrizz_photo": {
+        "last_anchor": "michelemarigo",
+        "anchors_history": [
+          "sergioisraelgarcia",
+          "iloveyoucherry009",
+          "sergioisraelgarcia",
+          "http_juliet",
+          "sergioisraelgarcia"
+        ],
+        "last_seen_at": "2026-05-19T17:26:40",
+        "total_iterations": 225,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "emilio.dalessandro.92": {
+        "last_anchor": "dore88jack",
+        "anchors_history": [
+          "the_athletes_day",
+          "officialclaudiamia.vicenza",
+          "dore88jack",
+          "_sara_romana",
+          "officialclaudiamia.vicenza"
+        ],
+        "last_seen_at": "2026-05-15T20:33:41",
+        "total_iterations": 57,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "davide.fanelli1": {
+        "last_anchor": "carloalbertomarchi",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-19T17:34:54",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "ricette_ghisa": {
+        "last_anchor": "lillianmarianagomes",
+        "anchors_history": [
+          "lillianmarianagomes",
+          "fabio466671",
+          "soniagazzolo",
+          "omniumgatherums"
+        ],
+        "last_seen_at": "2026-05-11T17:37:30",
+        "total_iterations": 6,
+        "exhausted_at": "2026-05-18T18:06:05",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "greentheoryfitness": {
+        "last_anchor": "santolatella_",
+        "anchors_history": [
+          "santolatella_",
+          "gsaks22",
+          "laviniapersoneniii",
+          "santolatella_",
+          "cruzar___"
+        ],
+        "last_seen_at": "2026-05-14T11:00:24",
+        "total_iterations": 36,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 2,
+        "consecutive_empty_first_visits": 0
+      },
+      "marco.casadei_": {
+        "last_anchor": "ragepack_europe",
+        "anchors_history": [
+          "itboygil",
+          "frantonaci0",
+          "_3nzo_97",
+          "se.rg2322",
+          "martas_mz"
+        ],
+        "last_seen_at": "2026-05-19T17:35:33",
+        "total_iterations": 142,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "bodynutrition_tarquinia": {
+        "last_anchor": "maledetti_pt",
+        "anchors_history": [
+          "matteo_enea_personal_coach",
+          "alessia_cinnati_pt",
+          "simona_carrus_",
+          "guendalinapesce",
+          "simona_carrus_"
+        ],
+        "last_seen_at": "2026-05-20T09:52:27",
+        "total_iterations": 44,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "_.paolalochi._": {
+        "last_anchor": "_eldan13",
+        "anchors_history": [
+          "nino.demonteverde",
+          "andreavallettaworkout",
+          "gabriele._.lasa",
+          "nino.demonteverde",
+          "giuseppe_bussu"
+        ],
+        "last_seen_at": "2026-05-19T20:37:13",
+        "total_iterations": 12,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "ivano.vitagliano.coach": {
+        "last_anchor": "mick_biliotti",
+        "anchors_history": [
+          "gaetano__ambrosio__boxing",
+          "mick_biliotti",
+          "gaetano__ambrosio__boxing",
+          "ezio_batignani",
+          "rositafit"
+        ],
+        "last_seen_at": "2026-05-17T14:27:26",
+        "total_iterations": 7,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "nastykappa_ifbb": {
+        "last_anchor": "giammariaprete",
+        "anchors_history": [
+          "alessio.conio.ifbb",
+          "daniele.nocera.56",
+          "marvinmunzu",
+          "_fra4real_",
+          "matteovolp"
+        ],
+        "last_seen_at": "2026-05-16T21:46:37",
+        "total_iterations": 10,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "manu3lito_bb": {
+        "last_anchor": "grande_stella_divina_queen_",
+        "anchors_history": [
+          "ddaviducc",
+          "diego.lift",
+          "maria___f4",
+          "the_athletes_day",
+          "albertohoefer_physique"
+        ],
+        "last_seen_at": "2026-05-19T20:30:21",
+        "total_iterations": 20,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "simonegenerali": {
+        "last_anchor": "jaime_lga",
+        "anchors_history": [
+          "federico_mocellin",
+          "paola_travlasublime",
+          "x_amaar_offisial_x39",
+          "jacopo.dimario",
+          "marco_uguccioni"
+        ],
+        "last_seen_at": "2026-05-20T23:47:48",
+        "total_iterations": 24,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "fabbian.lorenz": {
+        "last_anchor": "vincenzo_battaglia75",
+        "anchors_history": [
+          "republicofgym_",
+          "3d.experience_",
+          "michele_gattoni_ifbb",
+          "3d.experience_",
+          "mylandpadelgym"
+        ],
+        "last_seen_at": "2026-05-20T15:27:27",
+        "total_iterations": 7,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "ornella_angileri_ifbbpro": {
+        "last_anchor": "scowbytracey",
+        "anchors_history": [
+          "this_is_interno",
+          "gli.ontani",
+          "michelerizzotitan",
+          "francescaculcasi00",
+          "botmartinaa"
+        ],
+        "last_seen_at": "2026-05-19T23:26:05",
+        "total_iterations": 54,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "dario_beloli_ifbbpro": {
+        "last_anchor": "trainerdesk",
+        "anchors_history": [
+          "vincenzoferreri4",
+          "ivanodanb23",
+          "trainerdesk",
+          "__17.ale",
+          "daniel.ro___"
+        ],
+        "last_seen_at": "2026-05-19T11:23:48",
+        "total_iterations": 35,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "leonardopratoo": {
+        "last_anchor": "mbod.y16",
+        "anchors_history": [
+          "beatrice_la_gallina_felice",
+          "vane_tektek",
+          "gilbert.golemi",
+          "ceecee2602",
+          "beatrice_la_gallina_felice"
+        ],
+        "last_seen_at": "2026-05-19T14:25:54",
+        "total_iterations": 7,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "gretanicoletti_pt": {
+        "last_anchor": "dreamsaddict",
+        "anchors_history": [
+          "cam_angelica",
+          "ana03.maria13",
+          "penny_perrone",
+          "sabin_op",
+          "serena_alfieri"
+        ],
+        "last_seen_at": "2026-05-20T09:49:15",
+        "total_iterations": 39,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "cristian_ciampani92_": {
+        "last_anchor": "mingio_piercer",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-19T17:33:40",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "riccardo_cavallini": {
+        "last_anchor": "camilla.allegro",
+        "anchors_history": [
+          "mrs.emilyrose_",
+          "lapally89",
+          "fitspo.fla",
+          "nathy_per_il_fitness",
+          "lucaplebani"
+        ],
+        "last_seen_at": "2026-05-18T19:40:39",
+        "total_iterations": 20,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "cbuzz93": {
+        "last_anchor": "bubbleeyemaeda",
+        "anchors_history": [
+          "santiagobarrios_17",
+          "sollevamentolesi",
+          "alex_jeremy_bonaventura"
+        ],
+        "last_seen_at": "2026-05-16T20:11:04",
+        "total_iterations": 5,
+        "exhausted_at": "2026-05-16T20:11:18",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "omarnonni_pnbapro": {
+        "last_anchor": "olympicangel",
+        "anchors_history": [
+          "fabiothd_pnbapro",
+          "rebelema",
+          "whosandri_",
+          "fabiothd_pnbapro",
+          "moon.wolf._night"
+        ],
+        "last_seen_at": "2026-05-19T20:32:53",
+        "total_iterations": 17,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "greta.adamii_fit": {
+        "last_anchor": "raphaelespinoso",
+        "anchors_history": [
+          "jermaine_miller_az_realtor",
+          "dicevanonnamia",
+          "jermaine_miller_az_realtor",
+          "psicologa_litta_letizia",
+          "orionhomebuilders"
+        ],
+        "last_seen_at": "2026-05-19T20:35:46",
+        "total_iterations": 86,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "gerard_ifbb_": {
+        "last_anchor": "giuseppelorizzo3",
+        "anchors_history": [
+          "mikegaleazzi",
+          "giuseppelorizzo3",
+          "laura_lara_e_pure_paolo",
+          "dacosta.r7"
+        ],
+        "last_seen_at": "2026-05-20T21:17:46",
+        "total_iterations": 6,
+        "exhausted_at": "2026-05-20T21:18:02",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "sayan.nickk": {
+        "last_anchor": "micky_zbc",
+        "anchors_history": [
+          "alecoach.pt",
+          "andrea_m_30"
+        ],
+        "last_seen_at": "2026-05-18T10:24:34",
+        "total_iterations": 4,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "samuellfortuna": {
+        "last_anchor": "rivera_vf",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-20T09:52:51",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "dario.pnbapro.coach": {
+        "last_anchor": "vito_marro",
+        "anchors_history": [
+          "reflexbookph",
+          "marcooone77",
+          "davide_capuzmundi_",
+          "ponsfabio",
+          "cernigliapietro"
+        ],
+        "last_seen_at": "2026-05-20T20:29:57",
+        "total_iterations": 18,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "niccolo.balboni.coaching": {
+        "last_anchor": "sabry.borg",
+        "anchors_history": [
+          "lomba_francesco",
+          "silvia_pacchia",
+          "goosemedialab",
+          "mattiacostantino__",
+          "alex_rasetta_pt"
+        ],
+        "last_seen_at": "2026-05-20T21:37:02",
+        "total_iterations": 21,
+        "exhausted_at": "2026-05-20T21:37:17",
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "fede_castell_": {
+        "last_anchor": "fontiierik",
+        "anchors_history": [
+          "iamnicolamarini",
+          "simomantero6",
+          "iamnicolamarini",
+          "gabriele_giusti90",
+          "iamnicolamarini"
+        ],
+        "last_seen_at": "2026-05-19T14:29:37",
+        "total_iterations": 10,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "kristianluino_trainer": {
+        "last_anchor": "xxbookslover",
+        "anchors_history": [
+          "evaleone_",
+          "federico.carvelli.consulting",
+          "evaleone_",
+          "eli.combe_",
+          "garrettamarcello"
+        ],
+        "last_seen_at": "2026-05-20T22:05:37",
+        "total_iterations": 42,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "andrea_ifbb_pro": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 1
+      },
+      "ross_sun_": {
+        "last_anchor": "_giuse_zedda95",
+        "anchors_history": [
+          "michele_rizzi01",
+          "calabria8963",
+          "michele_rizzi01",
+          "farmacia_due_madonne_bo",
+          "aldo.shk"
+        ],
+        "last_seen_at": "2026-05-20T20:29:05",
+        "total_iterations": 20,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "paolozoncatrainer": {
+        "last_anchor": "facciofinanza",
+        "anchors_history": [
+          "italiandefenceacademyofficial",
+          "luca_ila_training"
+        ],
+        "last_seen_at": "2026-05-19T23:28:02",
+        "total_iterations": 3,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "francesco_arcidiacono90": {
+        "last_anchor": "__afterglowduo__",
+        "anchors_history": [
+          "frarzz",
+          "myriambasile.dietista",
+          "gretavaleriani",
+          "myriambasile.dietista",
+          "liar_94b"
+        ],
+        "last_seen_at": "2026-05-18T18:52:54",
+        "total_iterations": 9,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "wnbfitaly": {
+        "last_anchor": "samuele.visconti_",
+        "anchors_history": [
+          "julien.coach31",
+          "saramoniga",
+          "julien.coach31",
+          "ruffo_davide",
+          "luis_.gomes22"
+        ],
+        "last_seen_at": "2026-05-20T18:34:51",
+        "total_iterations": 11,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "federico_mariani_": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0
+      },
+      "agostomauro_pcaitaly": {
+        "last_anchor": "colosi_andrea_pt_ifbb",
+        "anchors_history": [
+          "teamwolf1980",
+          "chiaralobianco.fit",
+          "teamwolf1980",
+          "ponsfabio",
+          "dave_telaio_modena"
+        ],
+        "last_seen_at": "2026-05-19T20:34:05",
+        "total_iterations": 14,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "tieeco": {
+        "last_anchor": "giulistefanelli",
+        "anchors_history": [
+          "matteolibrenti",
+          "patricklgebre",
+          "_soy_marl",
+          "francesca_lupoo",
+          "jennyfluu"
+        ],
+        "last_seen_at": "2026-05-20T09:40:22",
+        "total_iterations": 9,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "bodybuilding_italia_community_": {
+        "last_anchor": "maycol.garreffa",
+        "anchors_history": [
+          "maycol.garreffa",
+          "alihussein5693",
+          "samu_berte_96",
+          "maycol.garreffa",
+          "giooorginooo"
+        ],
+        "last_seen_at": "2026-05-18T13:16:36",
+        "total_iterations": 11,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "tm_nutrizione": {
+        "last_anchor": "sofiadalconte",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-18T16:09:58",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 1,
+        "consecutive_empty_first_visits": 0
+      },
+      "kellysxv94": {
+        "last_anchor": "csisassobasket",
+        "anchors_history": [
+          "alberto_pazzaglia",
+          "villa_sabina_lecce",
+          "frizzio77",
+          "merighi_andrea",
+          "mareschino"
+        ],
+        "last_seen_at": "2026-05-21T00:11:36",
+        "total_iterations": 11,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "japan_skin": {
+        "last_anchor": "neur.ale",
+        "anchors_history": [
+          "l.7.lss",
+          "stella26_83",
+          "_paolo_ferrari_obscene",
+          "michael.piazza",
+          "andrea.trt"
+        ],
+        "last_seen_at": "2026-05-20T23:45:53",
+        "total_iterations": 13,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "lucacirillo_personaltrainer": {
+        "last_anchor": "nicolabalzerano",
+        "anchors_history": [
+          "lizpossentileetrainercoach",
+          "manuelarimondi",
+          "beaspagnoli",
+          "francesco_miccoli_presenter",
+          "atheca.it"
+        ],
+        "last_seen_at": "2026-05-21T13:01:21",
+        "total_iterations": 11,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "bodybuilding_italia_community": {
+        "last_anchor": "saradelneri_",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-19T14:26:52",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "thenewclassic_s": {
+        "last_anchor": "davideperracino",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-19T14:30:34",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "marcokoduzi": {
+        "last_anchor": "manu_dallasta",
+        "anchors_history": [
+          "mattiafaldini"
+        ],
+        "last_seen_at": "2026-05-20T09:39:51",
+        "total_iterations": 2,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "massimo_personal_trainer": {
+        "last_anchor": "morvexthegamer",
+        "anchors_history": [
+          "aftumbiumbi",
+          "vivianapacioni"
+        ],
+        "last_seen_at": "2026-05-20T23:49:01",
+        "total_iterations": 3,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "wbpf_italy": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 1
+      },
+      "eulyfitnesstudio": {
+        "last_anchor": "cicciaetortellini",
+        "anchors_history": [
+          "guglielmotarantino",
+          "ricky87bo",
+          "stefstani",
+          "iredelmambo",
+          "ricky87bo"
+        ],
+        "last_seen_at": "2026-05-19T22:56:04",
+        "total_iterations": 23,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "danielacamboni": {
+        "last_anchor": "cappidaniele",
+        "anchors_history": [
+          "ida87",
+          "phill.fornasa",
+          "francesco_raddi96",
+          "_hamza_karmani_",
+          "davide_ocr_clubexpofitness"
+        ],
+        "last_seen_at": "2026-05-20T09:21:28",
+        "total_iterations": 19,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "coach_ginnytyro": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 1
+      },
+      "annatfit.pt": {
+        "last_anchor": "kinshu_olistica",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-20T09:47:14",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "simonearmaroli": {
+        "last_anchor": "ottocentoundici.811",
+        "anchors_history": [
+          "richy_cami",
+          "marco_lococo76",
+          "giuseppe_sammarco3",
+          "danielemessina_",
+          "giulio_ragno"
+        ],
+        "last_seen_at": "2026-05-21T12:25:32",
+        "total_iterations": 6,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "jack_fogli": {
+        "last_anchor": "denispacani",
+        "anchors_history": [
+          "manu3ll1"
+        ],
+        "last_seen_at": "2026-05-20T20:00:45",
+        "total_iterations": 2,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "ste_cossu96": {
+        "last_anchor": null,
+        "anchors_history": [],
+        "last_seen_at": null,
+        "total_iterations": 0,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 1
+      },
+      "nardin_nicole": {
+        "last_anchor": "mileswithmeganj",
+        "anchors_history": [
+          "lauraj_lifts",
+          "tuck_erfit",
+          "tineontrails",
+          "tuck_erfit",
+          "witness.lee"
+        ],
+        "last_seen_at": "2026-05-20T23:19:11",
+        "total_iterations": 8,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      },
+      "olgs_fitness": {
+        "last_anchor": "kbpt",
+        "anchors_history": [],
+        "last_seen_at": "2026-05-20T23:49:57",
+        "total_iterations": 1,
+        "exhausted_at": null,
+        "consecutive_anchor_misses": 0,
+        "consecutive_empty_first_visits": 0
+      }
+    }
+  }
+}

@@ -163,6 +163,17 @@ class TabBarView:
                 classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
                 descriptionMatches=case_insensitive_re(TabBarText.HOME_CONTENT_DESC),
             )
+            if not button.exists():
+                # Tab bar might not be ready yet, wait and retry with increasing delays
+                for wait_secs in (3, 5, 10):
+                    logger.debug(f"Didn't find HOME tab, waiting {wait_secs}s for tab bar to appear...")
+                    sleep(wait_secs)
+                    button = self.device.find(
+                        classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
+                        descriptionMatches=case_insensitive_re(TabBarText.HOME_CONTENT_DESC),
+                    )
+                    if button.exists():
+                        break
 
         elif tab == TabBarTabs.SEARCH:
             button = self.device.find(
@@ -173,8 +184,12 @@ class TabBarView:
             if not button.exists():
                 # Some accounts display the search btn only in Home -> action bar
                 logger.debug("Didn't find search in the tab bar...")
-                home_view = self.navigateToHome()
-                home_view.navigateToSearch()
+                # First navigate to home, then try action bar search
+                self._navigateTo(TabBarTabs.HOME)
+                home_view = HomeView(self.device)
+                if not home_view.navigateToSearch():
+                    logger.error("Couldn't navigate to Search via Home action bar either.")
+                    return
                 return
         elif tab == TabBarTabs.REELS:
             button = self.device.find(
@@ -202,6 +217,16 @@ class TabBarView:
                 descriptionMatches=case_insensitive_re(TabBarText.PROFILE_CONTENT_DESC),
             )
             if not button.exists():
+                for wait_secs in (3, 5, 10):
+                    logger.debug(f"Didn't find PROFILE tab, waiting {wait_secs}s and retrying...")
+                    sleep(wait_secs)
+                    button = self.device.find(
+                        classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
+                        descriptionMatches=case_insensitive_re(TabBarText.PROFILE_CONTENT_DESC),
+                    )
+                    if button.exists():
+                        break
+            if not button.exists():
                 button = self._get_new_profile_position()
 
         if button is not None and button.exists(Timeout.MEDIUM):
@@ -209,9 +234,10 @@ class TabBarView:
             button.click(sleep=SleepTime.SHORT)
             if tab is not TabBarTabs.PROFILE:
                 button.click(sleep=SleepTime.SHORT)
-            return
+            return True
 
         logger.error(f"Didn't find tab {tab_name} in the tab bar...")
+        return False
 
 
 class ActionBarView:
@@ -236,6 +262,9 @@ class HomeView(ActionBarView):
         search_btn = self.action_bar.child(
             descriptionMatches=case_insensitive_re(TabBarText.SEARCH_CONTENT_DESC)
         )
+        if not search_btn.exists(Timeout.MEDIUM):
+            logger.error("Didn't find Search button in Home action bar.")
+            return None
         search_btn.click()
 
         return SearchView(self.device)

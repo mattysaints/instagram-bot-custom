@@ -1,0 +1,125 @@
+##############################################################################
+# Config UNFOLLOW-FOLLOWERS - sgancia chi TI HA SEGUITO INDIETRO ma sono
+# passati >= 7 giorni dal MIO follow.
+#
+# Da usare in alternativa a config-unfollow.yml (che gestisce i NON-followers
+# con delay 3gg). Lancialo nei giorni in cui vuoi alleggerire la lista
+# "following" da gente che ti ha seguito ma non genera engagement reale.
+#
+# Lancio:
+#   python run.py --config accounts/marramattia_fmgpro/config-unfollow-followers.yml
+#
+# Razionale anti-ban:
+#   - 7 giorni = soglia minima ragionevole per dire "non interagiranno mai"
+#   - rate orario ~6-8/h, target giornaliero 32-48 unfollow
+#   - sessioni e finestre sono SEPARATE da quelle dei follow per evitare
+#     pattern "follow + immediate unfollow" che IG flagga.
+##############################################################################
+
+# ---------------------------------------------------------------------------
+# General Configuration
+# ---------------------------------------------------------------------------
+username: marramattia_fmgpro
+device: emulator-5554
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: true
+screen-record: false
+speed-multiplier: 0.85
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: false
+disable-block-detection: false
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: false
+truncate-sources: 1-1
+
+# Action burst guard - throttle anche su unfollow
+action-throttle-enabled: true
+action-throttle-follow-min: 25-60
+action-throttle-like-min: 8-20
+action-throttle-unfollow-min: 25-50         # 25-50s tra unfollow consecutivi (max ~80/h, target ~6-8/h)
+action-throttle-comment-min: 240-360
+action-throttle-pm-min: 120-300
+
+# ---------------------------------------------------------------------------
+# AZIONE: SOLO unfollow-any-followers (chi ti segue indietro)
+# Sgancia chi ti segue indietro ma sono passati >= 7 giorni dal mio follow.
+# Cap per sessione 8-12 -> 4 sessioni = 32-48/giorno.
+# ---------------------------------------------------------------------------
+unfollow-any-followers: 8-12
+
+## CRITICO: 7 giorni dal MIO follow prima di considerarli sganciabili.
+unfollow-delay: 7
+
+## Ordine: dai piu' RECENTI ai piu' vecchi.
+## Su liste following grandi (migliaia di account) partire dai piu' vecchi
+## significa scrollare per ore prima di trovare candidati validi.
+## Partendo dai recenti il bot salta velocemente quelli sotto la soglia
+## di unfollow-delay e arriva in pochi swipe a chi e' eleggibile.
+sort-followers-newest-to-oldest: true
+
+## Tutela: se scendi sotto questo numero di "following totali", il bot ferma.
+min-following: 100
+
+# ---------------------------------------------------------------------------
+# Source Limits (non rilevanti per unfollow, ma il loader li richiede)
+# ---------------------------------------------------------------------------
+interactions-count: 1-1
+likes-count: 0
+likes-percentage: 0
+carousel-count: 0
+carousel-percentage: 0
+max-comments-pro-user: 0
+interact-percentage: 0
+follow-percentage: 0
+follow-limit: 0
+skipped-list-limit: 5
+skipped-posts-limit: 1
+fling-when-skipped: 0
+
+# ---------------------------------------------------------------------------
+# Total Limits Per Session
+# ---------------------------------------------------------------------------
+total-likes-limit: 0-0
+total-follows-limit: 0-0
+total-unfollows-limit: 8-12              # 8-12 unfollow/sessione
+total-watches-limit: 0-0
+total-successful-interactions-limit: 8-12
+total-interactions-limit: 14-20          # include skip
+total-comments-limit: 0-0
+total-pm-limit: 0-0
+total-scraped-limit: 200-300
+
+# Daily Budget
+daily-follows-cap: 0
+daily-likes-cap: 0
+daily-unfollows-cap: 70                  # cap totale (condiviso con eventuali altri config-unfollow*)
+daily-comments-cap: 0
+daily-pm-cap: 0
+
+stories-count: 0
+stories-percentage: 0
+
+# ---------------------------------------------------------------------------
+# Ending Session Conditions
+# ---------------------------------------------------------------------------
+end-if-likes-limit-reached: false
+end-if-follows-limit-reached: false
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# Scheduling - 4 finestre orarie separate da quelle dei follow
+# ---------------------------------------------------------------------------
+working-hours: [11.00-12.10, 14.20-15.30, 18.20-19.20, 21.00-21.50]
+time-delta: 5-20
+repeat: 90-180
+total-sessions: -1
+
