@@ -1167,7 +1167,11 @@ def iterate_over_followers(
         row_height, n_users = inspect_current_view(user_list)
         try:
             for item in user_list:
-                cur_row_height = item.get_height()
+                try:
+                    cur_row_height = item.get_height()
+                except Exception:
+                    logger.debug("Could not get item height, skipping item.")
+                    continue
                 if cur_row_height < row_height:
                     continue
                 user_info_view = item.child(index=1)

@@ -310,6 +310,10 @@ def open_instagram(device):
 
     logger.info("Ready for botting!🤫", extra={"color": f"{Style.BRIGHT}{Fore.GREEN}"})
 
+    # Extra wait to let Instagram UI fully initialize before interacting
+    logger.debug("Waiting for Instagram UI to fully load...")
+    random_sleep(5, 8, modulable=False)
+
     random_sleep()
     if configs.args.close_apps:
         logger.info("Close all the other apps, to avoid interferences...")

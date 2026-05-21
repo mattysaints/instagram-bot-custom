@@ -176,7 +176,32 @@ def restart(
         print_full_report(sessions, configs.args.scrape_to_file)
         sessions.persist(directory=session_state.my_username)
         sys.exit(2)
-    try:
-        TabBarView(device).navigateToProfile()
-    except Exception as e:
-        logger.warning(f"navigateToProfile failed during restart: {e}")
+    # Try navigateToProfile up to 3 times, re-opening Instagram if needed
+    for attempt in range(1, 4):
+        try:
+            result = TabBarView(device).navigateToProfile()
+            if result is not False:
+                break
+        except Exception as e:
+            logger.warning(f"navigateToProfile attempt {attempt} failed: {e}")
+        if attempt < 3:
+            logger.info(f"Tab bar not ready yet, re-opening Instagram (attempt {attempt}/3)...")
+            try:
+                close_instagram(device)
+            except Exception:
+                pass
+            random_sleep(5, 8, modulable=False)
+            try:
+                opened = open_instagram(device)
+            except Exception as e:
+                logger.warning(f"open_instagram failed on re-attempt {attempt}: {e}")
+                opened = False
+            if not opened:
+                print_full_report(sessions, configs.args.scrape_to_file)
+                sessions.persist(directory=session_state.my_username)
+                sys.exit(2)
+        else:
+            logger.error("Instagram tab bar never became ready after restart. Stopping bot.")
+            print_full_report(sessions, configs.args.scrape_to_file)
+            sessions.persist(directory=session_state.my_username)
+            sys.exit(2)
