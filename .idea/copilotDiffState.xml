@@ -3,6 +3,14 @@
   <component name="CopilotDiffPersistence">
     <option name="pendingDiffs">
       <map>
+        <entry key="$PROJECT_DIR$/.git_commit_msg.txt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/.git_commit_msg.txt" />
+              <option name="updatedContent" value="fix: like_post carousel-aware + tool rotate-bloggers + crash recovery piu' lungo&#10;&#10;views.py / interaction.py / like_from_urls.py - like_post(is_carousel):&#10;- Aggiunto parametro is_carousel a like_post(). Sui caroselli ora il bot&#10;  usa direttamente single-click sul cuoricino invece del doppio-tap.&#10;- Motivo: dopo _browse_carousel() il post e' fermo sull'ultima slide;&#10;  un doppio-tap subito dopo viene spesso interpretato da IG come&#10;  &quot;tap successivo per cambiare slide&quot; -&gt; NON likka -&gt; 178 Fail-to-like&#10;  in 4 giorni (analisi log). Single-click sul cuoricino e' sicuro al 100%.&#10;- Foto singole senza tag mantengono il doppio-tap (comportamento storico).&#10;- Aggiornato anche like_from_urls.py per coerenza.&#10;&#10;decorators.py - restart() piu' robusto:&#10;- Pausa post-crash da random_sleep() default (~3-5s) a 8-15s fissi.&#10;- Motivo: dopo un crash IG ha bisogno di rilasciare risorse. Pausa breve&#10;  -&gt; crash a catena (osservato 2 crash in 30s nei log).&#10;&#10;tools/rotate-bloggers.py (nuovo):&#10;- Riordina la lista blogger-followers in base a yield reale&#10;  (source_stats.json + explored_segments.json).&#10;- Score: + follows recenti, + bonus fresh/dormant, - penalita' esauriti,&#10;  - penalita' oversaturazione. Backup automatico prima di scrivere.&#10;- 2 run config PyCharm: dry-run + apply.&#10;&#10;.gitignore: aggiunto *.bak-* per non versionare backup automatici.&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
         <entry key="/config-hashtag-growth (snapshot).yml">
           <value>
             <PendingDiffInfo>
