@@ -36,10 +36,10 @@ truncate-sources: 10-12                    # [yield-tune] piu' sorgenti per sess
 scroll-skip-start: 35-120                  # [yield-tune] quando manca anchor, salta piu' in profondita' per evitare utenti gia' processati in alto
 resume-from-last-position: true            # ricorda l'ULTIMO utente analizzato per ogni sorgente e riprende da li' la sessione dopo
 resume-anchor-search-limit: 30             # [yield-tune] limita tempo perso in ricerca anchor lunga; fallback random prima
-resume-cooldown-days: 3                    # [yield] da 1gg a 3gg: forza rotazione su sorgenti fresche invece di rivisitare troppo presto quelle quasi esaurite
+resume-cooldown-days: 5                    # [yield-tune v2] da 3gg a 5gg: log mostra che le sorgenti top vengono ri-visitate troppo presto e producono "Same users iterated 5 times" + 0 fresh. Dare piu' respiro alla lista.
 hot-zone-screens: 2                        # [yield-tune] reagisci prima alle schermate senza utenti freschi
 hot-zone-jump-flings: 6                    # [yield-tune] salto piu' profondo per uscire dalle zone gia' battute
-hot-zone-max-jumps: 3                      # [yield-tune] un tentativo in piu' prima di abbandonare la sorgente
+hot-zone-max-jumps: 2                      # [yield-tune v2] da 3 a 2: log mostra 20+ "hot-zone detected" ma 0 "Abandoning source" -> il bot resta intrappolato a fling-e-trovare-1-utente. Meglio chiudere prima e cambiare sorgente.
 
 # Action burst guard - vieta a IG di vedere mai 2 follow in 5s o 2 like in 2s
 action-throttle-enabled: true
@@ -91,7 +91,7 @@ interactions-count: 35-50                  # [yield-tune+] alzato 20-30 -> 35-50
 likes-count: 2                             # 2 like per profilo (ridotto: meno chance di beccare Reel buggati)
 likes-percentage: 85-95                    # quasi sempre likka, mai 100% (anti-pattern)
 carousel-count: 1-2
-carousel-percentage: 50-70
+carousel-percentage: 30-50                 # [v2] abbassato da 50-70 a 30-50: log mostra 25-67 "Fail to like post"/giorno (178 totali in 4gg), causa probabile = doppio-tap su carosello che cambia slide invece di likare. Meno caroselli = meno fail.
 max-comments-pro-user: 1                   # max 1 commento per utente (anti-ban: mai 2 sullo stesso post)
 comment-percentage: 55-70                  # [PUSH] ~55-70% degli utenti interagiti riceve un commento -> ~12-15/sessione su 15-22 utenti veri. Il throttler limita comunque a max 15/h.
 pm-percentage: 0                           # [DISABILITATO] DM completamente off su main (i DM sono gestiti solo nel branch personalcoaching tramite il plugin custom dm-followback)
@@ -185,7 +185,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [18.47-20.17, 20.31-22.01, 22.14-23.44, 23.59-01.29, 01.30-03.00]   # generata dinamicamente da run-dynamic.py
+working-hours: [14.31-16.01, 17.22-18.52, 20.16-21.46, 22.54-00.24, 01.29-02.59]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
