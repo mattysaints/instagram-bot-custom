@@ -33,9 +33,21 @@ def check_if_english(device):
 
 
 def nav_to_blogger(device, username, current_job):
-    """navigate to blogger (followers list or posts)"""
+    """navigate to blogger (followers list or posts).
+
+    Returns:
+        Tuple[bool, Optional[int]]: (success, target_followers_count).
+        - success: True se la navigazione e' riuscita.
+        - target_followers_count: numero di follower del target letto dal
+          profilo PRIMA di entrare nella lista. None se non leggibile
+          (proprio profilo, errori UI, layout cambiato).
+          Usato a valle per scegliere strategie diverse su profili grossi
+          (es. 30k+) dove la lista contiene migliaia di utenti gia' processati
+          e scrollare costa tempo per yield ~0.
+    """
     _to_followers = bool(current_job.endswith("followers"))
     _to_following = bool(current_job.endswith("following"))
+    target_followers_count = None
     if username is None:
         profile_view = TabBarView(device).navigateToProfile()
         if _to_followers:
@@ -47,9 +59,22 @@ def nav_to_blogger(device, username, current_job):
     else:
         search_view = TabBarView(device).navigateToSearch()
         if not search_view.navigate_to_target(username, current_job):
-            return False
+            return False, None
 
         profile_view = ProfileView(device, is_own_profile=False)
+        # Leggi il follower count PRIMA di entrare nella lista, cosi' il
+        # chiamante puo' scegliere strategie diverse (early-break su profili
+        # >30k dove le liste sono enormi e piene di "already interacted").
+        try:
+            target_followers_count = profile_view.getFollowersCount()
+            if target_followers_count is not None:
+                logger.info(
+                    f"📊 @{username} ha {target_followers_count:,} follower."
+                )
+        except Exception as e:
+            logger.debug(f"getFollowersCount(@{username}) failed: {e}")
+            target_followers_count = None
+
         if _to_followers:
             logger.info(f"Open @{username} followers.")
             profile_view.navigateToFollowers()
@@ -57,7 +82,7 @@ def nav_to_blogger(device, username, current_job):
             logger.info(f"Open @{username} following.")
             profile_view.navigateToFollowing()
 
-    return True
+    return True, target_followers_count
 
 
 def nav_to_hashtag_or_place(device, target, current_job):

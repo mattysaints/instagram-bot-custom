@@ -228,7 +228,7 @@ def handle_blogger(
     interaction,
     is_follow_limit_reached,
 ):
-    if not nav_to_blogger(device, blogger, session_state.my_username):
+    if not nav_to_blogger(device, blogger, session_state.my_username)[0]:
         return
     can_interact = False
     if storage.is_user_in_blacklist(blogger):
@@ -930,7 +930,8 @@ def handle_followers(
     profile_filter=None,
 ):
     is_myself = username == session_state.my_username
-    if not nav_to_blogger(device, username, current_job):
+    nav_ok, target_followers_count = nav_to_blogger(device, username, current_job)
+    if not nav_ok:
         return
 
     iterate_over_followers(
@@ -946,6 +947,7 @@ def handle_followers(
         current_job,
         username,
         profile_filter=profile_filter,
+        target_followers_count=target_followers_count,
     )
 
 
@@ -962,6 +964,7 @@ def iterate_over_followers(
     current_job,
     target,
     profile_filter=None,
+    target_followers_count=None,
 ):
     device.find(
         resourceId=self.ResourceID.FOLLOW_LIST_CONTAINER,
@@ -1142,6 +1145,49 @@ def iterate_over_followers(
     hz_screens_threshold, hz_flings_per_jump, hz_max_jumps = _hot_zone_params(
         self.args
     )
+
+    # --- Large-target early-break ---
+    # Su profili molto grossi (>= 30k follower) la lista contiene migliaia di
+    # utenti gia' processati nelle sessioni precedenti; scrollare per ore per
+    # trovare il prossimo fresh user e' uno spreco di tempo e aumenta la
+    # superficie anti-ban (azioni a vuoto). Comprimiamo le soglie hot-zone
+    # cosi' il bot abbandona la sorgente DOPO MENO schermate vuote e passa al
+    # prossimo blogger della lista, dove probabilmente trovera' yield > 0.
+    LARGE_TARGET_THRESHOLD = 30_000
+    HUGE_TARGET_THRESHOLD = 100_000
+    is_large_target = (
+        target_followers_count is not None
+        and target_followers_count >= LARGE_TARGET_THRESHOLD
+    )
+    is_huge_target = (
+        target_followers_count is not None
+        and target_followers_count >= HUGE_TARGET_THRESHOLD
+    )
+    if is_huge_target:
+        # 100k+ : taglia ancora di piu' (basta 1 schermata vuota + 1 jump)
+        original = (hz_screens_threshold, hz_max_jumps)
+        hz_screens_threshold = max(1, min(hz_screens_threshold, 1))
+        hz_max_jumps = max(1, min(hz_max_jumps, 1))
+        logger.info(
+            f"[large-target] @{target} ha {target_followers_count:,} follower "
+            f"(>= {HUGE_TARGET_THRESHOLD:,}): comprimo hot-zone "
+            f"screens_threshold {original[0]}->{hz_screens_threshold}, "
+            f"max_jumps {original[1]}->{hz_max_jumps} per abbandonare prima.",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+    elif is_large_target:
+        # 30k-100k : compressione moderata
+        original = (hz_screens_threshold, hz_max_jumps)
+        hz_screens_threshold = max(1, min(hz_screens_threshold, 2))
+        hz_max_jumps = max(1, min(hz_max_jumps, 2))
+        logger.info(
+            f"[large-target] @{target} ha {target_followers_count:,} follower "
+            f"(>= {LARGE_TARGET_THRESHOLD:,}): comprimo hot-zone "
+            f"screens_threshold {original[0]}->{hz_screens_threshold}, "
+            f"max_jumps {original[1]}->{hz_max_jumps} per abbandonare prima.",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+
     hot_zone_enabled = (
         not is_myself
         and hz_screens_threshold > 0
