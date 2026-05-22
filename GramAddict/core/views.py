@@ -1496,25 +1496,55 @@ class OpenedPostView:
             resourceIdMatches=case_insensitive_re(ResourceID.MEDIA_CONTAINER)
         )
         liked = False
-        if post_media_view.exists():
-            logger.info("Liking post.")
-            if self.has_tags:
-                logger.info(
-                    "Post has tags, better going with a single click on the little heart ❤️."
-                )
-                like_button = self._get_post_like_button()
-                if like_button is not None:
-                    like_button.click()
-                    liked, _ = self._is_post_liked()
-                else:
-                    logger.warning("Can't find the like button object!")
+        if not post_media_view.exists():
+            logger.warning(
+                "❌ like_post: MEDIA_CONTAINER non trovato — post non caricato "
+                "(rete lenta) o layout cambiato. Nessun tentativo di like fatto."
+            )
+            return False
+
+        logger.info("Liking post.")
+        if self.has_tags:
+            logger.info(
+                "Post has tags, better going with a single click on the little heart ❤️."
+            )
+            like_button = self._get_post_like_button()
+            if like_button is not None:
+                like_button.click()
+                liked, _ = self._is_post_liked()
+                if not liked:
+                    logger.warning(
+                        "❌ like_post (tagged): click sul cuoricino fatto ma "
+                        "_is_post_liked() ritorna False — possibile rate-limit IG "
+                        "soft-block o cuoricino non più visibile dopo lo scroll."
+                    )
             else:
-                post_media_view.double_click()
-                liked, like_button = self._is_post_liked()
-                if not liked and like_button is not None:
+                logger.warning(
+                    "❌ like_post (tagged): like button non trovato — probabile "
+                    "post sponsorizzato/ads o layout IG differente (cuoricino "
+                    "non in viewport)."
+                )
+        else:
+            post_media_view.double_click()
+            liked, like_button = self._is_post_liked()
+            if not liked:
+                if like_button is None:
+                    logger.warning(
+                        "❌ like_post: double-tap fatto ma like_button non "
+                        "trovato dopo — possibile carosello che ha cambiato "
+                        "slide, post sponsorizzato, o post rimosso."
+                    )
+                else:
                     logger.info("Double click failed, clicking on the little heart ❤️.")
                     like_button.click()
                     liked, _ = self._is_post_liked()
+                    if not liked:
+                        logger.warning(
+                            "❌ like_post: anche il fallback heart-click non ha "
+                            "funzionato — probabile soft-block IG (like ignorati) "
+                            "o UI fuori sync con uiautomator. Considera di "
+                            "rallentare action-throttle-like-min."
+                        )
         return liked
 
     def start_video(self) -> bool:
