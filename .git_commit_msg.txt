@@ -1,0 +1,26 @@
+fix: like_post carousel-aware + tool rotate-bloggers + crash recovery piu' lungo
+
+views.py / interaction.py / like_from_urls.py - like_post(is_carousel):
+- Aggiunto parametro is_carousel a like_post(). Sui caroselli ora il bot
+  usa direttamente single-click sul cuoricino invece del doppio-tap.
+- Motivo: dopo _browse_carousel() il post e' fermo sull'ultima slide;
+  un doppio-tap subito dopo viene spesso interpretato da IG come
+  "tap successivo per cambiare slide" -> NON likka -> 178 Fail-to-like
+  in 4 giorni (analisi log). Single-click sul cuoricino e' sicuro al 100%.
+- Foto singole senza tag mantengono il doppio-tap (comportamento storico).
+- Aggiornato anche like_from_urls.py per coerenza.
+
+decorators.py - restart() piu' robusto:
+- Pausa post-crash da random_sleep() default (~3-5s) a 8-15s fissi.
+- Motivo: dopo un crash IG ha bisogno di rilasciare risorse. Pausa breve
+  -> crash a catena (osservato 2 crash in 30s nei log).
+
+tools/rotate-bloggers.py (nuovo):
+- Riordina la lista blogger-followers in base a yield reale
+  (source_stats.json + explored_segments.json).
+- Score: + follows recenti, + bonus fresh/dormant, - penalita' esauriti,
+  - penalita' oversaturazione. Backup automatico prima di scrivere.
+- 2 run config PyCharm: dry-run + apply.
+
+.gitignore: aggiunto *.bak-* per non versionare backup automatici.
+

@@ -28,3 +28,6 @@ apk/
 .env
 .env.*
 !.env.example
+
+# Backup automatici di rotate-bloggers.py
+*.bak-*

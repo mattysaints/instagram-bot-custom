@@ -295,7 +295,12 @@ def interact_with_user(
                         _browse_carousel(device, obj_count)
                     opened_post_view.watch_media(media_type)
                     get_throttler().wait_if_needed(ActionType.LIKE)
-                    like_succeed = opened_post_view.like_post()
+                    # Per il carosello passiamo is_carousel=True cosi' like_post
+                    # usa single-click sul cuoricino invece del doppio-tap (che
+                    # dopo _browse_carousel rischia di cambiare slide).
+                    like_succeed = opened_post_view.like_post(
+                        is_carousel=(media_type == MediaType.CAROUSEL)
+                    )
                 if like_succeed:
                     register_like(device, session_state)
                     number_of_liked += 1
