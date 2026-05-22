@@ -1486,9 +1486,22 @@ class OpenedPostView:
 
         return like_btn_view.get_selected(), like_btn_view
 
-    def like_post(self) -> bool:
+    def like_post(self, is_carousel: bool = False) -> bool:
         """
-        Like the post with a double click and check if it's liked
+        Like the post.
+
+        Strategia:
+          - Post con TAG persone -> single click sul cuoricino (il doppio-tap
+            su un tag aprirebbe il profilo della persona taggata).
+          - CAROSELLO -> single click sul cuoricino (il doppio-tap rischia di
+            essere interpretato come "tap successivo per cambiare slide" se
+            arriva subito dopo lo swipe di _browse_carousel(); osservato in
+            prod come fonte principale dei 'Fail to like post': il doppio-tap
+            cambia slide invece di likare).
+          - Foto singola SENZA tag -> doppio-tap (comportamento storico, piu'
+            "umano"), con fallback al cuoricino se non passa.
+
+        :param is_carousel: True se il post e' un carosello (multi-slide).
         :return: post has been liked
         :rtype: bool
         """
@@ -1504,9 +1517,14 @@ class OpenedPostView:
             return False
 
         logger.info("Liking post.")
-        if self.has_tags:
+        # Determina se usare single-click (sicuro ma richiede di trovare il
+        # cuoricino) o double-tap (piu' naturale ma rischioso su tag/carosello).
+        use_single_click = bool(self.has_tags) or is_carousel
+        if use_single_click:
+            reason = "has tags" if self.has_tags else "is carousel"
             logger.info(
-                "Post has tags, better going with a single click on the little heart ❤️."
+                f"Post {reason}: usando single-click sul cuoricino ❤️ "
+                f"(evito doppio-tap)."
             )
             like_button = self._get_post_like_button()
             if like_button is not None:
@@ -1514,25 +1532,25 @@ class OpenedPostView:
                 liked, _ = self._is_post_liked()
                 if not liked:
                     logger.warning(
-                        "❌ like_post (tagged): click sul cuoricino fatto ma "
-                        "_is_post_liked() ritorna False — possibile rate-limit IG "
-                        "soft-block o cuoricino non più visibile dopo lo scroll."
+                        f"❌ like_post ({reason}): click sul cuoricino fatto ma "
+                        f"_is_post_liked() ritorna False — possibile soft-block "
+                        f"IG o cuoricino non più visibile."
                     )
             else:
                 logger.warning(
-                    "❌ like_post (tagged): like button non trovato — probabile "
-                    "post sponsorizzato/ads o layout IG differente (cuoricino "
-                    "non in viewport)."
+                    f"❌ like_post ({reason}): like button non trovato — "
+                    f"probabile post sponsorizzato/ads o layout IG differente "
+                    f"(cuoricino non in viewport)."
                 )
         else:
+            # Foto singola senza tag: doppio-tap + fallback heart-click.
             post_media_view.double_click()
             liked, like_button = self._is_post_liked()
             if not liked:
                 if like_button is None:
                     logger.warning(
                         "❌ like_post: double-tap fatto ma like_button non "
-                        "trovato dopo — possibile carosello che ha cambiato "
-                        "slide, post sponsorizzato, o post rimosso."
+                        "trovato dopo — post rimosso o layout cambiato."
                     )
                 else:
                     logger.info("Double click failed, clicking on the little heart ❤️.")
@@ -1541,9 +1559,8 @@ class OpenedPostView:
                     if not liked:
                         logger.warning(
                             "❌ like_post: anche il fallback heart-click non ha "
-                            "funzionato — probabile soft-block IG (like ignorati) "
-                            "o UI fuori sync con uiautomator. Considera di "
-                            "rallentare action-throttle-like-min."
+                            "funzionato — probabile soft-block IG (like ignorati). "
+                            "Considera di rallentare action-throttle-like-min."
                         )
         return liked
 

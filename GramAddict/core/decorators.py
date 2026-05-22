@@ -166,7 +166,11 @@ def restart(
         check_if_crash_popup_is_there(device)
     except Exception:
         pass
-    random_sleep()
+    # Aspetta piu' a lungo dopo un crash: IG ha bisogno di tempo per
+    # rilasciare risorse, e l'emulatore di stabilizzarsi. Senza questa
+    # pausa, riaprire subito IG spesso porta a un secondo crash a catena
+    # (osservato in log: 2 crash entro 30s).
+    random_sleep(8, 15, modulable=False)
     try:
         opened = open_instagram(device)
     except Exception as e:
