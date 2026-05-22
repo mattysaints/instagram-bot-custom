@@ -31,3 +31,4 @@ apk/
 
 # Backup automatici di rotate-bloggers.py
 *.bak-*
+.git_commit_msg.txt
