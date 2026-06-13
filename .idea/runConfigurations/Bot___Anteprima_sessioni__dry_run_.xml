@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="👁️ Bot - Anteprima sessioni (dry-run)" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="false">
-    <module name="instagram-bot-custom" />
+  <configuration default="false" name="👁️ Bot - Anteprima sessioni (dry-run)" type="PythonConfigurationType" factoryName="Python">
+    <module name="GramAddict" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
@@ -8,12 +8,13 @@
       <env name="PYTHONUNBUFFERED" value="1" />
     </envs>
     <option name="SDK_HOME" value="$PROJECT_DIR$/.venv/bin/python" />
-    <option name="SDK_NAME" value="Python 3.9 (instagram-bot-custom)" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="IS_MODULE_SDK" value="false" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
+    <option name="DEBUG_JUST_MY_CODE" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+    <option name="RUN_TOOL" value="" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/run-dynamic.py" />
     <option name="PARAMETERS" value="--dry-run" />
     <option name="SHOW_COMMAND_LINE" value="false" />
@@ -24,4 +25,3 @@
     <method v="2" />
   </configuration>
 </component>
-
