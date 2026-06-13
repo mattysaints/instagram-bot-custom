@@ -10,6 +10,7 @@ from GramAddict.core.config import Config
 from GramAddict.core.daily_budget import DailyBudget
 from GramAddict.core.action_throttler import init_throttler
 from GramAddict.core.device_facade import create_device, get_device_info
+from GramAddict.core.fbr_refresh import maybe_refresh_fbr
 from GramAddict.core.filter import Filter
 from GramAddict.core.filter import load_config as load_filter
 from GramAddict.core.interaction import load_config as load_interaction
@@ -273,6 +274,14 @@ def start_bot(**kwargs):
             "comments": daily_budget.used("comments"),
             "pms": daily_budget.used("pms"),
         }
+
+        # Auto follow-back-rate refresh: scrape our own followers once (gated by
+        # interval) and recompute per-source FBR BEFORE the interact jobs run,
+        # so this session's source selection is already driven by fresh data.
+        try:
+            maybe_refresh_fbr(device, configs, storage, session_state)
+        except Exception as e:
+            logger.warning(f"[auto-fbr] Skipped due to error: {e}")
 
         show_ending_conditions()
         if not configs.args.debug:
