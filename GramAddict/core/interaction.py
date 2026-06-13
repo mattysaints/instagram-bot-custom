@@ -348,16 +348,42 @@ def interact_with_user(
         if sent_pm:
             interacted = True
     if can_follow:
-        followed = _follow(
-            device,
-            username,
-            follow_percentage,
-            args,
-            session_state,
-            swipe_amount,
-        )
-        if followed:
-            interacted = True
+        # "Warm follow" gate: a follow preceded by real engagement (likes,
+        # comments, watched stories, PM) converts to a follow-back far better
+        # than a cold follow. When follow_only_if_engaged is enabled we skip the
+        # follow for users we didn't actually engage with this interaction.
+        # Note: this gate applies only to the normal (public, non-empty) path;
+        # private/empty accounts are handled earlier and governed by the
+        # follow_private_or_empty filter, since engaging them is impossible.
+        do_follow = True
+        if getattr(args, "follow_only_if_engaged", False):
+            engagement = (
+                number_of_liked
+                + number_of_commented
+                + number_of_watched
+                + (1 if sent_pm else 0)
+            )
+            min_engagement = get_value(
+                getattr(args, "follow_min_engagement", "1"), None, 1
+            )
+            if engagement < min_engagement:
+                do_follow = False
+                logger.info(
+                    f"Skip follow for @{username}: engagement {engagement} < "
+                    f"required {min_engagement} (follow_only_if_engaged is on).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+        if do_follow:
+            followed = _follow(
+                device,
+                username,
+                follow_percentage,
+                args,
+                session_state,
+                swipe_amount,
+            )
+            if followed:
+                interacted = True
 
     return (
         interacted,

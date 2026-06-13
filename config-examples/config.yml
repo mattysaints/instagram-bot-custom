@@ -36,6 +36,17 @@ truncate-sources: 2-5
 # hot-zone-jump-flings: 4 # [hot-zone] number of consecutive flings per jump (~30-50 users skipped per fling)
 # hot-zone-max-jumps: 2 # [hot-zone] max jump attempts on the same source before abandoning it for the next one
 
+# Warm follow: only follow (public, non-empty) users you actually engaged with this interaction
+# (likes + comments + watched stories + PM). Converts to a follow-back much better than a cold follow.
+# follow-only-if-engaged: true
+# follow-min-engagement: 1 # min engagement actions required to follow (number or range, e.g. 1-2)
+
+# Auto follow-back-rate: scrape your own followers once per session and recompute the per-source
+# follow-back-rate, so source selection automatically favors sources that actually follow you back.
+# auto-fbr-refresh: true
+# auto-fbr-interval-hours: 24 # min hours between two refreshes (number or range, e.g. 20-28)
+# auto-fbr-max-scan: 0 # safety cap on followers scanned. 0 = full scan (recommended). If hit before list end, recompute is skipped to avoid a deflated FBR.
+
 # Action burst guard: enforces a hard floor between consecutive actions of the
 # same kind to avoid burst patterns that look automated. Recommended ON.
 # action-throttle-enabled: true

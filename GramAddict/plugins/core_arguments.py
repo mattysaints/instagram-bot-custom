@@ -372,6 +372,37 @@ class CoreArguments(Plugin):
                 "default": "0",
             },
             {
+                "arg": "--follow-only-if-engaged",
+                "help": "\"warm follow\": only follow a (public, non-empty) user if you actually engaged with them this interaction (likes + comments + watched stories + PM). A warm follow converts to a follow-back much better than a cold one. Private/empty accounts are unaffected (governed by follow_private_or_empty).",
+                "action": "store_true",
+            },
+            {
+                "arg": "--follow-min-engagement",
+                "nargs": None,
+                "help": "minimum number of engagement actions (each like, comment, watched story and PM counts as 1) required to follow when --follow-only-if-engaged is on. Number (e.g. 1) or range (e.g. 1-2).",
+                "metavar": "1",
+                "default": "1",
+            },
+            {
+                "arg": "--auto-fbr-refresh",
+                "help": "once per session (gated by --auto-fbr-interval-hours) scrape your own followers list and recompute the per-source follow-back-rate, so source selection automatically favors sources that actually follow you back.",
+                "action": "store_true",
+            },
+            {
+                "arg": "--auto-fbr-interval-hours",
+                "nargs": None,
+                "help": "minimum hours between two automatic follow-back-rate refreshes. It can be a number (e.g. 24) or a range (e.g. 20-28).",
+                "metavar": "24",
+                "default": "24",
+            },
+            {
+                "arg": "--auto-fbr-max-scan",
+                "nargs": None,
+                "help": "safety cap on how many followers to scan during the auto FBR refresh. 0 = full scan (recommended for accuracy). If the cap is hit before the end of the list the recompute is skipped, because a partial scan would deflate the follow-back-rate.",
+                "metavar": "0",
+                "default": "0",
+            },
+            {
                 "arg": "--scroll-skip-start",
                 "nargs": None,
                 "help": "skip a random number of items at the top of each source list (followers/likers/posts) so the bot doesn't always start from the same users. It can be a number (e.g. 20) or a range (e.g. 10-30).",

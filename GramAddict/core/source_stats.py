@@ -202,6 +202,37 @@ class SourceStats:
             ws.pop(idx)
         return chosen
 
+    # -- Auto-refresh bookkeeping ---------------------------------------------
+    def last_auto_fbr_check(self) -> Optional[datetime]:
+        """Datetime of the last automatic FBR refresh, or None if never run."""
+        ts = self._data.get("last_auto_fbr_check")
+        if not ts:
+            return None
+        try:
+            return datetime.fromisoformat(ts)
+        except (ValueError, TypeError):
+            return None
+
+    def mark_auto_fbr_check(self) -> None:
+        """Stamp 'now' as the last automatic FBR refresh and persist."""
+        self._data["last_auto_fbr_check"] = datetime.now().isoformat(timespec="seconds")
+        self._save()
+
+    def summary_rows(self) -> List[Tuple[str, int, int, Optional[float]]]:
+        """Return [(source_key, done, back, rate)] sorted by rate desc, for logs."""
+        rows: List[Tuple[str, int, int, Optional[float]]] = []
+        for key, e in self._data.get("sources", {}).items():
+            rows.append(
+                (
+                    key,
+                    int(e.get("follows_done", 0)),
+                    int(e.get("follows_back", 0)),
+                    e.get("follow_back_rate"),
+                )
+            )
+        rows.sort(key=lambda r: (r[3] if r[3] is not None else -1.0), reverse=True)
+        return rows
+
     # -- FBR recomputation utility --------------------------------------------
     def recompute_fbr_from_followers_set(
         self,
