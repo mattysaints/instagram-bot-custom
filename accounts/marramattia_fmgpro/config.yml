@@ -41,6 +41,18 @@ hot-zone-screens: 2                        # [yield-tune] reagisci prima alle sc
 hot-zone-jump-flings: 6                    # [yield-tune] salto piu' profondo per uscire dalle zone gia' battute
 hot-zone-max-jumps: 2                      # [yield-tune v2] da 3 a 2: log mostra 20+ "hot-zone detected" ma 0 "Abandoning source" -> il bot resta intrappolato a fling-e-trovare-1-utente. Meglio chiudere prima e cambiare sorgente.
 
+# [follow-back] Auto follow-back-rate: a inizio sessione (max 1 volta ogni 24h)
+# scansiona la TUA lista follower e ricalcola l'FBR per-sorgente, cosi' la
+# selezione delle sorgenti (gia' pesata) favorisce automaticamente i blogger
+# che ti fanno ricambiare il follow. C'e' gia' source_stats.json con dati reali.
+auto-fbr-refresh: true
+auto-fbr-interval-hours: 24                 # min ore tra due refresh (numero o range, es. 20-28)
+auto-fbr-max-scan: 0                        # 0 = scansione completa (consigliato). Se metti un cap e lo raggiungi prima della fine, il ricalcolo viene saltato per non falsare l'FBR.
+# [follow-back] Warm follow: segui solo chi hai davvero ingaggiato (like/storia/commento/PM).
+# Converte molto meglio del follow "freddo". Opt-in: scommenta per attivarlo.
+# follow-only-if-engaged: true
+# follow-min-engagement: 1
+
 # Action burst guard - vieta a IG di vedere mai 2 follow in 5s o 2 like in 2s
 action-throttle-enabled: true
 action-throttle-follow-min: 25-60          # min secondi fra 2 follow consecutivi (max ~90/h, target ~60/h)
