@@ -44,7 +44,7 @@ min_potency_ratio: 0.4                     # [relaxed] era 0.7 -> 0.4: utenti ve
 max_potency_ratio: 4                       # <= 4 -> finestra "1:1 - 4:1" dove c'e' la max probabilita' di follow-back
 min_posts: 9                               # almeno 9 post -> account vissuto, non vetrina mezza vuota
 mutual_friends: -1                         # qualsiasi (alza a >=1 se vuoi solo gente connessa)
-# last_post_max_age_days: 90               # disabilitato (costoso da verificare); riattiva se vedi inattivi
+last_post_max_age_days: 45                 # [follow-back] segui solo account ATTIVI (ultimo post <= 45gg): gli inattivi non ricambiano mai. Fail-open: se non riesce a leggere la data, non scarta.
 
 ## Filters on biography and name
 # blacklist_words: [sex, link in bio, onlyfans, escort, vendita, telegram]   # opzionale
