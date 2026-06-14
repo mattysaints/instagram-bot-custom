@@ -24,7 +24,7 @@ device: f2487e11                       # ADB device serial (adb devices -l); ser
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true
-screen-sleep: true
+screen-sleep: false                        # non spegnere lo schermo: evita il blocco PIN tra sessioni (vedi config.yml)
 screen-record: false
 speed-multiplier: 0.85
 debug: false
