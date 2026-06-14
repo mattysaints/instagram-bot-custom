@@ -529,7 +529,15 @@ def _wait_for_atx_agent_ready(device, max_wait_s: int = 30):
 
 def _restore_keyboard(device):
     logger.debug("Back to default keyboard!")
-    device.deviceV2.set_fastinput_ime(False)
+    try:
+        device.deviceV2.set_fastinput_ime(False)
+    except Exception as e:
+        # Best-effort cosmetic step. Questa funzione viene chiamata anche da
+        # kill_atx_agent durante il RECUPERO dell'atx-agent: se l'agent è
+        # irraggiungibile (AdbTimeout/ReadTimeout) ripristinare l'IME non vale
+        # il crash dell'intero bot. Logghiamo e proseguiamo: il recupero vero
+        # (restart + _wait_for_atx_agent_ready) avviene comunque subito dopo.
+        logger.debug(f"Could not restore default keyboard (ignoro): {e}")
 
 
 def random_sleep(inf=0.5, sup=3.0, modulable=True, log=True):

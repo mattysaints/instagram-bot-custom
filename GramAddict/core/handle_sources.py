@@ -16,6 +16,7 @@ from GramAddict.core.navigation import (
 from GramAddict.core.resources import ClassName
 from GramAddict.core.storage import FollowingStatus
 from GramAddict.core.utils import (
+    EmptyList,
     get_value,
     inspect_current_view,
     random_choice,
@@ -558,7 +559,16 @@ def handle_likers(
                 device.back()
                 PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
                 break
-            row_height, n_users = inspect_current_view(user_container)
+            try:
+                row_height, n_users = inspect_current_view(user_container)
+            except EmptyList:
+                logger.info(
+                    "Likers view is empty (reached end of likers list). Moving on.",
+                    extra={"color": f"{Fore.GREEN}"},
+                )
+                device.back()
+                PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                break
             try:
                 for item in user_container:
                     cur_row_height = item.get_height()
@@ -1210,7 +1220,21 @@ def iterate_over_followers(
         user_list = device.find(
             resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
         )
-        row_height, n_users = inspect_current_view(user_list)
+        try:
+            row_height, n_users = inspect_current_view(user_list)
+        except EmptyList:
+            # Vista senza utenti: tipicamente abbiamo scrollato/skippato oltre
+            # la fine di una lista followers molto corta (es. profilo con 7
+            # follower e skip-start di 10). NON è un errore fatale: trattiamo
+            # come "fine lista" lasciando user_list vuoto, così il for-loop non
+            # itera e il flusso ricade nel ramo "No followers were iterated,
+            # finish" in fondo al while (che marca la sorgente come esaurita).
+            logger.info(
+                "Current view has no users (likely scrolled past the end of a "
+                "short follower list). Finishing this source gracefully.",
+                extra={"color": f"{Fore.GREEN}"},
+            )
+            row_height, n_users, user_list = 0, 0, []
         try:
             for item in user_list:
                 try:
@@ -1223,11 +1247,17 @@ def iterate_over_followers(
                 user_info_view = item.child(index=1)
                 user_name_view = user_info_view.child(index=0).child()
                 if not user_name_view.exists():
-                    logger.info(
-                        "Next item not found: probably reached end of the screen.",
-                        extra={"color": f"{Fore.GREEN}"},
+                    # Una riga senza username NON implica "fine lista": dopo uno
+                    # skip profondo o un anchor-miss, la prima riga visibile puo'
+                    # essere parziale/sticky. Saltiamo SOLO questa riga e
+                    # proviamo le successive visibili, invece di abortire l'intera
+                    # schermata. Era la causa di "0 iterated -> exhausted" su
+                    # sorgenti enormi (@leonardopratoo 9k, @vecchi_mattia 293k):
+                    # dopo lo skip la 1a riga falliva e bruciavamo la sorgente.
+                    logger.debug(
+                        "Item without username (partial/sticky row), skip it."
                     )
-                    break
+                    continue
 
                 username = user_name_view.get_text()
                 screen_iterated_followers.append(username)
@@ -1495,6 +1525,23 @@ def iterate_over_followers(
                 "No followers were iterated, finish.",
                 extra={"color": f"{Fore.GREEN}"},
             )
+            # Una sorgente con MOLTI follower non puo' essere "esaurita" da una
+            # singola schermata vuota: dopo uno skip profondo / anchor-miss la
+            # prima schermata puo' arrivare vuota per un glitch di rendering.
+            # NON marcare esaurito: preserva la sorgente e riprovala la prossima
+            # sessione (altrimenti bruciamo blogger da 9k/293k follower con 0
+            # interazioni, per giorni di cooldown).
+            if (
+                target_followers_count is not None
+                and target_followers_count >= 2000
+            ):
+                logger.info(
+                    f"[empty-page] @{target} ha {target_followers_count:,} "
+                    "follower: schermata vuota trattata come glitch, NON marco "
+                    "esaurito (riprovo la prossima sessione).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return
             if (
                 not is_myself
                 and explored is not None
