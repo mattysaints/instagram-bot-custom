@@ -20,7 +20,7 @@
 # General Configuration
 # ---------------------------------------------------------------------------
 username: marramattia_fmgpro
-device: emulator-5554                       # ADB device serial (adb devices -l); serve solo se hai piu' di un device connesso
+device: f2487e11                       # ADB device serial (adb devices -l); serve solo se hai piu' di un device connesso
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true
