@@ -403,6 +403,13 @@ class CoreArguments(Plugin):
                 "default": "0",
             },
             {
+                "arg": "--auto-fbr-full-rescan-days",
+                "nargs": None,
+                "help": "how often to do a FULL followers re-scan. Between full scans the refresh is INCREMENTAL (only the new followers at the top of the list are scanned, then unioned with the saved snapshot) -> seconds instead of minutes. A full rescan corrects drift (followers who left).",
+                "metavar": "7",
+                "default": "7",
+            },
+            {
                 "arg": "--scroll-skip-start",
                 "nargs": None,
                 "help": "skip a random number of items at the top of each source list (followers/likers/posts) so the bot doesn't always start from the same users. It can be a number (e.g. 20) or a range (e.g. 10-30).",
