@@ -1816,6 +1816,36 @@ class ProfileView(ActionBarView):
 
             now = datetime.datetime.now()
 
+            # 1a) Forme relative ITALIANE (device locale it-IT: IG scrive
+            #     "2 giorni fa", "3 settimane fa", "5 ore fa", "1 mese fa",
+            #     "oggi", "ieri"). Vanno PRIMA delle inglesi, altrimenti "mesi"
+            #     verrebbe matchato come "m"(inuti) inglese -> 0 giorni sbagliato.
+            desc_low = desc.lower()
+            if "oggi" in desc_low:
+                return 0
+            if "ieri" in desc_low:
+                return 1
+            rel_it = re.search(
+                r"(\d+)\s*(giorn[oi]|settiman[ae]|mes[ei]|ann[oi]|or[ae]|"
+                r"minut[oi]|second[oi]|sett?|g|h|min)\b\.?\s*(fa)?",
+                desc,
+                flags=re.IGNORECASE,
+            )
+            if rel_it:
+                n = int(rel_it.group(1))
+                u = rel_it.group(2).lower()
+                if u in ("secondo", "secondi", "second", "minuto", "minuti",
+                         "min", "ora", "ore", "h"):
+                    return 0
+                if u in ("giorno", "giorni", "g"):
+                    return n
+                if u in ("settimana", "settimane", "sett", "set"):
+                    return n * 7
+                if u in ("mese", "mesi"):
+                    return n * 30
+                if u in ("anno", "anni"):
+                    return n * 365
+
             # 1) Relative english forms: "2 days ago", "3 weeks ago", "5h", "2w", "1y"
             rel = re.search(
                 r"(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?|s|m|h|d|w|mo|y)\s*(ago)?",
