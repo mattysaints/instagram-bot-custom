@@ -184,10 +184,11 @@ ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Matti
 ai-comments-fallback-to-file: true         # on AI failure, fallback a comments_list.txt (consigliato)
 
 
-## Stories ON: warm-up a basso rischio (view + like storia) -> piu' follow-back e visibilita'.
-## Sinergia col warm-follow: una storia vista conta come engagement che autorizza il follow.
-stories-count: 1-2
-stories-percentage: 40-60
+## Stories OFF: su IG 300 il ring storie NON si apre ("Failed to open the story container",
+## 0 storie viste in tutto lo storico + crash 14/06 23:44). Rischio/instabilita' per zero
+## beneficio -> disattivate. Il warm-follow si regge benissimo sui like.
+stories-count: 0
+stories-percentage: 0
 
 # ---------------------------------------------------------------------------
 # Ending Session Conditions
@@ -203,7 +204,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [21.16-22.24, 22.31-23.39, 23.46-00.54, 00.57-02.05]   # generata dinamicamente da run-dynamic.py
+working-hours: [23.49-00.26, 00.39-01.16, 01.31-02.08, 02.11-02.48]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
