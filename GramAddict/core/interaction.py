@@ -1203,9 +1203,14 @@ def _watch_stories(
                 )
                 return stories_counter
             else:
-                logger.warning("Failed to open the story container.")
+                # Evento BENIGNO (storia scaduta/sparita/privata o ring non
+                # apribile): NON e' un crash da dumpare. Niente save_crash, solo
+                # recupero della view per non lasciare il flusso disallineato
+                # (era una con-causa del crash scroll su lista follower persa).
+                logger.info(
+                    "Story non disponibile (chiusa/sparita), salto le storie."
+                )
                 logger.debug(f"Story username: {story_username}")
-                save_crash(device)
                 if story_frame.exists():
                     device.back()
                 return 0
