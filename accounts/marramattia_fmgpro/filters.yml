@@ -12,14 +12,14 @@
 ##############################################################################
 
 ## Filters on profile type
-skip_if_private: true                      # solo pubblici (qualita' + meno profili-bot)
+skip_if_private: false                     # [bilanciato] INCLUDI i privati: erano il 29.5% degli scarti (dati reali) e i privati reali del fitness ricambiano spesso. I filtri ratio/followers/posts restano attivi anche su di loro (follower/following/post sono visibili sui privati).
 skip_if_public: false
 skip_business: false                       # tieni anche i business piccoli (creator)
 skip_non_business: false
 skip_following: true                       # non rifare chi gia' segui
 skip_follower: true                        # non interagire con chi ti segue gia' (spreco di azione)
 skip_if_link_in_bio: false                 # link in bio = spesso creator/professionista (ok)
-follow_private_or_empty: false             # MAI seguire privati/vuoti
+follow_private_or_empty: true              # [bilanciato] segui anche i privati (gli account VUOTI restano comunque esclusi da min_posts: 9). Necessario perche' i privati passino al follow.
 
 ## Pre-flight username filters (valutati SENZA aprire il profilo - risparmiano 3-5s per skip)
 skip_username_patterns:                    # regex case-insensitive: skip a colpo sicuro

@@ -80,6 +80,11 @@ blogger-followers: [malatidipalestraofficial, ifbbproitaly, space.gym.official, 
 # Hashtag generali fitness IT + nicchia locale Emilia + bodybuilding/coaching specifici
 hashtag-likers-recent: [garebodybuilding, bodybuildinggara, preparazioneagonistica, agonisticbodybuilding, classicphysiqueitalia, menphysiqueitalia, atletabodybuilding, preparatoreagonistico, coachbodybuilding, bodybuildingcoach, naturalbodybuildingitalia, palestraitalia, classicoitaliano, colosseumifbb, bbfitalia, nbfitalia, fifitalia, fitmodelitalia, dedizionebodybuilding, bodybuildinglife, fitnesslifestyleitalia, muscolazione, pesistica, determinatione, passionepalestra, workoutitalia, bodybuildingtraining, ipertrofia, massamuscolare, nopainnogain]
 hashtag-likers-top: [garebodybuilding, preparazioneagonistica, classicphysiqueitalia, coachbodybuilding, preparatoreagonistico, bodybuildingitalia, naturalbodybuildingitalia, colosseumifbb, bbfitalia]
+# [TORINO LOCAL] Lead locali per coaching in presenza. Pesca chi mette like / posta
+# da specifiche LOCATION IG (palestre/luoghi di Torino). I nomi DEVONO combaciare con
+# la ricerca "Luoghi" di Instagram. Scommenta e sostituisci con le tue palestre target.
+# place-likers-recent: [Nome Palestra Torino 1, McFIT Torino, Nome Box CrossFit Torino]
+# place-posts-recent: [Nome Palestra Torino 1, Nome Palestra Torino 2]
 ## Watching content (umanizza)
 watch-video-time: 8-25
 watch-photo-time: 2-5
@@ -179,9 +184,10 @@ ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Matti
 ai-comments-fallback-to-file: true         # on AI failure, fallback a comments_list.txt (consigliato)
 
 
-## Stories OFF
-stories-count: 0
-stories-percentage: 0
+## Stories ON: warm-up a basso rischio (view + like storia) -> piu' follow-back e visibilita'.
+## Sinergia col warm-follow: una storia vista conta come engagement che autorizza il follow.
+stories-count: 1-2
+stories-percentage: 40-60
 
 # ---------------------------------------------------------------------------
 # Ending Session Conditions
@@ -197,7 +203,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [10.17-11.47, 13.06-14.36, 16.14-17.44, 19.24-20.54, 22.13-23.43]   # generata dinamicamente da run-dynamic.py
+working-hours: [21.16-22.24, 22.31-23.39, 23.46-00.54, 00.57-02.05]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
