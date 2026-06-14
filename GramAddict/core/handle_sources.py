@@ -1511,6 +1511,18 @@ def iterate_over_followers(
                     className=ClassName.LIST_VIEW,
                 )
 
+            # Se la lista NON c'e' nemmeno dopo il back (tipico quando le storie
+            # hanno spostato la view), NON scrollare una lista morta: era la
+            # causa del crash JsonRpcError "scrollToEnd su UiSelector ... id/list".
+            # Chiudiamo la sorgente in modo pulito, senza crashare la sessione.
+            if not list_view.exists():
+                logger.warning(
+                    "[recover] Lista follower introvabile anche dopo back: "
+                    "chiudo la sorgente senza crash.",
+                    extra={"color": f"{Fore.YELLOW}"},
+                )
+                return
+
             if is_myself:
                 logger.info("Need to scroll now", extra={"color": f"{Fore.GREEN}"})
                 list_view.scroll(Direction.UP)
