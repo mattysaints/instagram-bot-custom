@@ -81,18 +81,20 @@ def main():
         if not key.startswith(prefix):
             continue
         name = key[len(prefix):]
-        done = int(v.get("follows_done", 0))
+        done = int(v.get("follows_done", 0))        # follows performed (register)
+        sample = int(v.get("fbr_sample", 0))         # verifiable denominator
         back = int(v.get("follows_back", 0))
         rate = v.get("follow_back_rate")
-        rows.append([name, done, back, rate])
+        rows.append([name, done, sample, back, rate])
 
     if not rows:
         print(f"No data for job '{args.job}' in {account_path/'source_stats.json'}.")
         print("Available jobs:", sorted({k.split('|',1)[0] for k in sources}))
         return
 
-    def classify(done, rate):
-        if rate is None or done < args.min_signal:
+    def classify(sample, rate):
+        # Signal gate uses the VERIFIABLE sample, not the raw follows count.
+        if rate is None or sample < args.min_signal:
             return "LOW-SIGNAL"
         if rate <= args.low_fbr:
             return "DEAD"
@@ -101,33 +103,34 @@ def main():
         return "OK"
 
     for r in rows:
-        r.append(classify(r[1], r[3]))
+        r.append(classify(r[2], r[4]))  # classify on fbr_sample, rate
 
-    # Sort: rate desc (None last), then done desc.
-    rows.sort(key=lambda r: (r[3] if r[3] is not None else -1.0, r[1]), reverse=True)
+    # Sort: rate desc (None last), then sample desc.
+    rows.sort(key=lambda r: (r[4] if r[4] is not None else -1.0, r[2]), reverse=True)
 
     last = data.get("last_auto_fbr_check")
     tot_done = sum(r[1] for r in rows)
-    tot_back = sum(r[2] for r in rows)
-    gfbr = 100 * tot_back / tot_done if tot_done else 0.0
+    tot_sample = sum(r[2] for r in rows)
+    tot_back = sum(r[3] for r in rows)
+    gfbr = 100 * tot_back / tot_sample if tot_sample else 0.0
 
     print("=" * 78)
     print(f"FBR REPORT — {args.username} — job '{args.job}'")
     print(f"last auto-FBR check: {last or 'never'}")
-    print(f"sources: {len(rows)} | follows_done: {tot_done} | follows_back: {tot_back} "
-          f"| GLOBAL FBR: {gfbr:.1f}%")
-    print(f"thresholds: min-signal={args.min_signal}  DEAD<= {args.low_fbr*100:.0f}%  "
+    print(f"sources: {len(rows)} | follows_done: {tot_done} | verified sample: {tot_sample} "
+          f"| follows_back: {tot_back} | GLOBAL FBR: {gfbr:.1f}%")
+    print(f"thresholds: min-signal(sample)={args.min_signal}  DEAD<= {args.low_fbr*100:.0f}%  "
           f"GOOD>= {args.high_fbr*100:.0f}%")
     print("=" * 78)
-    print(f"{'#':>3}  {'source':<34} {'done':>5} {'back':>5} {'FBR':>7}  class")
+    print(f"{'#':>3}  {'source':<32} {'fdone':>6} {'back':>5} {'samp':>5} {'FBR':>7}  class")
     print("-" * 78)
-    for i, (name, done, back, rate, cls) in enumerate(rows, 1):
+    for i, (name, done, sample, back, rate, cls) in enumerate(rows, 1):
         rate_s = f"{rate*100:5.1f}%" if rate is not None else "  n/a"
-        print(f"{i:>3}  {name:<34} {done:>5} {back:>5} {rate_s:>7}  {cls}")
+        print(f"{i:>3}  {name:<32} {done:>6} {back:>5} {sample:>5} {rate_s:>7}  {cls}")
 
     counts = {}
     for r in rows:
-        counts[r[4]] = counts.get(r[4], 0) + 1
+        counts[r[5]] = counts.get(r[5], 0) + 1
     print("-" * 78)
     print("summary:", ", ".join(f"{k}={counts[k]}" for k in ("GOOD", "OK", "DEAD", "LOW-SIGNAL") if k in counts))
 
@@ -138,7 +141,7 @@ def main():
         if not current:
             print(f"\n[prune] Could not read inline '{args.job}: [...]' from {cfg}.")
             return
-        dead = {r[0] for r in rows if r[4] == "DEAD"}
+        dead = {r[0] for r in rows if r[5] == "DEAD"}
         # Dedup while preserving order.
         seen = set()
         kept, dropped = [], []

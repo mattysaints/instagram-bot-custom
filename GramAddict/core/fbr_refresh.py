@@ -206,9 +206,13 @@ def _log_summary(stats, top: int = 10) -> None:
     if not rows:
         return
     logger.info(
-        "[auto-fbr] Top sources by follow-back-rate (source | done / back | rate):",
+        "[auto-fbr] Top sources by FBR (source | followed | verified back/sample | rate). "
+        "'*' = enough sample to bias selection (>=10).",
         extra={"color": f"{Fore.CYAN}"},
     )
-    for key, done, back, rate in rows[:top]:
+    for key, done, sample, back, rate in rows[:top]:
         rate_str = f"{rate*100:5.1f}%" if rate is not None else "  n/a"
-        logger.info(f"[auto-fbr]   {key:<55} {done:>4} / {back:<4} {rate_str}")
+        trusted = "*" if sample >= 10 and rate is not None else " "
+        logger.info(
+            f"[auto-fbr] {trusted} {key:<52} fdone={done:>4}  {back:>3}/{sample:<4} {rate_str}"
+        )
