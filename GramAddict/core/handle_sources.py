@@ -1003,6 +1003,15 @@ def iterate_over_followers(
                     )
                     if list_view.exists():
                         max_scrolls = _resume_search_limit(self.args)
+                        # Su liste enormi l'anchor e' sepolto troppo in profondita':
+                        # il seek a scroll lenti fallisce quasi sempre e spreca
+                        # minuti. Falliamo prima e lasciamo lavorare lo skip-start
+                        # (ora veloce, scrolla per schermate).
+                        if (
+                            target_followers_count is not None
+                            and target_followers_count >= 30_000
+                        ):
+                            max_scrolls = min(max_scrolls, 12)
                         logger.info(
                             f"[resume] Looking for last anchor of @{target} (up to {max_scrolls} scrolls). Candidates: {anchors[:3]}{'...' if len(anchors)>3 else ''}",
                             extra={"color": f"{Fore.CYAN}"},
@@ -1116,7 +1125,25 @@ def iterate_over_followers(
                 )
                 actually_skipped = 0
                 prev_first_username = None
-                for i in range(skip_n):
+                # IMPORTANTE: scrollare per SCHERMATE, non per follower. Ogni
+                # scroll avanza ~una schermata (= users_per_screen follower),
+                # NON un singolo follower. Il vecchio loop faceva skip_n scroll
+                # (1 follower == 1 scroll) -> saltava ~6x troppi e sprecava
+                # minuti (113 -> 113 scroll -> ~7 min). Ora: ~ceil(skip_n/screen).
+                try:
+                    _probe = device.find(
+                        resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER
+                    )
+                    _, users_per_screen = inspect_current_view(_probe)
+                except Exception:
+                    users_per_screen = 0
+                if not users_per_screen or users_per_screen < 1:
+                    users_per_screen = 6  # default ragionevole per la lista follower IG
+                scrolls_needed = max(
+                    1, (skip_n + users_per_screen - 1) // users_per_screen
+                )
+                done_scrolls = 0
+                for i in range(scrolls_needed):
                     try:
                         user_list = device.find(
                             resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
@@ -1132,22 +1159,24 @@ def iterate_over_followers(
                             pass
                         list_view.scroll(Direction.DOWN)
                         random_sleep(0.3, 0.9, modulable=False)
+                        done_scrolls += 1
                         if (
                             first_username is not None
                             and prev_first_username == first_username
                         ):
                             logger.info(
-                                f"List didn't move while skipping (skipped {actually_skipped}/{skip_n}). Stop.",
+                                f"List didn't move while skipping (~{actually_skipped}/{skip_n}). Stop.",
                                 extra={"color": f"{Fore.CYAN}"},
                             )
                             break
                         prev_first_username = first_username
-                        actually_skipped += 1
+                        actually_skipped += users_per_screen
                     except Exception as e:
                         logger.debug(f"Skip-start interrupted: {e}")
                         break
                 logger.info(
-                    f"Skipped {actually_skipped} followers, starting iteration here.",
+                    f"Skipped ~{actually_skipped} followers in {done_scrolls} scrolls, "
+                    "starting iteration here.",
                     extra={"color": f"{Fore.CYAN}"},
                 )
 
