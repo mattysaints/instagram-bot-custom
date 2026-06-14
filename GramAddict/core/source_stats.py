@@ -89,6 +89,7 @@ class SourceStats:
             {
                 "follows_done": 0,
                 "follows_back": 0,
+                "fbr_sample": 0,
                 "follow_back_rate": None,
                 "last_follow_at": None,
                 "last_fbr_check": None,
@@ -110,8 +111,19 @@ class SourceStats:
         follows_done: int,
         follows_back: int,
     ) -> None:
+        """Update the follow-back stats from a recompute.
+
+        ``follows_done`` here is the recompute's denominator: how many followed
+        users for this source we could actually VERIFY against the current
+        followers list (i.e. that still exist in interacted_users.json). We store
+        it as ``fbr_sample`` — distinct from ``follows_done`` (the running count
+        of follows performed, maintained by register_follow). The rate is based
+        on the verifiable sample, and the weighting gates on that sample so a
+        spurious 1/1=100% on a tiny sample can't bias source selection.
+        """
         e = self._entry(job, source)
-        e["follows_done"] = max(int(follows_done), int(e.get("follows_done", 0)))
+        # Do NOT clobber follows_done (the register_follow count) here.
+        e["fbr_sample"] = int(follows_done)
         e["follows_back"] = int(follows_back)
         if follows_done > 0:
             e["follow_back_rate"] = round(follows_back / follows_done, 4)
@@ -119,6 +131,12 @@ class SourceStats:
             e["follow_back_rate"] = None
         e["last_fbr_check"] = datetime.now().isoformat(timespec="seconds")
         self._save()
+
+    def fbr_sample(self, job: str, source: str) -> int:
+        """How many follows for this source were verifiable in the last FBR
+        recompute (the denominator the rate is based on)."""
+        e = self._data.get("sources", {}).get(_key(job, source))
+        return int(e.get("fbr_sample", 0)) if e else 0
 
     # -- Read API -------------------------------------------------------------
     def get(self, job: str, source: str) -> Dict:
@@ -152,8 +170,11 @@ class SourceStats:
         high_factor. Linear interpolation in-between.
         """
         rate = self.fbr(job, source)
-        done = self.follows_done(job, source)
-        if rate is None or done < min_follows_for_signal:
+        # Gate on the VERIFIABLE sample (denominator the rate is based on), not
+        # the raw follows_done count: a 1/1=100% on a tiny sample must stay
+        # neutral instead of being treated as a top source.
+        sample = self.fbr_sample(job, source)
+        if rate is None or sample < min_follows_for_signal:
             return 1.0
         if rate <= low_fbr_threshold:
             return low_factor
@@ -218,19 +239,22 @@ class SourceStats:
         self._data["last_auto_fbr_check"] = datetime.now().isoformat(timespec="seconds")
         self._save()
 
-    def summary_rows(self) -> List[Tuple[str, int, int, Optional[float]]]:
-        """Return [(source_key, done, back, rate)] sorted by rate desc, for logs."""
-        rows: List[Tuple[str, int, int, Optional[float]]] = []
+    def summary_rows(self) -> List[Tuple[str, int, int, int, Optional[float]]]:
+        """Return [(source_key, follows_done, fbr_sample, back, rate)] sorted by
+        rate desc, for logs. ``fbr_sample`` is the verifiable denominator the
+        rate is based on; ``follows_done`` is the raw follows performed."""
+        rows: List[Tuple[str, int, int, int, Optional[float]]] = []
         for key, e in self._data.get("sources", {}).items():
             rows.append(
                 (
                     key,
                     int(e.get("follows_done", 0)),
+                    int(e.get("fbr_sample", 0)),
                     int(e.get("follows_back", 0)),
                     e.get("follow_back_rate"),
                 )
             )
-        rows.sort(key=lambda r: (r[3] if r[3] is not None else -1.0), reverse=True)
+        rows.sort(key=lambda r: (r[4] if r[4] is not None else -1.0), reverse=True)
         return rows
 
     # -- FBR recomputation utility --------------------------------------------
