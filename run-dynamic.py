@@ -31,6 +31,16 @@ import time
 from pathlib import Path
 from typing import Optional
 
+# Forza UTF-8 su stdout/stderr PRIMA che colorama (importato da GramAddict)
+# avvolga lo stream: lo script stampa emoji (ℹ️ ✅ 🚀 ⏳) e su Windows la
+# console di default e' cp1252 -> UnicodeEncodeError che fa crashare il lancio.
+# reconfigure e' un no-op innocuo se lo stream e' gia' utf-8.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import GramAddict  # noqa: F401  # bootstrap runtime env for IDE launches
 
 DEFAULT_CONFIG = "accounts/simonebestagno/config.yml"
@@ -145,14 +155,17 @@ def shrink_to_fit(
 
 def patch_working_hours(config_path: Path, windows: list[str]) -> None:
     """Sostituisce la riga 'working-hours: [...]' nel file YAML."""
-    text = config_path.read_text()
+    # encoding esplicito: il config contiene caratteri non-ASCII (emoji nei
+    # commenti, lettere accentate). Senza encoding, su Windows read_text/
+    # write_text usano cp1252 e crashano con UnicodeDecodeError/EncodeError.
+    text = config_path.read_text(encoding="utf-8")
     new_line = f"working-hours: [{', '.join(windows)}]   # generata dinamicamente da run-dynamic.py"
     pattern = re.compile(r"^\s*#?\s*working-hours\s*:.*$", re.MULTILINE)
     if pattern.search(text):
         text = pattern.sub(new_line, text, count=1)
     else:
         text = text.rstrip() + "\n" + new_line + "\n"
-    config_path.write_text(text)
+    config_path.write_text(text, encoding="utf-8")
 
 
 def _read_device_from_config(config_path: Path) -> Optional[str]:
@@ -160,7 +173,7 @@ def _read_device_from_config(config_path: Path) -> Optional[str]:
     minimale: niente PyYAML dependency). Ritorna None se non trovato.
     Necessario per sapere a quale serial fare wait-for-device."""
     try:
-        text = config_path.read_text()
+        text = config_path.read_text(encoding="utf-8")
     except Exception:
         return None
     m = re.search(r"^\s*device\s*:\s*([^\s#]+)", text, re.MULTILINE)
@@ -415,7 +428,7 @@ def main():
     env = os.environ.copy()
     env_file = Path(".env.local")
     if env_file.exists():
-        for line in env_file.read_text().splitlines():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
