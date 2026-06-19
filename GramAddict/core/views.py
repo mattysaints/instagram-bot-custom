@@ -1,7 +1,7 @@
 import datetime
 import logging
-import os
 import re
+import shlex
 import platform
 from enum import Enum, auto
 from random import choice, randint, uniform
@@ -45,6 +45,25 @@ def load_config(config):
 def case_insensitive_re(str_list):
     strings = str_list if isinstance(str_list, str) else "|".join(str_list)
     return f"(?i)({strings})"
+
+
+def adb_input_text_command_arg(text: str) -> str:
+    """
+    Build the remote shell argument for `adb shell input text`.
+
+    adb forwards the shell command to Android's /system/bin/sh, where values
+    such as #hashtags would otherwise be interpreted as comments.
+    """
+    safe = text.replace(" ", "%s")
+    return shlex.quote(safe)
+
+
+def adb_input_text_stderr_is_failure(stderr: str) -> bool:
+    stderr_lower = (stderr or "").lower()
+    return (
+        "error: invalid arguments for command: text" in stderr_lower
+        or "usage: input" in stderr_lower
+    )
 
 
 class TabBarTabs(Enum):
@@ -144,6 +163,17 @@ class TabBarView:
                 classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
                 descriptionMatches=case_insensitive_re(TabBarText.HOME_CONTENT_DESC),
             )
+            if not button.exists():
+                # Tab bar might not be ready yet, wait and retry with increasing delays
+                for wait_secs in (3, 5, 10):
+                    logger.debug(f"Didn't find HOME tab, waiting {wait_secs}s for tab bar to appear...")
+                    sleep(wait_secs)
+                    button = self.device.find(
+                        classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
+                        descriptionMatches=case_insensitive_re(TabBarText.HOME_CONTENT_DESC),
+                    )
+                    if button.exists():
+                        break
 
         elif tab == TabBarTabs.SEARCH:
             button = self.device.find(
@@ -154,8 +184,12 @@ class TabBarView:
             if not button.exists():
                 # Some accounts display the search btn only in Home -> action bar
                 logger.debug("Didn't find search in the tab bar...")
-                home_view = self.navigateToHome()
-                home_view.navigateToSearch()
+                # First navigate to home, then try action bar search
+                self._navigateTo(TabBarTabs.HOME)
+                home_view = HomeView(self.device)
+                if not home_view.navigateToSearch():
+                    logger.error("Couldn't navigate to Search via Home action bar either.")
+                    return
                 return
         elif tab == TabBarTabs.REELS:
             button = self.device.find(
@@ -183,6 +217,16 @@ class TabBarView:
                 descriptionMatches=case_insensitive_re(TabBarText.PROFILE_CONTENT_DESC),
             )
             if not button.exists():
+                for wait_secs in (3, 5, 10):
+                    logger.debug(f"Didn't find PROFILE tab, waiting {wait_secs}s and retrying...")
+                    sleep(wait_secs)
+                    button = self.device.find(
+                        classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
+                        descriptionMatches=case_insensitive_re(TabBarText.PROFILE_CONTENT_DESC),
+                    )
+                    if button.exists():
+                        break
+            if not button.exists():
                 button = self._get_new_profile_position()
 
         if button is not None and button.exists(Timeout.MEDIUM):
@@ -190,9 +234,10 @@ class TabBarView:
             button.click(sleep=SleepTime.SHORT)
             if tab is not TabBarTabs.PROFILE:
                 button.click(sleep=SleepTime.SHORT)
-            return
+            return True
 
         logger.error(f"Didn't find tab {tab_name} in the tab bar...")
+        return False
 
 
 class ActionBarView:
@@ -217,6 +262,9 @@ class HomeView(ActionBarView):
         search_btn = self.action_bar.child(
             descriptionMatches=case_insensitive_re(TabBarText.SEARCH_CONTENT_DESC)
         )
+        if not search_btn.exists(Timeout.MEDIUM):
+            logger.error("Didn't find Search button in Home action bar.")
+            return None
         search_btn.click()
 
         return SearchView(self.device)
@@ -231,25 +279,30 @@ class HashTagView:
         if obj.exists(Timeout.LONG):
             logger.debug("RecyclerView exists.")
         else:
-            logger.debug("RecyclerView doesn't exists.")
+            logger.warning("⚠️  RecyclerView non trovata — hashtag page non caricata o layout cambiato.")
         return obj
 
     def _getFistImageView(self, recycler):
-        obj = recycler.child(
-            resourceIdMatches=ResourceID.IMAGE_BUTTON,
-        )
-        if obj.exists(Timeout.LONG):
-            logger.debug("First image in view exists.")
-        else:
-            logger.debug("First image in view doesn't exists.")
-        return obj
+        # Tentativo 1: IMAGE_BUTTON (layout classico)
+        obj = recycler.child(resourceIdMatches=ResourceID.IMAGE_BUTTON)
+        if obj.exists(Timeout.MEDIUM):
+            logger.debug("First image in view exists (IMAGE_BUTTON).")
+            return obj
+        # Fallback: qualunque child cliccabile nel recycler (layout nuovo IG)
+        logger.warning("⚠️  IMAGE_BUTTON non trovato nel RecyclerView — provo fallback su child cliccabile.")
+        obj_fallback = recycler.child(clickable=True)
+        if obj_fallback.exists(Timeout.SHORT):
+            logger.info("🔄 Fallback: trovato child cliccabile nel RecyclerView.")
+            return obj_fallback
+        logger.warning("⚠️  Nessun child cliccabile trovato nel RecyclerView.")
+        return obj  # ritorna l'obj originale (non esiste) per mantenere compatibilità check .exists()
 
     def _getRecentTab(self):
         obj = self.device.find(
             className=ClassName.TEXT_VIEW,
             textMatches=case_insensitive_re(TabBarText.RECENT_CONTENT_DESC),
         )
-        if obj.exists(Timeout.LONG):
+        if obj.exists(Timeout.TINY):
             logger.debug("Recent Tab exists.")
         else:
             logger.debug("Recent Tab doesn't exists.")
@@ -273,20 +326,30 @@ class PlacesView:
         return obj
 
     def _getFistImageView(self, recycler):
-        obj = recycler.child(
-            resourceIdMatches=ResourceID.IMAGE_BUTTON,
-        )
-        if obj.exists(Timeout.LONG):
-            logger.debug("First image in view exists.")
-        else:
-            logger.debug("First image in view doesn't exists.")
+        # Tentativo 1: IMAGE_BUTTON (layout classico)
+        obj = recycler.child(resourceIdMatches=ResourceID.IMAGE_BUTTON)
+        if obj.exists(Timeout.MEDIUM):
+            logger.debug("First image in view exists (IMAGE_BUTTON).")
+            return obj
+        # Fallback: qualunque child cliccabile nel recycler (layout nuovo IG)
+        logger.warning("⚠️  IMAGE_BUTTON non trovato nel RecyclerView (PlacesView) — provo fallback su child cliccabile.")
+        obj_fallback = recycler.child(clickable=True)
+        if obj_fallback.exists(Timeout.SHORT):
+            logger.info("🔄 Fallback PlacesView: trovato child cliccabile nel RecyclerView.")
+            return obj_fallback
+        logger.warning("⚠️  Nessun child cliccabile trovato nel RecyclerView (PlacesView).")
         return obj
 
     def _getRecentTab(self):
-        return self.device.find(
+        obj = self.device.find(
             className=ClassName.TEXT_VIEW,
             textMatches=case_insensitive_re(TabBarText.RECENT_CONTENT_DESC),
         )
+        if obj.exists(Timeout.TINY):
+            logger.debug("Recent Tab exists.")
+        else:
+            logger.debug("Recent Tab doesn't exists.")
+        return obj
 
     def _getInformBody(self):
         return self.device.find(
@@ -400,93 +463,37 @@ class SearchView:
         generates real keystroke events that IG can react to (live search
         results will populate). Returns True on success.
         """
-        import shutil
         import subprocess
-
-        # Resolve adb explicitly (PATH inside PyCharm-launched venv may not
-        # include the Android SDK platform-tools). Without this, subprocess
-        # raises FileNotFoundError -> we silently fall back to FastInputIME
-        # which is broken on most emulators -> searchbar stays empty.
-        adb_bin = shutil.which("adb")
-        if adb_bin is None:
-            # Last resort: try common Windows / macOS / Linux SDK locations.
-            candidates = [
-                os.path.expandvars(r"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"),
-                os.path.expandvars(r"%ANDROID_HOME%\platform-tools\adb.exe"),
-                os.path.expandvars(r"%ANDROID_SDK_ROOT%\platform-tools\adb.exe"),
-                os.path.expanduser("~/Library/Android/sdk/platform-tools/adb"),
-                os.path.expanduser("~/Android/Sdk/platform-tools/adb"),
-            ]
-            for c in candidates:
-                if c and "%" not in c and os.path.isfile(c):
-                    adb_bin = c
-                    break
-        if adb_bin is None:
-            logger.warning(
-                "[search-typing] `adb` not found on PATH and no platform-tools "
-                "directory detected. Set ANDROID_HOME or add platform-tools "
-                "to PATH so `_adb_type_text` can drive the searchbar. "
-                "Falling back to FastInputIME (often broken on emulators)."
-            )
-            return False
 
         try:
             serial = self.device.deviceV2.serial
         except Exception as e:
-            logger.warning(f"[search-typing] cannot read device serial: {e}")
+            logger.warning(f"⌨️  adb-type: cannot read device serial: {e}")
             return False
-        # `adb shell input text` quirks:
-        #   - spaces must be encoded as %s (the binary doesn't accept them)
-        #   - the device-side shell interprets shell metacharacters like '#'
-        #     (comment) and '&', ';', '|', '(', ')'. If we pass `input text
-        #     #fitnessdonna` it becomes `input text` (the # truncates the line)
-        #     -> the device returns "Error: Argument expected after text" with
-        #     rc=0 and an empty searchbar.
-        # Solution: encode spaces as %s and SINGLE-QUOTE the argument so the
-        # device shell treats it as one literal token. We also escape any
-        # single quote inside the text (rare) via '\''.
-        safe_spaces = text.replace(" ", "%s")
-        # Single-quote escape: ' -> '\''
-        quoted = "'" + safe_spaces.replace("'", "'\\''") + "'"
-        logger.info(
-            f"[search-typing] adb={adb_bin!r} serial={serial!r} -> "
-            f"input text {quoted}"
-        )
+        logger.info(f"⌨️  adb-type: sending {text!r} ({len(text)} chars) to focused EditText via 'adb shell input text'")
         try:
             res = subprocess.run(
-                [adb_bin, "-s", serial, "shell", "input", "text", quoted],
+                [
+                    "adb",
+                    "-s",
+                    serial,
+                    "shell",
+                    f"input text {adb_input_text_command_arg(text)}",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=10,
             )
             stdout = (res.stdout or b"").decode(errors="replace").strip()
             stderr = (res.stderr or b"").decode(errors="replace").strip()
-            # `adb shell input` returns rc=0 even when it printed the usage
-            # screen (e.g. when the argument got eaten by shell metacharacters).
-            # Detect that and fail loud so we can fall back / log it properly.
-            looks_like_usage = (
-                "Usage:" in stderr or "Usage:" in stdout
-                or "Error:" in stderr or "Error:" in stdout
-            )
-            if looks_like_usage:
-                # Keep the message short: full usage screen is just noise.
-                err_short = stderr.replace("\r", " ").replace("\n", " ")[:200]
-                logger.warning(
-                    f"[search-typing] device's `input text` rejected the "
-                    f"argument (rc={res.returncode}). Truncated stderr: "
-                    f"{err_short!r}"
-                )
-                return False
-            logger.info(
-                f"[search-typing] adb rc={res.returncode} "
-                f"stdout={stdout!r} stderr={stderr[:120]!r}"
-            )
-            return res.returncode == 0
-        except FileNotFoundError as ex:
-            logger.warning(f"[search-typing] adb binary not executable: {ex}")
-            return False
+            ok = res.returncode == 0 and not adb_input_text_stderr_is_failure(stderr)
+            if ok:
+                logger.info(f"⌨️  adb-type: OK (rc=0). stdout={stdout!r} stderr={stderr!r}")
+            else:
+                logger.warning(f"⌨️  adb-type: FAILED rc={res.returncode} stdout={stdout!r} stderr={stderr!r}")
+            return ok
         except Exception as ex:
-            logger.warning(f"[search-typing] adb call failed: {ex}")
+            logger.warning(f"⌨️  adb-type: exception while running adb: {ex}")
             return False
 
     def _kick_search(self):
@@ -530,26 +537,10 @@ class SearchView:
         logger.info(f"Navigate to {target}")
         search_edit_text = self._getSearchEditText()
         if search_edit_text is not None:
-            logger.info("[search-typing] Pressing on searchbar.")
+            logger.info("⌨️  Searchbar trovata, clicco per dare focus.")
             search_edit_text.click(sleep=SleepTime.SHORT)
-            # Diagnostic: did the EditText get focus? Without focus, `input text`
-            # types into the void (or into the wrong widget).
-            try:
-                xml = self.device.deviceV2.dump_hierarchy()
-                # Quick'n'dirty check: count focused="true" EditText nodes.
-                import re as _re
-                focused_edits = _re.findall(
-                    r'<node[^>]*class="android\.widget\.EditText"[^>]*focused="true"',
-                    xml,
-                )
-                logger.info(
-                    f"[search-typing] After click: {len(focused_edits)} "
-                    f"focused EditText(s) in UI."
-                )
-            except Exception as e:
-                logger.info(f"[search-typing] focus-check failed: {e}")
         else:
-            logger.warning("[search-typing] There is no searchbar! Returning False.")
+            logger.warning("⌨️  Nessuna searchbar visibile: impossibile digitare.")
             return False
         # NOTE: original implementation had an early _check_current_view here to
         # detect if the target is already in the search history. We skip it on
@@ -558,40 +549,35 @@ class SearchView:
         # Type the search text using ADB `input text` so IG receives real
         # keystroke events and triggers live search (FastInputIME tends to be
         # broken on most emulators, so set_text+PASTE leaves the result list empty).
-        logger.info(f"[search-typing] typing {target!r} via adb input text.")
         adb_typed = self._adb_type_text(target)
         if not adb_typed:
             # Fallback to the original approach
+            mode_name = "PASTE (dont_type=true)" if args.dont_type else "TYPE keystroke"
             logger.warning(
-                "[search-typing] adb typing failed, falling back to FastInputIME "
-                "set_text. If the searchbar stays empty this is the cause."
+                f"⌨️  adb-type fallita, fallback a set_text({mode_name})."
             )
             search_edit_text.set_text(
                 target,
                 Mode.PASTE if args.dont_type else Mode.TYPE,
             )
             if args.dont_type:
+                logger.info("⌨️  Kick-search: invio SPACE+BACKSPACE per forzare live-filter.")
                 self._kick_search()
         # Give IG some time to fetch search results
         random_sleep(2, 4, modulable=False)
-        # Always read what the searchbar actually contains after typing, even on
-        # success path: emulators sometimes confirm rc=0 but the typing went
-        # elsewhere (e.g. focus stolen by an overlay).
+        # Readback: verify what the searchbar actually contains right now.
         try:
             current = self._getSearchEditText()
             if current is not None and current.exists():
-                txt = current.get_text()
-                logger.info(
-                    f"[search-typing] searchbar contains after typing: {txt!r} "
-                    f"(expected ~{target!r})"
-                )
-            else:
-                logger.info(
-                    "[search-typing] searchbar EditText no longer visible "
-                    "after typing (probably moved to search-results view)."
-                )
+                seen = current.get_text() or ""
+                if seen.strip().lower() == target.strip().lower():
+                    logger.info(f"⌨️  Searchbar OK: contiene {seen!r}.")
+                else:
+                    logger.warning(
+                        f"⌨️  Searchbar MISMATCH: atteso {target!r} ma trovato {seen!r}."
+                    )
         except Exception as e:
-            logger.info(f"[search-typing] could not read searchbar text: {e}")
+            logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
         if self._check_current_view(target, job):
             logger.info(f"{target} is in top view.")
             return True
@@ -602,27 +588,34 @@ class SearchView:
             )
             count = visible_rows.count_items()
             logger.info(
-                f"[search-typing] target {target!r} not in top view, "
-                f"{count} SEARCH_ROW_ITEM(s) visible after typing."
+                f"🔍 navigate_to_target: target {target!r} non in top view; "
+                f"{count} riga/righe SEARCH_ROW_ITEM visibili dopo la digitazione."
             )
         except Exception as e:
-            logger.info(f"[search-typing] could not enumerate rows: {e}")
+            logger.debug(f"navigate_to_target: could not enumerate rows: {e}")
+        # Even more diagnostics: read what the EditText actually contains so we
+        # know whether typing hit the right widget at all.
+        try:
+            current = self._getSearchEditText()
+            if current is not None and current.exists():
+                txt = current.get_text()
+                logger.debug(
+                    f"navigate_to_target: searchbar currently contains: {txt!r}"
+                )
+        except Exception as e:
+            logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
         # Dump the UI hierarchy NOW so we can see which resource-ids IG is
         # using for search results in this version.
         try:
             xml = self.device.deviceV2.dump_hierarchy()
-            # Cross-platform tmp path (the original /tmp doesn't exist on Windows).
-            import tempfile
-            dump_path = os.path.join(
-                tempfile.gettempdir(), "gramaddict_ui_search.xml"
-            )
+            dump_path = "/tmp/gramaddict_ui_search.xml"
             with open(dump_path, "w", encoding="utf-8") as f:
                 f.write(xml)
-            logger.info(
-                f"[search-typing] UI dump saved to {dump_path} ({len(xml)} chars)"
+            logger.debug(
+                f"navigate_to_target: UI dump saved to {dump_path} ({len(xml)} chars)"
             )
         except Exception as e:
-            logger.info(f"[search-typing] UI dump failed: {e}")
+            logger.debug(f"navigate_to_target: UI dump failed: {e}")
         echo_text = self.device.find(resourceId=ResourceID.ECHO_TEXT)
         if echo_text.exists(Timeout.SHORT):
             logger.debug("Pressing on see all results.")
@@ -763,20 +756,6 @@ class PostsViewList:
                                 break
                     break
             if obj1 is None:
-                # IG >= ~400 (Compose feed) puo' non avere gap_view/footer_space:
-                # in quel caso facciamo solo uno scroll semplice e usciamo.
-                if not gap_view_obj.exists():
-                    logger.debug(
-                        "No gap/footer in current view (Compose feed?). Falling back to a basic swipe."
-                    )
-                    displayHeight = self.device.get_info()["displayHeight"]
-                    self.device.swipe_points(
-                        displayWidth / 2,
-                        displayHeight * 0.75,
-                        displayWidth / 2,
-                        displayHeight * 0.20,
-                    )
-                    return True
                 obj1 = gap_view_obj.get_bounds()["bottom"]
             containers_content = self.device.find(resourceIdMatches=containers_content)
 
@@ -890,7 +869,16 @@ class PostsViewList:
                 resourceId=ResourceID.ROW_FEED_TEXTVIEW_LIKES,
                 className=ClassName.TEXT_VIEW,
             )
-            if " Liked by" in likes_view.get_text():
+            if not likes_view.exists():
+                logger.warning("⚠️  open_likers_container: likes_view non trovata — skip apertura likers.")
+                return
+            try:
+                likes_text = likes_view.get_text() or ""
+            except Exception as e:
+                logger.warning(f"⚠️  open_likers_container: get_text() fallita ({e}) — fallback click diretto.")
+                likes_view.click()
+                return
+            if " Liked by" in likes_text:
                 post_liked_by_a_following = True
             elif likes_view.child().count_items() < 2:
                 likes_view.click()
@@ -957,7 +945,15 @@ class PostsViewList:
             current_job, Owner.GET_NAME
         )
         has_tags = self._has_tags()
+        max_swipes = 8  # fallback: evita loop infinito se la descrizione non appare mai
+        swipe_count = 0
         while True:
+            if swipe_count >= max_swipes:
+                logger.warning(
+                    f"⚠️  _check_if_last_post: raggiunto limite {max_swipes} swipe senza trovare descrizione. "
+                    "Esco con post 'non duplicato' per evitare loop infinito."
+                )
+                return False, last_description or "", username, is_ad, is_hashtag, has_tags
             post_description = self.device.find(
                 index=-1,
                 resourceIdMatches=ResourceID.ROW_FEED_TEXT,
@@ -990,6 +986,7 @@ class PostsViewList:
                     universal_actions._swipe_points(
                         direction=Direction.DOWN, delta_y=200
                     )
+                    swipe_count += 1
                     continue
                 row_feed_profile_header = self.device.find(
                     resourceId=ResourceID.ROW_FEED_PROFILE_HEADER
@@ -1009,6 +1006,7 @@ class PostsViewList:
                     f"Can't find the description of {username}'s post, try to swipe a little bit down."
                 )
                 universal_actions._swipe_points(direction=Direction.DOWN, delta_y=200)
+                swipe_count += 1
 
     def _if_action_bar_is_over_obj_swipe(self, obj):
         """do a swipe of the amount of the action bar"""
@@ -1188,17 +1186,13 @@ class PostsViewList:
         if skip_media_check:
             return
         media, content_desc = self._get_media_container()
-        # IG >= ~400: il media_group del feed ha content-desc vuoto (Compose).
-        # Trattiamo "" come UNKNOWN ma proseguiamo comunque con il double click.
-        if media is None or not media.exists():
+        if content_desc is None:
             return
         if not already_watched:
-            media_type, _ = post_view_list.detect_media_type(content_desc or "")
+            media_type, _ = post_view_list.detect_media_type(content_desc)
             opened_post_view.watch_media(media_type)
         if mode == LikeMode.DOUBLE_CLICK:
-            if media_type in (MediaType.CAROUSEL, MediaType.PHOTO, MediaType.UNKNOWN):
-                # IG >= ~400: nel feed home non c'e' piu' un like_button con resource-id
-                # esposto da Compose. L'unico modo affidabile e' il double tap sul media.
+            if media_type in (MediaType.CAROUSEL, MediaType.PHOTO):
                 logger.info("Double click on post.")
                 _, _, action_bar_bottom = PostsViewList(
                     self.device
@@ -1238,14 +1232,10 @@ class PostsViewList:
                 logger.debug("Like is not present.")
                 return False
         else:
-            # IG >= ~400: nel feed Compose il bottone non ha piu' un resource-id
-            # ispezionabile. Non possiamo verificare visivamente -> consideriamo
-            # il double-tap come andato a buon fine (best-effort).
-            logger.debug(
-                "Like button not found by resource-id (IG Compose feed). "
-                "Assuming double-tap like succeeded."
+            UniversalActions(self.device)._swipe_points(
+                direction=Direction.DOWN, delta_y=100
             )
-            return True
+            return PostsViewList(self.device)._check_if_liked()
 
     def _check_if_ad_or_hashtag(
         self, post_owner_obj
@@ -1367,6 +1357,12 @@ class AccountView:
                 return True
             logger.debug(f"You're logged as {current_profile_name.strip()}")
             selector = self.device.find(resourceId=ResourceID.ACTION_BAR_TITLE_CHEVRON)
+            if not selector.exists(Timeout.SHORT):
+                logger.warning(
+                    "Account switcher chevron not found (single account or new IG UI). "
+                    "Assuming current account is correct and skipping account switch."
+                )
+                return True
             selector.click()
             if self._find_username(username):
                 if action_bar is not None:
@@ -1490,9 +1486,22 @@ class OpenedPostView:
 
         return like_btn_view.get_selected(), like_btn_view
 
-    def like_post(self) -> bool:
+    def like_post(self, is_carousel: bool = False) -> bool:
         """
-        Like the post with a double click and check if it's liked
+        Like the post.
+
+        Strategia:
+          - Post con TAG persone -> single click sul cuoricino (il doppio-tap
+            su un tag aprirebbe il profilo della persona taggata).
+          - CAROSELLO -> single click sul cuoricino (il doppio-tap rischia di
+            essere interpretato come "tap successivo per cambiare slide" se
+            arriva subito dopo lo swipe di _browse_carousel(); osservato in
+            prod come fonte principale dei 'Fail to like post': il doppio-tap
+            cambia slide invece di likare).
+          - Foto singola SENZA tag -> doppio-tap (comportamento storico, piu'
+            "umano"), con fallback al cuoricino se non passa.
+
+        :param is_carousel: True se il post e' un carosello (multi-slide).
         :return: post has been liked
         :rtype: bool
         """
@@ -1500,25 +1509,59 @@ class OpenedPostView:
             resourceIdMatches=case_insensitive_re(ResourceID.MEDIA_CONTAINER)
         )
         liked = False
-        if post_media_view.exists():
-            logger.info("Liking post.")
-            if self.has_tags:
-                logger.info(
-                    "Post has tags, better going with a single click on the little heart ❤️."
-                )
-                like_button = self._get_post_like_button()
-                if like_button is not None:
-                    like_button.click()
-                    liked, _ = self._is_post_liked()
-                else:
-                    logger.warning("Can't find the like button object!")
+        if not post_media_view.exists():
+            logger.warning(
+                "❌ like_post: MEDIA_CONTAINER non trovato — post non caricato "
+                "(rete lenta) o layout cambiato. Nessun tentativo di like fatto."
+            )
+            return False
+
+        logger.info("Liking post.")
+        # Determina se usare single-click (sicuro ma richiede di trovare il
+        # cuoricino) o double-tap (piu' naturale ma rischioso su tag/carosello).
+        use_single_click = bool(self.has_tags) or is_carousel
+        if use_single_click:
+            reason = "has tags" if self.has_tags else "is carousel"
+            logger.info(
+                f"Post {reason}: usando single-click sul cuoricino ❤️ "
+                f"(evito doppio-tap)."
+            )
+            like_button = self._get_post_like_button()
+            if like_button is not None:
+                like_button.click()
+                liked, _ = self._is_post_liked()
+                if not liked:
+                    logger.warning(
+                        f"❌ like_post ({reason}): click sul cuoricino fatto ma "
+                        f"_is_post_liked() ritorna False — possibile soft-block "
+                        f"IG o cuoricino non più visibile."
+                    )
             else:
-                post_media_view.double_click()
-                liked, like_button = self._is_post_liked()
-                if not liked and like_button is not None:
+                logger.warning(
+                    f"❌ like_post ({reason}): like button non trovato — "
+                    f"probabile post sponsorizzato/ads o layout IG differente "
+                    f"(cuoricino non in viewport)."
+                )
+        else:
+            # Foto singola senza tag: doppio-tap + fallback heart-click.
+            post_media_view.double_click()
+            liked, like_button = self._is_post_liked()
+            if not liked:
+                if like_button is None:
+                    logger.warning(
+                        "❌ like_post: double-tap fatto ma like_button non "
+                        "trovato dopo — post rimosso o layout cambiato."
+                    )
+                else:
                     logger.info("Double click failed, clicking on the little heart ❤️.")
                     like_button.click()
                     liked, _ = self._is_post_liked()
+                    if not liked:
+                        logger.warning(
+                            "❌ like_post: anche il fallback heart-click non ha "
+                            "funzionato — probabile soft-block IG (like ignorati). "
+                            "Considera di rallentare action-throttle-like-min."
+                        )
         return liked
 
     def start_video(self) -> bool:
@@ -1642,6 +1685,10 @@ class OpenedPostView:
         )
         liked = False
         full_screen, obj = self._is_video_in_fullscreen()
+        if not full_screen:
+            logger.warning("❌ like_video: video NON in fullscreen — impossibile eseguire il like. "
+                           "Probabile cambio layout Reel/IGTV o post non caricato.")
+            return False
         if full_screen:
             logger.info("Liking video.")
             obj.double_click()
@@ -1656,17 +1703,20 @@ class OpenedPostView:
                     like_button.click()
                     UniversalActions.detect_block(self.device)
                 else:
-                    logger.error("We are seeing another video.")
+                    logger.error("❌ like_video: like_button non trovato — probabile layout Reel diverso (UFI_STACK assente).")
                 liked, _ = self._is_video_liked()
+            if not liked:
+                logger.warning("❌ like_video: like video fallito dopo double-click + fallback heart.")
         return liked
 
     def _getListViewLikers(self):
-        for _ in range(2):
+        for attempt in range(2):
             obj = self.device.find(resourceId=ResourceID.LIST)
             if obj.exists(Timeout.LONG):
+                logger.info(f"📋 Lista likers caricata (tentativo {attempt+1}/2).")
                 return obj
-            logger.debug("Can't find likers list, try again..")
-        logger.error("Can't load likers list..")
+            logger.warning(f"⚠️  Lista likers non trovata (tentativo {attempt+1}/2), riprovo...")
+        logger.error("❌ Lista likers NON caricata dopo 2 tentativi. Il post verrà saltato.")
         return None
 
     def _getUserContainer(self):
@@ -1765,6 +1815,36 @@ class ProfileView(ActionBarView):
             logger.debug(f"getFirstPostAgeDays: first post desc = {desc!r}")
 
             now = datetime.datetime.now()
+
+            # 1a) Forme relative ITALIANE (device locale it-IT: IG scrive
+            #     "2 giorni fa", "3 settimane fa", "5 ore fa", "1 mese fa",
+            #     "oggi", "ieri"). Vanno PRIMA delle inglesi, altrimenti "mesi"
+            #     verrebbe matchato come "m"(inuti) inglese -> 0 giorni sbagliato.
+            desc_low = desc.lower()
+            if "oggi" in desc_low:
+                return 0
+            if "ieri" in desc_low:
+                return 1
+            rel_it = re.search(
+                r"(\d+)\s*(giorn[oi]|settiman[ae]|mes[ei]|ann[oi]|or[ae]|"
+                r"minut[oi]|second[oi]|sett?|g|h|min)\b\.?\s*(fa)?",
+                desc,
+                flags=re.IGNORECASE,
+            )
+            if rel_it:
+                n = int(rel_it.group(1))
+                u = rel_it.group(2).lower()
+                if u in ("secondo", "secondi", "second", "minuto", "minuti",
+                         "min", "ora", "ore", "h"):
+                    return 0
+                if u in ("giorno", "giorni", "g"):
+                    return n
+                if u in ("settimana", "settimane", "sett", "set"):
+                    return n * 7
+                if u in ("mese", "mesi"):
+                    return n * 30
+                if u in ("anno", "anni"):
+                    return n * 365
 
             # 1) Relative english forms: "2 days ago", "3 weeks ago", "5h", "2w", "1y"
             rel = re.search(

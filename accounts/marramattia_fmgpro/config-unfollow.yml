@@ -1,0 +1,121 @@
+##############################################################################
+# Config UNFOLLOW dedicata - profilo "Prudente Realistico".
+#
+# Strategia:
+#   - Solo unfollow di chi NON ti ha seguito indietro
+#   - Solo utenti seguiti dal bot da almeno 2 giorni (unfollow-delay)
+#   - Sessioni separate dai follow (non li mescola: anti-ban)
+#   - 2 sessioni/giorno, 35-40 unfollow ciascuna -> ~70-80/giorno totale
+#     distanziate da ~4-6h (repeat 240-360 minuti)
+#
+# Uso:
+#   python run.py --config accounts/marramattia_fmgpro/config-unfollow.yml
+#
+# Strategia operativa consigliata:
+#   - Giorni dispari -> config.yml (follow + like)
+#   - Giorni pari    -> config-unfollow.yml (solo unfollow)
+##############################################################################
+
+# ---------------------------------------------------------------------------
+# General Configuration
+# ---------------------------------------------------------------------------
+username: marramattia_fmgpro
+device: f2487e11                       # ADB device serial (adb devices -l); serve solo se hai piu' di un device connesso
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: false                        # non spegnere lo schermo: evita il blocco PIN tra sessioni (vedi config.yml)
+screen-record: false
+speed-multiplier: 0.85
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: false
+disable-block-detection: false
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: false
+truncate-sources: 1-1
+
+# ---------------------------------------------------------------------------
+# AZIONE: solo unfollow-non-followers
+# Sgancia chi non ti segue indietro.
+# Cap per sessione: 35-40 -> 2 sessioni = ~70-80/giorno totale
+# ---------------------------------------------------------------------------
+unfollow-non-followers: 35-40
+
+## unfollow-delay: aspetta almeno N giorni dal follow prima di unfollare.
+## 2 giorni: se dopo 2 giorni non ha ricambiato il follow, lo scartiamo.
+unfollow-delay: 2
+
+## Ordine: dai piu' RECENTI ai piu' vecchi.
+## Motivo: con liste following grandi (migliaia di account) partire dai
+## piu' vecchi significa scrollare per ore prima di completare un giro.
+## Partendo dai recenti il bot salta velocemente quelli sotto i 3 giorni
+## (unfollow-delay) e arriva in pochi swipe ai candidati validi
+## (followati 3-30 giorni fa che non hanno rifolloato).
+sort-followers-newest-to-oldest: true
+
+## Strategia search-driven: invece di scrollare la lista Following alla
+## cieca, prendi i candidati da interacted_users.json (gente che il bot
+## stesso ha followato, gia' filtrata per unfollow-delay) e cerca ognuno
+## per username nella search bar in cima alla lista, poi unfollow.
+## Su liste enormi e' molto piu' veloce ed evita i loop di scroll vuoti.
+unfollow-via-search: true
+
+## min-following: se scendi sotto questo numero di "following totali", il bot ferma.
+## Ti tutela dal rimanere senza seguiti.
+min-following: 100
+
+# ---------------------------------------------------------------------------
+# Source Limits (non rilevanti per unfollow, ma il loader li richiede)
+# ---------------------------------------------------------------------------
+interactions-count: 1-1
+likes-count: 0
+likes-percentage: 0
+carousel-count: 0
+carousel-percentage: 0
+max-comments-pro-user: 0
+interact-percentage: 0
+follow-percentage: 0
+follow-limit: 0
+skipped-list-limit: 5
+skipped-posts-limit: 1
+fling-when-skipped: 0
+
+# ---------------------------------------------------------------------------
+# Total Limits Per Session - SOLO unfollow
+# ---------------------------------------------------------------------------
+total-likes-limit: 0-0
+total-follows-limit: 0-0
+total-unfollows-limit: 35-40              # 35-40 unfollow/sessione (2 sessioni/giorno)
+total-watches-limit: 0-0
+total-successful-interactions-limit: 35-40
+total-interactions-limit: 50-70           # include skip (follow_back / error)
+total-comments-limit: 0-0
+total-pm-limit: 0-0
+total-scraped-limit: 200-300              # NON 0! Il bot esce subito se scraped-limit e' 0
+
+stories-count: 0
+stories-percentage: 0
+
+# ---------------------------------------------------------------------------
+# Ending Session Conditions
+# ---------------------------------------------------------------------------
+end-if-likes-limit-reached: false
+end-if-follows-limit-reached: false
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# Scheduling
+# ---------------------------------------------------------------------------
+time-delta: 0-1
+# 2 sessioni/giorno distanziate ~4-6h: repeat 240-360 minuti tra una sessione
+# e la successiva. total-sessions: 2 ferma il bot dopo la seconda.
+repeat: 240-360
+total-sessions: 2
+

@@ -295,7 +295,12 @@ def interact_with_user(
                         _browse_carousel(device, obj_count)
                     opened_post_view.watch_media(media_type)
                     get_throttler().wait_if_needed(ActionType.LIKE)
-                    like_succeed = opened_post_view.like_post()
+                    # Per il carosello passiamo is_carousel=True cosi' like_post
+                    # usa single-click sul cuoricino invece del doppio-tap (che
+                    # dopo _browse_carousel rischia di cambiare slide).
+                    like_succeed = opened_post_view.like_post(
+                        is_carousel=(media_type == MediaType.CAROUSEL)
+                    )
                 if like_succeed:
                     register_like(device, session_state)
                     number_of_liked += 1
@@ -343,16 +348,42 @@ def interact_with_user(
         if sent_pm:
             interacted = True
     if can_follow:
-        followed = _follow(
-            device,
-            username,
-            follow_percentage,
-            args,
-            session_state,
-            swipe_amount,
-        )
-        if followed:
-            interacted = True
+        # "Warm follow" gate: a follow preceded by real engagement (likes,
+        # comments, watched stories, PM) converts to a follow-back far better
+        # than a cold follow. When follow_only_if_engaged is enabled we skip the
+        # follow for users we didn't actually engage with this interaction.
+        # Note: this gate applies only to the normal (public, non-empty) path;
+        # private/empty accounts are handled earlier and governed by the
+        # follow_private_or_empty filter, since engaging them is impossible.
+        do_follow = True
+        if getattr(args, "follow_only_if_engaged", False):
+            engagement = (
+                number_of_liked
+                + number_of_commented
+                + number_of_watched
+                + (1 if sent_pm else 0)
+            )
+            min_engagement = get_value(
+                getattr(args, "follow_min_engagement", "1"), None, 1
+            )
+            if engagement < min_engagement:
+                do_follow = False
+                logger.info(
+                    f"Skip follow for @{username}: engagement {engagement} < "
+                    f"required {min_engagement} (follow_only_if_engaged is on).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+        if do_follow:
+            followed = _follow(
+                device,
+                username,
+                follow_percentage,
+                args,
+                session_state,
+                swipe_amount,
+            )
+            if followed:
+                interacted = True
 
     return (
         interacted,
@@ -658,6 +689,14 @@ def _comment(
                         logger.debug(f"[ai-comment] caption extraction skipped: {e}")
 
                 logger.info("Open comments of post.")
+                # Re-check existence: between the first check and the click
+                # the button may have scrolled off screen or IG refreshed the
+                # post view, causing a JsonRpcError on a stale selector.
+                if not comment_button.exists():
+                    logger.info(
+                        "Comment button disappeared before click, skipping comment.",
+                    )
+                    break
                 comment_button.click()
                 comment_box = device.find(
                     resourceId=ResourceID.LAYOUT_COMMENT_THREAD_EDITTEXT,
@@ -992,6 +1031,17 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
     if not session_state.check_limit(
         limit_type=session_state.Limit.FOLLOWS, output=False
     ):
+        # Hard safety: never re-follow a user we already unfollowed before
+        # (either by the bot or reconciled from a manual unfollow). This is
+        # a last-line-of-defense check; handle_sources should normally skip
+        # these users much earlier in the pipeline.
+        storage = getattr(session_state, "storage", None)
+        if storage is not None and storage.was_unfollowed_before(username):
+            logger.info(
+                f"@{username}: previously unfollowed - refusing to follow again. Skip.",
+                extra={"color": f"{Fore.YELLOW}"},
+            )
+            return False
         follow_chance = randint(1, 100)
         if follow_chance > follow_percentage:
             return False
@@ -1165,9 +1215,14 @@ def _watch_stories(
                 )
                 return stories_counter
             else:
-                logger.warning("Failed to open the story container.")
+                # Evento BENIGNO (storia scaduta/sparita/privata o ring non
+                # apribile): NON e' un crash da dumpare. Niente save_crash, solo
+                # recupero della view per non lasciare il flusso disallineato
+                # (era una con-causa del crash scroll su lista follower persa).
+                logger.info(
+                    "Story non disponibile (chiusa/sparita), salto le storie."
+                )
                 logger.debug(f"Story username: {story_username}")
-                save_crash(device)
                 if story_frame.exists():
                     device.back()
                 return 0

@@ -185,21 +185,54 @@ def get_instagram_version():
 
 
 def open_instagram_with_url(url) -> bool:
+    """
+    Open an https://www.instagram.com/... URL directly inside the Instagram
+    app, bypassing the Android "Open with..." chooser. We do this by issuing
+    the VIEW intent with the package explicitly pinned to `app_id` and the
+    BROWSABLE category set, which is exactly how the system would route the
+    intent if the user had previously selected "Always" on the chooser.
+    """
     logger.info(f"Open Instagram app with url: {url}")
-    # Forziamo il package handler a com.instagram.android (-p flag) cosi'
-    # Android NON mostra il chooser "Open with..." quando ci sono piu' app
-    # registrate per https://instagram.com/* (es. browser, app cloned).
-    # In questo modo il deeplink va SEMPRE dentro Instagram nativo.
-    pkg_flag = " -p com.instagram.android"
+    device_arg = "" if configs.device_id is None else f" -s {configs.device_id}"
+    pkg = app_id or "com.instagram.android"
+    # Quote the URL so that any '&' / '?' is not interpreted by the remote
+    # shell. Single-quoting also protects against future url-template changes.
+    quoted_url = f"'{url}'"
     cmd = (
-        f"adb{'' if configs.device_id is None else ' -s ' + configs.device_id} "
-        f"shell am start -a android.intent.action.VIEW -d {url}{pkg_flag}"
+        f"adb{device_arg} shell am start"
+        f" -a android.intent.action.VIEW"
+        f" -c android.intent.category.BROWSABLE"
+        f" -p {pkg}"
+        f" -d {quoted_url}"
     )
     cmd_res = subprocess.run(cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding="utf8")
     err = cmd_res.stderr.strip()
+    out = (cmd_res.stdout or "").strip()
     random_sleep()
     if err:
-        logger.debug(err)
+        logger.debug(f"open_instagram_with_url stderr: {err}")
+    # `am start` prints "Error: ..." on stdout when it fails to resolve the
+    # intent (e.g. the activity is not exported or the package is wrong).
+    # Detect those cases and retry once without the package pin as a last
+    # resort - this preserves backward compatibility on exotic IG forks.
+    if "Error:" in out or "Activity not started" in out and "Error" in out:
+        logger.warning(
+            f"Pinned deep-link failed ({out!r}); retrying without explicit package."
+        )
+        fallback_cmd = (
+            f"adb{device_arg} shell am start"
+            f" -a android.intent.action.VIEW"
+            f" -d {quoted_url}"
+        )
+        cmd_res = subprocess.run(
+            fallback_cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding="utf8"
+        )
+        err = cmd_res.stderr.strip()
+        if err:
+            logger.debug(f"open_instagram_with_url fallback stderr: {err}")
+            return False
+    elif err:
+        # stderr present and we did not get a recoverable stdout error
         return False
     return True
 
@@ -276,6 +309,10 @@ def open_instagram(device):
         random_sleep(3, 3, modulable=False)
 
     logger.info("Ready for botting!🤫", extra={"color": f"{Style.BRIGHT}{Fore.GREEN}"})
+
+    # Extra wait to let Instagram UI fully initialize before interacting
+    logger.debug("Waiting for Instagram UI to fully load...")
+    random_sleep(5, 8, modulable=False)
 
     random_sleep()
     if configs.args.close_apps:
@@ -460,10 +497,47 @@ def restart_atx_agent(device):
     except subprocess.CalledProcessError as e:
         logger.error(f"Error occurred while restarting atx-agent: {e}")
 
+    # Wait until the uiautomator2 JSON-RPC endpoint is responsive again before
+    # the next session tries to call it (otherwise get_device_info raises a
+    # ProxyError and crashes the whole bot process).
+    _wait_for_atx_agent_ready(device)
+
+
+def _wait_for_atx_agent_ready(device, max_wait_s: int = 30):
+    """Poll atx-agent / uiautomator2 until it answers, or give up gracefully."""
+    deadline = time.time() + max_wait_s
+    attempt = 0
+    last_err = None
+    while time.time() < deadline:
+        attempt += 1
+        try:
+            # Lightweight probe: ask uiautomator2 for device info.
+            _ = device.deviceV2.info
+            logger.info(
+                f"atx-agent is responsive again (after {attempt} probe(s))."
+            )
+            return True
+        except Exception as e:
+            last_err = e
+            sleep(1.0)
+    logger.warning(
+        f"atx-agent did not become responsive within {max_wait_s}s "
+        f"(last error: {last_err}). Continuing anyway."
+    )
+    return False
+
 
 def _restore_keyboard(device):
     logger.debug("Back to default keyboard!")
-    device.deviceV2.set_fastinput_ime(False)
+    try:
+        device.deviceV2.set_fastinput_ime(False)
+    except Exception as e:
+        # Best-effort cosmetic step. Questa funzione viene chiamata anche da
+        # kill_atx_agent durante il RECUPERO dell'atx-agent: se l'agent è
+        # irraggiungibile (AdbTimeout/ReadTimeout) ripristinare l'IME non vale
+        # il crash dell'intero bot. Logghiamo e proseguiamo: il recupero vero
+        # (restart + _wait_for_atx_agent_ready) avviene comunque subito dopo.
+        logger.debug(f"Could not restore default keyboard (ignoro): {e}")
 
 
 def random_sleep(inf=0.5, sup=3.0, modulable=True, log=True):

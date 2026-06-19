@@ -130,7 +130,7 @@ _MAX_CAPTION_CHARS = 800
 # Se l'API risponde piu' lentamente di questo, abbandoniamo: meglio
 # usare un commento dal file txt che far aspettare il bot per minuti
 # (il bot deve restare "umano" nei tempi di risposta).
-_REQUEST_TIMEOUT_S = 12
+_REQUEST_TIMEOUT_S = 8
 
 # Cascata di modelli di fallback. Se il primo (configurato dall'utente)
 # fallisce con un errore "transitorio" (rate-limit, 5xx, timeout, blocco
@@ -152,6 +152,76 @@ _DEFAULT_MODEL_CASCADE = [
 # vietato. Stessa cosa per 404 (modello inesistente -> proviamo il prossimo
 # nella cascata).
 _RETRYABLE_HTTP = {408, 429, 500, 502, 503, 504}
+
+# ---------------------------------------------------------------------------
+# Circuit breaker: se la rete e' DOWN (DNS bloccato, connessione assente,
+# firewall che droppa) NON ha senso tentare i 4 modelli in cascata ad ogni
+# commento -- ogni cascata costa 4 * _REQUEST_TIMEOUT_S = ~32s sprecati
+# (osservato in produzione: rete con DNS aziendale che blocca
+# generativelanguage.googleapis.com -> NXDOMAIN -> 4 fallimenti immediati,
+# ma anche con timeout veri sono 32+ secondi a vuoto).
+#
+# Soluzione: appena rileviamo un network error "strutturale" (DNS / unable
+# to resolve / connection refused), apriamo il breaker e per i prossimi
+# _BREAKER_COOLDOWN_S secondi rispondiamo subito None senza nemmeno tentare
+# la prima chiamata. Dopo il cooldown ritentiamo (la rete potrebbe essere
+# tornata: cambio Wi-Fi, VPN, ecc.).
+# ---------------------------------------------------------------------------
+_BREAKER_COOLDOWN_S = 600  # 10 minuti
+# Marker errori di rete strutturali (case-insensitive sul repr della
+# exception). Se compaiono, apriamo il breaker. Altri errori (timeout
+# read/write puri) NON aprono il breaker: potrebbe essere solo
+# l'endpoint specifico lento.
+_NETWORK_DOWN_MARKERS = (
+    "nodename nor servname",        # DNS lookup failed (macOS)
+    "name or service not known",    # DNS lookup failed (Linux)
+    "temporary failure in name resolution",
+    "no address associated with hostname",
+    "newconnectionerror",           # urllib3 wrapper su errori sock di basso livello
+    "failed to establish a new connection",
+    "network is unreachable",
+    "no route to host",
+    "connection refused",
+)
+
+_breaker_opened_at: Optional[float] = None  # epoch seconds, None = chiuso
+
+
+def _breaker_is_open() -> bool:
+    """True se il circuit breaker e' aperto (network ritenuto down)."""
+    global _breaker_opened_at
+    if _breaker_opened_at is None:
+        return False
+    import time as _t
+    elapsed = _t.time() - _breaker_opened_at
+    if elapsed >= _BREAKER_COOLDOWN_S:
+        # cooldown scaduto: chiudiamo e diamo un'altra chance.
+        _breaker_opened_at = None
+        logger.info(
+            f"[ai-comment] circuit breaker: cooldown di {_BREAKER_COOLDOWN_S}s "
+            f"scaduto, ritento la rete."
+        )
+        return False
+    return True
+
+
+def _breaker_open(reason: str) -> None:
+    """Apre il breaker: prossime chiamate skip-pano subito al fallback txt."""
+    global _breaker_opened_at
+    import time as _t
+    _breaker_opened_at = _t.time()
+    logger.warning(
+        f"[ai-comment] circuit breaker APERTO ({reason}). "
+        f"Le prossime chiamate AI verranno skip-pate per "
+        f"{_BREAKER_COOLDOWN_S}s (fallback diretto a comments_list.txt)."
+    )
+
+
+def _looks_like_network_down(err_repr: str) -> bool:
+    """True se l'errore ha l'odore di una rete down strutturale
+    (DNS, no route, refused) piuttosto che di un timeout/lentezza."""
+    low = err_repr.lower()
+    return any(marker in low for marker in _NETWORK_DOWN_MARKERS)
 
 
 # ============================================================================
@@ -494,11 +564,12 @@ def _build_prompt(
 
 def _sanitize_output(text: str) -> str:
     """Rimuove rumore comune dei modelli: virgolette wrap, prefissi tipo
-    'Comment:', newline interni, spazi doppi, e taglia a 220 char (limite
-    morbido: commenti piu' lunghi sembrano scripted)."""
+    'Comment:', newline interni, spazi doppi, tag HTML, e taglia a 220 char."""
     if not text:
         return ""
     t = text.strip()
+    # rimuovi tag HTML (es. </blockquote>, <br>, ecc.)
+    t = re.sub(r"<[^>]+>", "", t).strip()
     # rimuovi un eventuale wrap di virgolette singole/doppie/back-tick
     for q in ('"', "'", "`"):
         if len(t) >= 2 and t.startswith(q) and t.endswith(q):
@@ -545,7 +616,7 @@ def _call_gemini(
             "temperature": 0.9,
             "topP": 1.0,
             "topK": 40,
-            "maxOutputTokens": 80,
+            "maxOutputTokens": 120,
         },
         # Filtri di sicurezza: lasciamo i default (BLOCK_MEDIUM_AND_ABOVE).
     }
@@ -560,7 +631,16 @@ def _call_gemini(
     except Exception as e:
         # network/timeout -> sempre retryable: prova un altro modello,
         # magari sta saturo solo quel pool.
+        err_repr = repr(e)
         logger.warning(f"[ai-comment] {model}: errore di rete: {e}")
+        # Se l'errore puzza di "rete down strutturale" (DNS bloccato,
+        # connessione rifiutata, no route), apri il circuit breaker:
+        # tentare gli altri 3 modelli e' solo spreco di tempo (~24s).
+        if _looks_like_network_down(err_repr):
+            _breaker_open(f"network down detected on {model}")
+            # retryable=False per fermare la cascata immediatamente nel
+            # chiamante generate_comment().
+            return None, False
         return None, True
 
     if r.status_code != 200:
@@ -692,6 +772,15 @@ def generate_comment(
         media_type: 'photo'|'video'|'reel'|'igtv'|'carousel' (case-free).
     """
     if not is_enabled(args):
+        return None
+    # Circuit breaker: se l'ultima chiamata ha rilevato rete giu'
+    # (DNS bloccato / no connection), skippiamo direttamente al fallback
+    # txt senza tentare nemmeno il primo modello. Riproviamo dopo
+    # _BREAKER_COOLDOWN_S (vedi _breaker_is_open).
+    if _breaker_is_open():
+        logger.debug(
+            "[ai-comment] circuit breaker aperto: skip diretto al fallback txt."
+        )
         return None
     api_key = (
         getattr(args, "ai_comments_api_key", None)

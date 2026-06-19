@@ -6,7 +6,7 @@ from os import path
 from atomicwrites import atomic_write
 from colorama import Fore
 
-from GramAddict.core.device_facade import DeviceFacade, Direction, Timeout
+from GramAddict.core.device_facade import Direction, Timeout
 from GramAddict.core.navigation import (
     nav_to_blogger,
     nav_to_feed,
@@ -16,6 +16,7 @@ from GramAddict.core.navigation import (
 from GramAddict.core.resources import ClassName
 from GramAddict.core.storage import FollowingStatus
 from GramAddict.core.utils import (
+    EmptyList,
     get_value,
     inspect_current_view,
     random_choice,
@@ -104,6 +105,11 @@ def _seek_anchor_in_followers(
 
     Returns (found: bool, anchor: Optional[str], scrolls_done: int).
     Stops early if the list does not advance (end reached / list shorter than anchor position).
+
+    NOTE: when the anchor is found we do NOT scroll past it. The main iteration
+    loop will process the current screen starting from wherever the anchor appears,
+    so no users are skipped. (Previously an extra scroll was done here, losing the
+    first screenful of fresh users after the anchor position.)
     """
     if not anchors:
         return False, None, 0
@@ -130,12 +136,14 @@ def _seek_anchor_in_followers(
 
             for name in visible_usernames:
                 if name in anchors_set:
-                    # uno scroll extra per saltare oltre l'anchor stesso
-                    list_view.scroll(Direction.DOWN)
-                    random_sleep(0.3, 0.8, modulable=False)
+                    # Anchor found on this screen. Do NOT scroll further: the main
+                    # iteration loop starts from the current visible screen, which
+                    # includes users right after the anchor position.
+                    # (The anchor itself will be skipped by the "already interacted"
+                    # check in the main loop, costing at most 1 row read.)
                     return True, name, i + 1
 
-            # se non muove piu', siamo a fondo lista
+            # se non muove piu', siamo a fondo lista -> anchor superato o lista corta
             if first_username is not None and prev_first == first_username:
                 return False, None, i
             prev_first = first_username
@@ -221,7 +229,7 @@ def handle_blogger(
     interaction,
     is_follow_limit_reached,
 ):
-    if not nav_to_blogger(device, blogger, session_state.my_username):
+    if not nav_to_blogger(device, blogger, session_state.my_username)[0]:
         return
     can_interact = False
     if storage.is_user_in_blacklist(blogger):
@@ -229,14 +237,19 @@ def handle_blogger(
     else:
         interacted, interacted_when = storage.check_user_was_interacted(blogger)
         if interacted:
-            can_reinteract = storage.can_be_reinteract(
-                interacted_when, get_value(self.args.can_reinteract_after, None, 0)
-            )
-            logger.info(
-                f"@{blogger}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-            )
-            if can_reinteract:
-                can_interact = True
+            if storage.was_unfollowed_before(blogger):
+                logger.info(
+                    f"@{blogger}: previously unfollowed - will NOT be re-followed. Skip."
+                )
+            else:
+                can_reinteract = storage.can_be_reinteract(
+                    interacted_when, get_value(self.args.can_reinteract_after, None, 0)
+                )
+                logger.info(
+                    f"@{blogger}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                )
+                if can_reinteract:
+                    can_interact = True
         else:
             can_interact = True
 
@@ -423,15 +436,41 @@ def handle_likers(
         or current_job != "blogger-post-likers"
         and not nav_to_hashtag_or_place(device, target, current_job)
     ):
+        logger.warning(f"⛔ handle_likers: navigazione fallita per {target!r} ({current_job}). Sorgente saltata.")
         return False
+    logger.info(f"📋 handle_likers: inizio scansione likers di {target!r} ({current_job})")
     post_description = ""
     nr_same_post = 0
     nr_same_posts_max = 3
+    consecutive_errors = 0
+    max_consecutive_errors = 3
     while True:
-        flag, post_description, _, _, _, _ = PostsViewList(device)._check_if_last_post(
-            post_description, current_job
-        )
-        has_likers, number_of_likers = PostsViewList(device)._find_likers_container()
+        try:
+            flag, post_description, _, _, _, _ = PostsViewList(device)._check_if_last_post(
+                post_description, current_job
+            )
+            has_likers, number_of_likers = PostsViewList(device)._find_likers_container()
+            consecutive_errors = 0  # reset su successo
+        except Exception as e:
+            consecutive_errors += 1
+            logger.warning(
+                f"⚠️  handle_likers: eccezione durante check post di {target!r} "
+                f"({consecutive_errors}/{max_consecutive_errors}): {e}"
+            )
+            if consecutive_errors >= max_consecutive_errors:
+                logger.error(
+                    f"❌ handle_likers: troppi errori consecutivi su {target!r}. Abbandono sorgente."
+                )
+                try:
+                    device.back()
+                except Exception:
+                    pass
+                return False
+            try:
+                PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+            except Exception:
+                pass
+            continue
         if flag:
             nr_same_post += 1
             logger.info(f"Warning: {nr_same_post}/{nr_same_posts_max} repeated posts.")
@@ -449,8 +488,15 @@ def handle_likers(
             and profile_filter.is_num_likers_in_range(number_of_likers)
             and number_of_likers != 1
         ):
+            logger.info(f"👍 Post di {target!r}: {number_of_likers} likers — apro lista.")
             PostsViewList(device).open_likers_container()
         else:
+            if not has_likers:
+                logger.info(f"⏭️  Post di {target!r}: nessun likers visibile — skip post.")
+            elif number_of_likers == 1:
+                logger.info(f"⏭️  Post di {target!r}: solo 1 liker — skip post.")
+            else:
+                logger.info(f"⏭️  Post di {target!r}: {number_of_likers} likers fuori range filtro — skip post.")
             PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
             continue
 
@@ -458,7 +504,9 @@ def handle_likers(
 
         likes_list_view = OpenedPostView(device)._getListViewLikers()
         if likes_list_view is None:
-            return
+            logger.warning(f"⚠️  Lista likers non caricata per post di {target!r}. Passo al post successivo.")
+            PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+            continue
         prev_screen_iterated_likers = []
 
         # --- Random skip start on likers list ---
@@ -507,9 +555,20 @@ def handle_likers(
             opened = False
             user_container = OpenedPostView(device)._getUserContainer()
             if user_container is None:
-                logger.warning("Likers list didn't load :(")
-                return
-            row_height, n_users = inspect_current_view(user_container)
+                logger.warning(f"⚠️  Lista likers scomparsa durante iterazione di {target!r}. Torno ai post.")
+                device.back()
+                PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                break
+            try:
+                row_height, n_users = inspect_current_view(user_container)
+            except EmptyList:
+                logger.info(
+                    "Likers view is empty (reached end of likers list). Moving on.",
+                    extra={"color": f"{Fore.GREEN}"},
+                )
+                device.back()
+                PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                break
             try:
                 for item in user_container:
                     cur_row_height = item.get_height()
@@ -536,15 +595,20 @@ def handle_likers(
                             interacted_when,
                         ) = storage.check_user_was_interacted(username)
                         if interacted:
-                            can_reinteract = storage.can_be_reinteract(
-                                interacted_when,
-                                get_value(self.args.can_reinteract_after, None, 0),
-                            )
-                            logger.info(
-                                f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-                            )
-                            if can_reinteract:
-                                can_interact = True
+                            if storage.was_unfollowed_before(username):
+                                logger.info(
+                                    f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
+                                )
+                            else:
+                                can_reinteract = storage.can_be_reinteract(
+                                    interacted_when,
+                                    get_value(self.args.can_reinteract_after, None, 0),
+                                )
+                                logger.info(
+                                    f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                                )
+                                if can_reinteract:
+                                    can_interact = True
                         else:
                             can_interact = True
 
@@ -674,6 +738,23 @@ def handle_posts(
     # --- Random skip start on posts (hashtag/place). Disabled for feed. ---
     if current_job != "feed":
         skip_n = _get_scroll_skip_start(self.args, "posts")
+        # Per sorgenti vergini (mai visitate) cappare lo skip a max 5:
+        # non ha senso saltare 75 post su un hashtag mai visto prima.
+        if skip_n > 0:
+            try:
+                rec = storage.get_explored_segments_record(current_job, target) if hasattr(storage, "get_explored_segments_record") else None
+                rec_iters = rec.get("total_iterations", 0) if rec else 0
+                rec_anchor = rec.get("last_anchor") if rec else None
+                is_virgin = rec_iters == 0 and rec_anchor is None
+                if is_virgin and skip_n > 5:
+                    logger.info(
+                        f"[skip-start] Prima visita a {target}: capping skip "
+                        f"{skip_n} -> 5 (sorgente vergine, non ha senso saltare post non visti).",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    skip_n = 5
+            except Exception as e:
+                logger.debug(f"skip-start cap (posts) check failed: {e}")
         if skip_n > 0:
             logger.info(
                 f"Skipping first {skip_n} posts of {target} (random start).",
@@ -739,18 +820,24 @@ def handle_posts(
                             username
                         )
                         if interacted:
-                            can_reinteract = storage.can_be_reinteract(
-                                interacted_when,
-                                get_value(self.args.can_reinteract_after, None, 0),
-                            )
-                            logger.info(
-                                f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-                            )
-                            if can_reinteract:
-                                can_interact = True
-                                nr_consecutive_already_interacted = 0
-                            else:
+                            if storage.was_unfollowed_before(username):
+                                logger.info(
+                                    f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
+                                )
                                 nr_consecutive_already_interacted += 1
+                            else:
+                                can_reinteract = storage.can_be_reinteract(
+                                    interacted_when,
+                                    get_value(self.args.can_reinteract_after, None, 0),
+                                )
+                                logger.info(
+                                    f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                                )
+                                if can_reinteract:
+                                    can_interact = True
+                                    nr_consecutive_already_interacted = 0
+                                else:
+                                    nr_consecutive_already_interacted += 1
                         else:
                             can_interact = True
                             nr_consecutive_already_interacted = 0
@@ -853,7 +940,8 @@ def handle_followers(
     profile_filter=None,
 ):
     is_myself = username == session_state.my_username
-    if not nav_to_blogger(device, username, current_job):
+    nav_ok, target_followers_count = nav_to_blogger(device, username, current_job)
+    if not nav_ok:
         return
 
     iterate_over_followers(
@@ -869,6 +957,7 @@ def handle_followers(
         current_job,
         username,
         profile_filter=profile_filter,
+        target_followers_count=target_followers_count,
     )
 
 
@@ -885,6 +974,7 @@ def iterate_over_followers(
     current_job,
     target,
     profile_filter=None,
+    target_followers_count=None,
 ):
     device.find(
         resourceId=self.ResourceID.FOLLOW_LIST_CONTAINER,
@@ -913,6 +1003,15 @@ def iterate_over_followers(
                     )
                     if list_view.exists():
                         max_scrolls = _resume_search_limit(self.args)
+                        # Su liste enormi l'anchor e' sepolto troppo in profondita':
+                        # il seek a scroll lenti fallisce quasi sempre e spreca
+                        # minuti. Falliamo prima e lasciamo lavorare lo skip-start
+                        # (ora veloce, scrolla per schermate).
+                        if (
+                            target_followers_count is not None
+                            and target_followers_count >= 30_000
+                        ):
+                            max_scrolls = min(max_scrolls, 12)
                         logger.info(
                             f"[resume] Looking for last anchor of @{target} (up to {max_scrolls} scrolls). Candidates: {anchors[:3]}{'...' if len(anchors)>3 else ''}",
                             extra={"color": f"{Fore.CYAN}"},
@@ -927,6 +1026,16 @@ def iterate_over_followers(
                             )
                             explored.reset_anchor_misses(current_job, target)
                             resumed_from_anchor = True
+                            # Do one extra scroll so the first iterated screen
+                            # is the one AFTER the anchor position, not the
+                            # screen containing the (already-seen) anchor user.
+                            # This avoids the "first screen post-resume is all
+                            # already-interacted" hot-zone false positive.
+                            try:
+                                list_view.scroll(Direction.DOWN)
+                                random_sleep(0.3, 0.7, modulable=False)
+                            except Exception as _se:
+                                logger.debug(f"[resume] post-anchor scroll failed: {_se}")
                         else:
                             misses = explored.register_anchor_miss(
                                 current_job, target
@@ -989,6 +1098,20 @@ def iterate_over_followers(
                         extra={"color": f"{Fore.CYAN}"},
                     )
                     skip_n = capped
+                elif not is_virgin and rec_anchor is None:
+                    # Anchor miss: anchor was reset after consecutive misses.
+                    # The source has been visited before but the previous anchor
+                    # username disappeared (user deleted/blocked/left followers).
+                    # Use half the configured skip to land roughly mid-list without
+                    # risking "List didn't move" on short followers lists.
+                    halved = max(10, skip_n // 2)
+                    if halved < skip_n:
+                        logger.info(
+                            f"[skip-start] @{target} anchor reset (missed too many times): "
+                            f"halving skip {skip_n} -> {halved} to avoid overshooting.",
+                            extra={"color": f"{Fore.CYAN}"},
+                        )
+                        skip_n = halved
             except Exception as e:
                 logger.debug(f"first-time skip cap check failed: {e}")
         if skip_n > 0:
@@ -1002,7 +1125,25 @@ def iterate_over_followers(
                 )
                 actually_skipped = 0
                 prev_first_username = None
-                for i in range(skip_n):
+                # IMPORTANTE: scrollare per SCHERMATE, non per follower. Ogni
+                # scroll avanza ~una schermata (= users_per_screen follower),
+                # NON un singolo follower. Il vecchio loop faceva skip_n scroll
+                # (1 follower == 1 scroll) -> saltava ~6x troppi e sprecava
+                # minuti (113 -> 113 scroll -> ~7 min). Ora: ~ceil(skip_n/screen).
+                try:
+                    _probe = device.find(
+                        resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER
+                    )
+                    _, users_per_screen = inspect_current_view(_probe)
+                except Exception:
+                    users_per_screen = 0
+                if not users_per_screen or users_per_screen < 1:
+                    users_per_screen = 6  # default ragionevole per la lista follower IG
+                scrolls_needed = max(
+                    1, (skip_n + users_per_screen - 1) // users_per_screen
+                )
+                done_scrolls = 0
+                for i in range(scrolls_needed):
                     try:
                         user_list = device.find(
                             resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
@@ -1018,22 +1159,24 @@ def iterate_over_followers(
                             pass
                         list_view.scroll(Direction.DOWN)
                         random_sleep(0.3, 0.9, modulable=False)
+                        done_scrolls += 1
                         if (
                             first_username is not None
                             and prev_first_username == first_username
                         ):
                             logger.info(
-                                f"List didn't move while skipping (skipped {actually_skipped}/{skip_n}). Stop.",
+                                f"List didn't move while skipping (~{actually_skipped}/{skip_n}). Stop.",
                                 extra={"color": f"{Fore.CYAN}"},
                             )
                             break
                         prev_first_username = first_username
-                        actually_skipped += 1
+                        actually_skipped += users_per_screen
                     except Exception as e:
                         logger.debug(f"Skip-start interrupted: {e}")
                         break
                 logger.info(
-                    f"Skipped {actually_skipped} followers, starting iteration here.",
+                    f"Skipped ~{actually_skipped} followers in {done_scrolls} scrolls, "
+                    "starting iteration here.",
                     extra={"color": f"{Fore.CYAN}"},
                 )
 
@@ -1041,6 +1184,49 @@ def iterate_over_followers(
     hz_screens_threshold, hz_flings_per_jump, hz_max_jumps = _hot_zone_params(
         self.args
     )
+
+    # --- Large-target early-break ---
+    # Su profili molto grossi (>= 30k follower) la lista contiene migliaia di
+    # utenti gia' processati nelle sessioni precedenti; scrollare per ore per
+    # trovare il prossimo fresh user e' uno spreco di tempo e aumenta la
+    # superficie anti-ban (azioni a vuoto). Comprimiamo le soglie hot-zone
+    # cosi' il bot abbandona la sorgente DOPO MENO schermate vuote e passa al
+    # prossimo blogger della lista, dove probabilmente trovera' yield > 0.
+    LARGE_TARGET_THRESHOLD = 30_000
+    HUGE_TARGET_THRESHOLD = 100_000
+    is_large_target = (
+        target_followers_count is not None
+        and target_followers_count >= LARGE_TARGET_THRESHOLD
+    )
+    is_huge_target = (
+        target_followers_count is not None
+        and target_followers_count >= HUGE_TARGET_THRESHOLD
+    )
+    if is_huge_target:
+        # 100k+ : taglia ancora di piu' (basta 1 schermata vuota + 1 jump)
+        original = (hz_screens_threshold, hz_max_jumps)
+        hz_screens_threshold = max(1, min(hz_screens_threshold, 1))
+        hz_max_jumps = max(1, min(hz_max_jumps, 1))
+        logger.info(
+            f"[large-target] @{target} ha {target_followers_count:,} follower "
+            f"(>= {HUGE_TARGET_THRESHOLD:,}): comprimo hot-zone "
+            f"screens_threshold {original[0]}->{hz_screens_threshold}, "
+            f"max_jumps {original[1]}->{hz_max_jumps} per abbandonare prima.",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+    elif is_large_target:
+        # 30k-100k : compressione moderata
+        original = (hz_screens_threshold, hz_max_jumps)
+        hz_screens_threshold = max(1, min(hz_screens_threshold, 2))
+        hz_max_jumps = max(1, min(hz_max_jumps, 2))
+        logger.info(
+            f"[large-target] @{target} ha {target_followers_count:,} follower "
+            f"(>= {LARGE_TARGET_THRESHOLD:,}): comprimo hot-zone "
+            f"screens_threshold {original[0]}->{hz_screens_threshold}, "
+            f"max_jumps {original[1]}->{hz_max_jumps} per abbandonare prima.",
+            extra={"color": f"{Fore.CYAN}"},
+        )
+
     hot_zone_enabled = (
         not is_myself
         and hz_screens_threshold > 0
@@ -1048,51 +1234,59 @@ def iterate_over_followers(
     )
     consecutive_zero_fresh = 0
     jumps_done = 0
+    # Track how many screens contain ONLY permanently-skipped users (unfollowed,
+    # blacklisted). These do not count toward the hot-zone "already interacted"
+    # detection — they are structurally unavoidable and will always be there.
+    screen_permanent_skip_count = 0
 
     while True:
         logger.info("Iterate over visible followers.")
         screen_iterated_followers = []
         screen_skipped_followers_count = 0
         screen_fresh_count = 0
+        screen_permanent_skips = 0  # unfollowed / blacklisted on this screen
         scroll_end_detector.notify_new_page()
         user_list = device.find(
             resourceIdMatches=self.ResourceID.USER_LIST_CONTAINER,
         )
-        row_height, n_users = inspect_current_view(user_list)
+        try:
+            row_height, n_users = inspect_current_view(user_list)
+        except EmptyList:
+            # Vista senza utenti: tipicamente abbiamo scrollato/skippato oltre
+            # la fine di una lista followers molto corta (es. profilo con 7
+            # follower e skip-start di 10). NON è un errore fatale: trattiamo
+            # come "fine lista" lasciando user_list vuoto, così il for-loop non
+            # itera e il flusso ricade nel ramo "No followers were iterated,
+            # finish" in fondo al while (che marca la sorgente come esaurita).
+            logger.info(
+                "Current view has no users (likely scrolled past the end of a "
+                "short follower list). Finishing this source gracefully.",
+                extra={"color": f"{Fore.GREEN}"},
+            )
+            row_height, n_users, user_list = 0, 0, []
         try:
             for item in user_list:
                 try:
                     cur_row_height = item.get_height()
-                except DeviceFacade.JsonRpcError as _ui_err:
-                    # La row è scomparsa dalla UI tra l'inspect_current_view e
-                    # l'iterazione (refresh IG, scroll automatico, row riciclata).
-                    # Trattiamo come "fine schermo visibile" e usciamo dal for
-                    # in modo pulito invece di crashare l'intera sessione.
-                    logger.info(
-                        "A follower row vanished from UI mid-iteration (likely refresh). "
-                        "Treating as end of visible screen.",
-                        extra={"color": f"{Fore.GREEN}"},
-                    )
-                    logger.debug(f"Row vanished detail: {_ui_err}")
-                    break
+                except Exception:
+                    logger.debug("Could not get item height, skipping item.")
+                    continue
                 if cur_row_height < row_height:
                     continue
-                try:
-                    user_info_view = item.child(index=1)
-                    user_name_view = user_info_view.child(index=0).child()
-                except DeviceFacade.JsonRpcError as _ui_err:
-                    logger.info(
-                        "A follower row child node vanished mid-read. Skipping row.",
-                        extra={"color": f"{Fore.GREEN}"},
-                    )
-                    logger.debug(f"Child vanished detail: {_ui_err}")
-                    continue
+                user_info_view = item.child(index=1)
+                user_name_view = user_info_view.child(index=0).child()
                 if not user_name_view.exists():
-                    logger.info(
-                        "Next item not found: probably reached end of the screen.",
-                        extra={"color": f"{Fore.GREEN}"},
+                    # Una riga senza username NON implica "fine lista": dopo uno
+                    # skip profondo o un anchor-miss, la prima riga visibile puo'
+                    # essere parziale/sticky. Saltiamo SOLO questa riga e
+                    # proviamo le successive visibili, invece di abortire l'intera
+                    # schermata. Era la causa di "0 iterated -> exhausted" su
+                    # sorgenti enormi (@leonardopratoo 9k, @vecchi_mattia 293k):
+                    # dopo lo skip la 1a riga falliva e bruciavamo la sorgente.
+                    logger.debug(
+                        "Item without username (partial/sticky row), skip it."
                     )
-                    break
+                    continue
 
                 username = user_name_view.get_text()
                 screen_iterated_followers.append(username)
@@ -1112,22 +1306,32 @@ def iterate_over_followers(
                 can_interact = False
                 if storage.is_user_in_blacklist(username):
                     logger.info(f"@{username} is in blacklist. Skip.")
+                    screen_skipped_followers_count += 1
+                    screen_permanent_skips += 1
                 else:
                     interacted, interacted_when = storage.check_user_was_interacted(
                         username
                     )
                     if interacted:
-                        can_reinteract = storage.can_be_reinteract(
-                            interacted_when,
-                            get_value(self.args.can_reinteract_after, None, 0),
-                        )
-                        logger.info(
-                            f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
-                        )
-                        if can_reinteract:
-                            can_interact = True
-                        else:
+                        if storage.was_unfollowed_before(username):
+                            logger.info(
+                                f"@{username}: previously unfollowed - will NOT be re-followed. Skip."
+                            )
                             screen_skipped_followers_count += 1
+                            # Permanently unavailable: does NOT drive hot-zone
+                            screen_permanent_skips += 1
+                        else:
+                            can_reinteract = storage.can_be_reinteract(
+                                interacted_when,
+                                get_value(self.args.can_reinteract_after, None, 0),
+                            )
+                            logger.info(
+                                f"@{username}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
+                            )
+                            if can_reinteract:
+                                can_interact = True
+                            else:
+                                screen_skipped_followers_count += 1
                     else:
                         can_interact = True
                         screen_fresh_count += 1
@@ -1150,6 +1354,21 @@ def iterate_over_followers(
                             target=target,
                             on_interaction=on_interaction,
                         ):
+                            # Session limit reached mid-screen: save the last
+                            # interacted username as anchor so next session
+                            # resumes from here (not just from end of screen).
+                            if (
+                                not is_myself
+                                and explored is not None
+                                and _resume_enabled(self.args)
+                            ):
+                                try:
+                                    explored.set_anchor(current_job, target, username)
+                                    logger.debug(
+                                        f"[resume] Saved mid-screen anchor @{username} before session end."
+                                    )
+                                except Exception as _ae:
+                                    logger.debug(f"set_anchor (mid-screen) failed: {_ae}")
                             return
                     if element_opened:
                         logger.info("Back to followers list")
@@ -1160,26 +1379,33 @@ def iterate_over_followers(
                 "Cannot get next item: probably reached end of the screen.",
                 extra={"color": f"{Fore.GREEN}"},
             )
-        except DeviceFacade.JsonRpcError as _ui_err:
-            # Safety net: una row volatile (INSTANCE=N inesistente, refresh
-            # della lista, view tree non sincronizzato) ci ha portati fuori
-            # dal for. Equivale a "fine schermo visibile", proseguiamo con
-            # lo scroll della pagina successiva.
-            logger.info(
-                "Followers iteration interrupted by a UI desync. "
-                "Treating as end of visible screen and continuing.",
-                extra={"color": f"{Fore.GREEN}"},
-            )
-            logger.debug(f"Iteration desync detail: {_ui_err}")
 
         # --- Hot-zone detector: troppi schermi consecutivi senza utenti FRESH ---
         if hot_zone_enabled and len(screen_iterated_followers) > 0:
             if screen_fresh_count == 0:
-                consecutive_zero_fresh += 1
-                logger.info(
-                    f"[hot-zone] No fresh users on this screen ({consecutive_zero_fresh}/{hz_screens_threshold}).",
-                    extra={"color": f"{Fore.CYAN}"},
+                # Distinguish: screen with ONLY permanently-skipped users
+                # (previously unfollowed / blacklisted) is not a "hot zone" —
+                # it is a structural dead zone that exists in every pass and does
+                # not indicate we're stuck in a recently-interacted region.
+                # Only count screens where the skips are "already interacted"
+                # (temporary) as hot-zone evidence.
+                transient_skips = screen_skipped_followers_count - screen_permanent_skips
+                all_permanent = (
+                    screen_permanent_skips == len(screen_iterated_followers)
+                    or (screen_permanent_skips > 0 and transient_skips == 0)
                 )
+                if all_permanent:
+                    logger.debug(
+                        f"[hot-zone] Screen has only permanently-skipped users "
+                        f"({screen_permanent_skips} unfollowed/blacklisted). "
+                        f"Not counting toward hot-zone."
+                    )
+                else:
+                    consecutive_zero_fresh += 1
+                    logger.info(
+                        f"[hot-zone] No fresh users on this screen ({consecutive_zero_fresh}/{hz_screens_threshold}).",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
             else:
                 if consecutive_zero_fresh > 0 or jumps_done > 0:
                     logger.info(
@@ -1285,6 +1511,18 @@ def iterate_over_followers(
                     className=ClassName.LIST_VIEW,
                 )
 
+            # Se la lista NON c'e' nemmeno dopo il back (tipico quando le storie
+            # hanno spostato la view), NON scrollare una lista morta: era la
+            # causa del crash JsonRpcError "scrollToEnd su UiSelector ... id/list".
+            # Chiudiamo la sorgente in modo pulito, senza crashare la sessione.
+            if not list_view.exists():
+                logger.warning(
+                    "[recover] Lista follower introvabile anche dopo back: "
+                    "chiudo la sorgente senza crash.",
+                    extra={"color": f"{Fore.YELLOW}"},
+                )
+                return
+
             if is_myself:
                 logger.info("Need to scroll now", extra={"color": f"{Fore.GREEN}"})
                 list_view.scroll(Direction.UP)
@@ -1328,6 +1566,23 @@ def iterate_over_followers(
                 "No followers were iterated, finish.",
                 extra={"color": f"{Fore.GREEN}"},
             )
+            # Una sorgente con MOLTI follower non puo' essere "esaurita" da una
+            # singola schermata vuota: dopo uno skip profondo / anchor-miss la
+            # prima schermata puo' arrivare vuota per un glitch di rendering.
+            # NON marcare esaurito: preserva la sorgente e riprovala la prossima
+            # sessione (altrimenti bruciamo blogger da 9k/293k follower con 0
+            # interazioni, per giorni di cooldown).
+            if (
+                target_followers_count is not None
+                and target_followers_count >= 2000
+            ):
+                logger.info(
+                    f"[empty-page] @{target} ha {target_followers_count:,} "
+                    "follower: schermata vuota trattata come glitch, NON marco "
+                    "esaurito (riprovo la prossima sessione).",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return
             if (
                 not is_myself
                 and explored is not None

@@ -2,11 +2,19 @@ import logging
 import sys
 import traceback
 from datetime import datetime
-from http.client import HTTPException
+from http.client import HTTPException, RemoteDisconnected
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import ReadTimeout as RequestsReadTimeout
 from socket import timeout
 
 from colorama import Fore, Style
-from uiautomator2.exceptions import UiObjectNotFoundError
+from uiautomator2.exceptions import UiObjectNotFoundError, GatewayError
+
+try:
+    from adbutils.errors import AdbTimeout, AdbError
+except ImportError:
+    AdbTimeout = OSError
+    AdbError = OSError
 
 from GramAddict.core.device_facade import DeviceFacade
 from GramAddict.core.report import print_full_report
@@ -74,6 +82,13 @@ def run_safely(device, device_id, sessions, session_state, screen_record, config
                 DeviceFacade.JsonRpcError,
                 IndexError,
                 HTTPException,
+                RemoteDisconnected,
+                RequestsConnectionError,
+                RequestsReadTimeout,
+                GatewayError,
+                OSError,
+                AdbTimeout,
+                AdbError,
                 timeout,
                 UiObjectNotFoundError,
             ):
@@ -90,11 +105,20 @@ def run_safely(device, device_id, sessions, session_state, screen_record, config
                     logger.critical(
                         f"'{exception_line}' -> This kind of exception will stop the bot (no restart)."
                     )
-                logger.info(
-                    f"List of running apps: {', '.join(device.deviceV2.app_list_running())}"
-                )
-                save_crash(device)
-                close_instagram(device)
+                try:
+                    logger.info(
+                        f"List of running apps: {', '.join(device.deviceV2.app_list_running())}"
+                    )
+                except Exception:
+                    logger.warning("Could not list running apps (device unreachable).")
+                try:
+                    save_crash(device)
+                except Exception as se:
+                    logger.warning(f"save_crash failed in except handler: {se}")
+                try:
+                    close_instagram(device)
+                except Exception:
+                    pass
                 print_full_report(sessions, configs.args.scrape_to_file)
                 sessions.persist(directory=session_state.my_username)
                 raise e from e
@@ -114,10 +138,16 @@ def restart(
 ):
     if print_traceback:
         logger.error(traceback.format_exc())
-        save_crash(device)
-    logger.info(
-        f"List of running apps: {', '.join(device.deviceV2.app_list_running())}."
-    )
+        try:
+            save_crash(device)
+        except Exception as e:
+            logger.warning(f"save_crash failed during restart (device unreachable?): {e}")
+    try:
+        logger.info(
+            f"List of running apps: {', '.join(device.deviceV2.app_list_running())}."
+        )
+    except Exception:
+        logger.warning("Could not list running apps (device unreachable).")
     if configs.args.count_app_crashes or normal_crash:
         session_state.totalCrashes += 1
         if session_state.check_limit(
@@ -128,11 +158,54 @@ def restart(
             )
             stop_bot(device, sessions, session_state)
         logger.info("Something unexpected happened. Let's try again.")
-    close_instagram(device)
-    check_if_crash_popup_is_there(device)
-    random_sleep()
-    if not open_instagram(device):
+    try:
+        close_instagram(device)
+    except Exception as e:
+        logger.warning(f"close_instagram failed during restart: {e}")
+    try:
+        check_if_crash_popup_is_there(device)
+    except Exception:
+        pass
+    # Aspetta piu' a lungo dopo un crash: IG ha bisogno di tempo per
+    # rilasciare risorse, e l'emulatore di stabilizzarsi. Senza questa
+    # pausa, riaprire subito IG spesso porta a un secondo crash a catena
+    # (osservato in log: 2 crash entro 30s).
+    random_sleep(8, 15, modulable=False)
+    try:
+        opened = open_instagram(device)
+    except Exception as e:
+        logger.warning(f"open_instagram failed during restart: {e}")
+        opened = False
+    if not opened:
         print_full_report(sessions, configs.args.scrape_to_file)
         sessions.persist(directory=session_state.my_username)
         sys.exit(2)
-    TabBarView(device).navigateToProfile()
+    # Try navigateToProfile up to 3 times, re-opening Instagram if needed
+    for attempt in range(1, 4):
+        try:
+            result = TabBarView(device).navigateToProfile()
+            if result is not False:
+                break
+        except Exception as e:
+            logger.warning(f"navigateToProfile attempt {attempt} failed: {e}")
+        if attempt < 3:
+            logger.info(f"Tab bar not ready yet, re-opening Instagram (attempt {attempt}/3)...")
+            try:
+                close_instagram(device)
+            except Exception:
+                pass
+            random_sleep(5, 8, modulable=False)
+            try:
+                opened = open_instagram(device)
+            except Exception as e:
+                logger.warning(f"open_instagram failed on re-attempt {attempt}: {e}")
+                opened = False
+            if not opened:
+                print_full_report(sessions, configs.args.scrape_to_file)
+                sessions.persist(directory=session_state.my_username)
+                sys.exit(2)
+        else:
+            logger.error("Instagram tab bar never became ready after restart. Stopping bot.")
+            print_full_report(sessions, configs.args.scrape_to_file)
+            sessions.persist(directory=session_state.my_username)
+            sys.exit(2)

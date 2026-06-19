@@ -1,0 +1,84 @@
+##############################################################################
+# For more information on filters, refer to: 
+# https://docs.gramaddict.org/#/configuration?id=available-filters
+#
+# Note: be sure to comment out any filter not used by adding a # in front
+# AGAIN: YOU DON'T HAVE TO DELETE THE LINE, BUT ONLY COMMENT IT WITH A #!
+##############################################################################
+
+##############################################################################
+# Filtri "QUALITY + STEALTH": targetizza utenti reali, attivi, profilo sano.
+# Bilanciamento tra "bacino abbastanza largo" e "no profili spam/inattivi".
+##############################################################################
+
+## Filters on profile type
+skip_if_private: false                     # [bilanciato] INCLUDI i privati: erano il 29.5% degli scarti (dati reali) e i privati reali del fitness ricambiano spesso. I filtri ratio/followers/posts restano attivi anche su di loro (follower/following/post sono visibili sui privati).
+skip_if_public: false
+skip_business: false                       # tieni anche i business piccoli (creator)
+skip_non_business: false
+skip_following: true                       # non rifare chi gia' segui
+skip_follower: true                        # non interagire con chi ti segue gia' (spreco di azione)
+skip_if_link_in_bio: false                 # link in bio = spesso creator/professionista (ok)
+follow_private_or_empty: true              # [bilanciato] segui anche i privati (gli account VUOTI restano comunque esclusi da min_posts: 9). Necessario perche' i privati passino al follow.
+
+## Pre-flight username filters (valutati SENZA aprire il profilo - risparmiano 3-5s per skip)
+skip_username_patterns:                    # regex case-insensitive: skip a colpo sicuro
+  - "_official$"
+  - "\\.shop$"
+  - "_shop$"
+  - "_store$"
+  - "^crypto"
+  - "^nft"
+  - "^promo"
+  - "^bot[_0-9]"
+skip_username_with_emoji: true             # username con emoji = quasi sempre spam/bot
+skip_username_longer_than: 28              # username > 28 char raro per umani normali
+skip_username_digit_ratio_above: 0.6       # > 60% cifre (es. 'ig_user_4837291') = bot
+
+## Filters on profile stats - profilo "qualita' + alta probabilita' di follow-back"
+min_followers: 80                          # [relaxed] era 130 -> 80: i micro-utenti italiani fitness reali stanno spesso a 80-150 follower
+max_followers: 7000                        # <= 7k -> utenti reali / micro-piccoli (oltre i 7-10k cala il ricambio)
+min_followings: 50                         # segue almeno 50 persone (utente attivo)
+max_followings: 4000                       # [relaxed] era 2500 -> 4000: amatori fitness italiani spesso seguono molti pro/brand
+min_potency_ratio: 0.4                     # [relaxed] era 0.7 -> 0.4: utenti veri 200/500 hanno ratio 0.4, troppo aggressivo escluderli
+max_potency_ratio: 4                       # <= 4 -> finestra "1:1 - 4:1" dove c'e' la max probabilita' di follow-back
+min_posts: 9                               # almeno 9 post -> account vissuto, non vetrina mezza vuota
+mutual_friends: -1                         # qualsiasi (alza a >=1 se vuoi solo gente connessa)
+last_post_max_age_days: 45                 # [#3] RIATTIVATO con parser date in italiano aggiunto (IG it-IT usa "X giorni fa"). Fail-open: se non legge la data non scarta. VERIFICA con debug:true che ora legga le date (log "getFirstPostAgeDays: first post desc = ...").
+
+## Filters on biography and name
+blacklist_words: [onlyfans, onlyf, escort, sex, "link in bio", telegram, vendita, sconto, codice sconto, spedizione, dropship, crypto, forex, casino, scommesse]   # [#4] pulizia audience: salta seller/spam/adult. Parole intere (word-boundary), case-insensitive.
+# mandatory_words: [fitness, gym, allenamento]                                # opzionale: ultra-mirato
+# specific_alphabet: [LATIN]                                                  # disabilitato (costoso)
+# biography_language: [it, en]                                                # disabilitato (costoso)
+
+## Filters for enabling comments
+## NB: per commentare un post il bot richiede DUE flag entrambi True:
+##   1) comment_<media-type>  (foto/video/carosello)
+##   2) comment_<job-name>    (es. blogger_followers)
+## Senza ENTRAMBI -> "Can't comment this MediaType.X because filters are: ..."
+comment_hashtag_likers_top: false
+comment_hashtag_likers_recent: false
+comment_hashtag_posts_top: false
+comment_hashtag_posts_recent: false
+comment_place_likers_top: false
+comment_place_likers_recent: false
+comment_place_posts_top: false
+comment_place_posts_recent: false
+comment_blogger_followers: true            # [AI-comments] ON: il job blogger-followers commenta (Gemini gen)
+comment_blogger_following: false
+comment_blogger_post_likers: false
+comment_blogger: false
+comment_interact_usernames: false
+comment_interact_from_file: false
+comment_feed: false
+comment_photos: true                       # [AI-comments] ON: i commenti su foto sono permessi
+comment_videos: true                       # [AI-comments] ON: i commenti su video/reel sono permessi
+comment_carousels: true                    # [AI-comments] ON: i commenti su caroselli sono permessi
+
+## Filters for sending PM (non usati)
+pm_to_private_or_empty: false
+
+## Filters on number of post likers (non usati per blogger-followers)
+min_likers: 1
+max_likers: 1000

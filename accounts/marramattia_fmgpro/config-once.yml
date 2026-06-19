@@ -1,0 +1,122 @@
+##############################################################################
+# Config "ONE-SHOT" - una sola sessione, parte SUBITO al lancio.
+# Usa questo file (NON via run-dynamic.py) quando vuoi forzare una singola
+# sessione manuale, senza loop di repeat e senza working-hours.
+#
+# Lancio:
+#   python run.py --config accounts/marramattia_fmgpro/config-once.yml
+#
+# Tutto il resto e' identico al config.yml principale: stessi cap giornalieri
+# (daily_budget.json e' condiviso), stesse sorgenti, stessi filtri.
+##############################################################################
+
+# ---------------------------------------------------------------------------
+# General Configuration
+# ---------------------------------------------------------------------------
+username: marramattia_fmgpro
+device: emulator-5554
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: true
+screen-record: false
+speed-multiplier: 0.85
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: false
+disable-block-detection: false
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: true
+truncate-sources: 5-7
+scroll-skip-start: 15-60
+resume-from-last-position: true
+resume-anchor-search-limit: 50
+resume-cooldown-days: 14
+hot-zone-screens: 3
+hot-zone-jump-flings: 4
+hot-zone-max-jumps: 2
+
+# Action burst guard
+action-throttle-enabled: true
+action-throttle-follow-min: 25-60
+action-throttle-like-min: 8-20
+action-throttle-unfollow-min: 20-45
+action-throttle-comment-min: 60-180
+action-throttle-pm-min: 120-300
+
+# ---------------------------------------------------------------------------
+# Actions
+# ---------------------------------------------------------------------------
+blogger-followers: [fmgshows_italy, malatidipalestraofficial, ifbbproitaly, npc_italy, pieronocerino1, andrea_mammoli, andrea.presti_ifbbpro, giulia_befierce]
+
+watch-video-time: 8-25
+watch-photo-time: 2-5
+delete-interacted-users: false
+sort-followers-newest-to-oldest: true
+unfollow-delay: 30
+delete-removed-followers: false
+telegram-reports: false
+
+# ---------------------------------------------------------------------------
+# Source Limits (per singolo blogger, dentro la sessione)
+# ---------------------------------------------------------------------------
+interactions-count: 10-15
+likes-count: 2
+likes-percentage: 85-95
+carousel-count: 1-2
+carousel-percentage: 50-70
+max-comments-pro-user: 0
+interact-percentage: 70-85
+follow-percentage: 50-65
+follow-limit: 8-12
+skipped-list-limit: 30-45
+skipped-posts-limit: 4
+fling-when-skipped: 0
+min-following: 50
+
+# ---------------------------------------------------------------------------
+# Total Limits Per Session
+# ---------------------------------------------------------------------------
+total-likes-limit: 24-30
+total-follows-limit: 11-15
+total-unfollows-limit: 0-0
+total-watches-limit: 0-0
+total-successful-interactions-limit: 11-15
+total-interactions-limit: 999
+total-comments-limit: 0-0
+total-pm-limit: 0-0
+total-scraped-limit: 200-300
+
+# ---------------------------------------------------------------------------
+# Daily Budget (PERSISTENTE - condiviso col config.yml principale)
+# ---------------------------------------------------------------------------
+daily-follows-cap: 70
+daily-likes-cap: 150
+daily-unfollows-cap: 70
+daily-comments-cap: 0
+daily-pm-cap: 0
+
+stories-count: 0
+stories-percentage: 0
+
+# ---------------------------------------------------------------------------
+# Ending Session Conditions
+# ---------------------------------------------------------------------------
+end-if-likes-limit-reached: true
+end-if-follows-limit-reached: true
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# Scheduling - ONE-SHOT: parte subito, una sola sessione, nessun loop
+# ---------------------------------------------------------------------------
+# working-hours: COMMENTATO -> il bot considera "sempre dentro working-hours" e parte subito
+# repeat: COMMENTATO        -> nessuna sessione successiva
+total-sessions: 1                          # esattamente 1 sessione poi esce
+time-delta: 0-0                            # niente jitter all'avvio
+

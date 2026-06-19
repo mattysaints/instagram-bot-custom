@@ -149,6 +149,50 @@ class Storage:
         else:
             return FollowingStatus[user[USER_FOLLOWING_STATUS].upper()]
 
+    def was_unfollowed_before(self, username) -> bool:
+        """
+        Return True when we previously unfollowed this user (either via the
+        bot or reconciled because we found we were no longer following them
+        on Instagram). Used as a hard-skip rule: once unfollowed, we never
+        want to follow the user again, regardless of `can_reinteract_after`.
+        """
+        return self.get_following_status(username) == FollowingStatus.UNFOLLOWED
+
+    def mark_unfollow_check(self, username, outcome):
+        """
+        Record that we just probed this user with the unfollow flow and
+        decided NOT to unfollow them (because they follow us back, or the
+        profile check failed). We store a timestamp + the outcome so the
+        candidates builder can throttle re-checks and avoid hammering the
+        same profiles every session.
+
+        Does NOT touch `following_status` - the user is still FOLLOWED in
+        terms of our local state.
+        """
+        user = self.interacted_users.get(username)
+        if user is None:
+            return
+        user["last_unfollow_check"] = datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S.%f"
+        )
+        user["last_unfollow_check_outcome"] = outcome
+        self._update_file()
+
+    def get_last_unfollow_check(self, username):
+        """Return (datetime, outcome) or (None, None) if never probed."""
+        user = self.interacted_users.get(username)
+        if user is None:
+            return None, None
+        ts = user.get("last_unfollow_check")
+        if not ts:
+            return None, None
+        try:
+            return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f"), user.get(
+                "last_unfollow_check_outcome"
+            )
+        except ValueError:
+            return None, None
+
     def add_filter_user(self, username, profile_data, skip_reason=None):
         user = profile_data.__dict__
         user["follow_button_text"] = (

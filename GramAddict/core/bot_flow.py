@@ -10,6 +10,7 @@ from GramAddict.core.config import Config
 from GramAddict.core.daily_budget import DailyBudget
 from GramAddict.core.action_throttler import init_throttler
 from GramAddict.core.device_facade import create_device, get_device_info
+from GramAddict.core.fbr_refresh import maybe_refresh_fbr
 from GramAddict.core.filter import Filter
 from GramAddict.core.filter import load_config as load_filter
 from GramAddict.core.interaction import load_config as load_interaction
@@ -181,60 +182,39 @@ def start_bot(**kwargs):
         profile_view = ProfileView(device)
         account_view = AccountView(device)
         tab_bar_view = TabBarView(device)
-        # Retry transitorio: dopo un downgrade APK / primo cold-start, IG
-        # puo' perdere il foreground per qualche secondo (popup di sistema,
-        # init dei moduli, dialog "what's new"). Il decorator
-        # @check_if_ig_is_opened solleva subito AppHasCrashed -> il bot
-        # uscirebbe alla prima sessione senza fare nulla. Riproviamo fino
-        # a 3 volte chiudendo/riaprendo IG prima di abbandonare.
-        init_attempts = 3
-        init_ok = False
-        last_init_error = None
-        for init_try in range(1, init_attempts + 1):
-            try:
-                account_view.navigate_to_main_account()
-                check_if_english(device)
-                if configs.args.username is not None:
-                    success = account_view.changeToUsername(configs.args.username)
-                    if not success:
-                        logger.error(
-                            f"Not able to change to {configs.args.username}, abort!"
-                        )
-                        save_crash(device)
-                        device.back()
-                        break
-                account_view.refresh_account()
-                (
-                    session_state.my_username,
-                    session_state.my_posts_count,
-                    session_state.my_followers_count,
-                    session_state.my_following_count,
-                ) = profile_view.getProfileInfo()
-                init_ok = True
-                break
-            except Exception as e:
-                last_init_error = e
-                logger.warning(
-                    f"Init attempt {init_try}/{init_attempts} failed: {e}"
-                )
-                if init_try < init_attempts:
-                    logger.info(
-                        "Restarting Instagram and retrying...",
-                        extra={"color": f"{Fore.YELLOW}"},
+        try:
+            account_view.navigate_to_main_account()
+            check_if_english(device)
+            if configs.args.username is not None:
+                success = account_view.changeToUsername(configs.args.username)
+                if not success:
+                    logger.error(
+                        f"Not able to change to {configs.args.username}, abort!"
                     )
-                    try:
-                        close_instagram(device)
-                    except Exception:
-                        pass
-                    sleep(3)
-                    if not open_instagram(device):
-                        logger.error("Cannot reopen Instagram, abort.")
-                        break
-                    sleep(5)
-        if not init_ok:
-            logger.error(f"Exception: {last_init_error}")
-            save_crash(device)
-            break
+                    save_crash(device)
+                    device.back()
+                    break
+            account_view.refresh_account()
+            (
+                session_state.my_username,
+                session_state.my_posts_count,
+                session_state.my_followers_count,
+                session_state.my_following_count,
+            ) = profile_view.getProfileInfo()
+        except Exception as e:
+            logger.error(f"Exception: {e}")
+            try:
+                save_crash(device)
+            except Exception as save_e:
+                logger.warning(f"save_crash failed (device unreachable?): {save_e}")
+            # Do NOT break: retry the session loop after a short sleep.
+            # A break here would terminate the entire bot process.
+            # Transient device errors (RemoteDisconnected, AdbTimeout) during
+            # the setup phase should be recovered by restarting the loop.
+            logger.info("Setup phase failed, retrying after 30s...")
+            from time import sleep as _sleep
+            _sleep(30)
+            continue
 
         if (
             session_state.my_username is None
@@ -285,6 +265,11 @@ def start_bot(**kwargs):
             f"There is/are {len(jobs_list)-len(unfollow_jobs)} active-job(s) and {len(unfollow_jobs)} unfollow-job(s) scheduled for this session."
         )
         storage = Storage(session_state.my_username)
+        # Expose storage on the session so deep code paths (e.g. the follow
+        # action inside core/interaction.py) can run the "never re-follow
+        # previously unfollowed users" safety check without having to thread
+        # storage through every plugin signature.
+        session_state.storage = storage
         filters = Filter(storage)
 
         # Daily budget: persistent counter shared across ALL sessions of the
@@ -304,6 +289,14 @@ def start_bot(**kwargs):
             "comments": daily_budget.used("comments"),
             "pms": daily_budget.used("pms"),
         }
+
+        # Auto follow-back-rate refresh: scrape our own followers once (gated by
+        # interval) and recompute per-source FBR BEFORE the interact jobs run,
+        # so this session's source selection is already driven by fresh data.
+        try:
+            maybe_refresh_fbr(device, configs, storage, session_state)
+        except Exception as e:
+            logger.warning(f"[auto-fbr] Skipped due to error: {e}")
 
         show_ending_conditions()
         if not configs.args.debug:

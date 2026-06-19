@@ -112,7 +112,9 @@ class LikeFromURLs(Plugin):
                                 if media_type == MediaType.CAROUSEL:
                                     _browse_carousel(self.device, obj_count)
                                 opened_post_view.watch_media(media_type)
-                                like_succeed = opened_post_view.like_post()
+                                like_succeed = opened_post_view.like_post(
+                                    is_carousel=(media_type == MediaType.CAROUSEL)
+                                )
 
                             username, _, _ = post_view_list._post_owner(
                                 self.current_mode, Owner.GET_NAME

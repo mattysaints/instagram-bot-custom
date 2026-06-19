@@ -1,0 +1,210 @@
+##############################################################################
+# Config STEALTH "Coach Fitness Fiorano" - allineato a tabelle anti-ban 2026.
+# Profilo: personal trainer / coach online + palestra Fiorano Modenese.
+# Obiettivo: crescere bacino targetizzato (fitness IT). DM disabilitati su
+# questo branch (main): solo follow + like + commenti AI.
+#
+# Target giornaliero:
+#   follow:   60-70    | like: 120-150 | commenti: 60-90 (AI Gemini) | DM: 0
+# Rate orario garantito:
+#   follow:  <= 8-10/h | like: <= 15-20/h | commenti: <= 10-15/h
+# Strategia: 5 micro-sessioni brevi in fasce umane, niente raffiche.
+##############################################################################
+
+# ---------------------------------------------------------------------------
+# General Configuration
+# ---------------------------------------------------------------------------
+username: marramattia_fmgpro
+device: f2487e11                      # ADB device serial (adb devices -l)
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: false                        # NON spegnere lo schermo tra sessioni: spegnerlo fa scattare il blocco con PIN e la sessione dopo non riesce a sbloccare (visto nel log 14/06 09:17). Con stay_on_while_plugged_in + device in carica lo schermo resta sempre acceso.
+screen-record: false
+speed-multiplier: 0.85                     # rallenta del 15% -> piu' umano
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: true                    # se l'agent uiautomator si rompe a meta sessione, ricrealo (anti-cieco: senza, il bot continua a digitare ma non vede l'UI di IG -> 0 azioni)
+disable-block-detection: false             # IMPORTANTE: rileva action-block
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: false                        # ordine fisso: blogger-followers prima, poi hashtag-likers-recent e hashtag-likers-top
+truncate-sources: 10-12                    # [yield-tune] piu' sorgenti per sessione: riduce il peso delle hot-zone gia' viste e aumenta il bacino fresco
+scroll-skip-start: 35-120                  # [yield-tune] quando manca anchor, salta piu' in profondita' per evitare utenti gia' processati in alto
+resume-from-last-position: true            # ricorda l'ULTIMO utente analizzato per ogni sorgente e riprende da li' la sessione dopo
+resume-anchor-search-limit: 30             # [yield-tune] limita tempo perso in ricerca anchor lunga; fallback random prima
+resume-cooldown-days: 5                    # [yield-tune v2] da 3gg a 5gg: log mostra che le sorgenti top vengono ri-visitate troppo presto e producono "Same users iterated 5 times" + 0 fresh. Dare piu' respiro alla lista.
+hot-zone-screens: 2                        # [yield-tune] reagisci prima alle schermate senza utenti freschi
+hot-zone-jump-flings: 6                    # [yield-tune] salto piu' profondo per uscire dalle zone gia' battute
+hot-zone-max-jumps: 2                      # [yield-tune v2] da 3 a 2: log mostra 20+ "hot-zone detected" ma 0 "Abandoning source" -> il bot resta intrappolato a fling-e-trovare-1-utente. Meglio chiudere prima e cambiare sorgente.
+
+# [follow-back] Auto follow-back-rate: a inizio sessione (max 1 volta ogni 24h)
+# scansiona la TUA lista follower e ricalcola l'FBR per-sorgente, cosi' la
+# selezione delle sorgenti (gia' pesata) favorisce automaticamente i blogger
+# che ti fanno ricambiare il follow. C'e' gia' source_stats.json con dati reali.
+auto-fbr-refresh: true
+auto-fbr-interval-hours: 24                 # min ore tra due refresh (numero o range, es. 20-28)
+auto-fbr-max-scan: 0                        # 0 = scansione completa (consigliato). Se metti un cap e lo raggiungi prima della fine, il ricalcolo viene saltato per non falsare l'FBR.
+# [follow-back] Warm follow: segui solo chi hai davvero ingaggiato (like/storia/commento/PM).
+# Converte molto meglio del follow "freddo". Con likes-percentage 85-95 perdi pochissimi follow.
+follow-only-if-engaged: true
+follow-min-engagement: 1                    # basta 1 azione reale (like/storia/commento/PM) per autorizzare il follow
+
+# Action burst guard - vieta a IG di vedere mai 2 follow in 5s o 2 like in 2s
+action-throttle-enabled: true
+action-throttle-follow-min: 25-60          # min secondi fra 2 follow consecutivi (max ~90/h, target ~60/h)
+action-throttle-like-min: 8-20             # min secondi fra 2 like consecutivi (max ~270/h, target ~150/h)
+action-throttle-unfollow-min: 20-45
+action-throttle-comment-min: 240-360       # 4-6 min tra 2 commenti consecutivi -> max ~10-15 comment/h (tetto tabella anti-ban: 15/h)
+action-throttle-pm-min: 300-540            # 5-9 min tra 2 DM -> max ~7-8 DM/h (tabella anti-ban DM: <=10/h, sto sotto)
+
+# ---------------------------------------------------------------------------
+# Actions
+# ---------------------------------------------------------------------------
+# Sorgenti da cui pescare follower a tema. Piu' sorgenti = piu' bacino fresco.
+# IMPORTANTE: ogni username DEVE esistere su IG (verificalo aprendo instagram.com/USERNAME)
+# Linee guida: 3-5 blogger del tuo settore con 5k-50k follower (non celebrita').
+# NB: usare SEMPRE il formato inline [a, b, c] -- la sintassi YAML "a lista" rompe il parser.
+#blogger-followers: [afmi2_segrate, manuel_santalucia_ifbbpro, malatidipalestraofficial, ifbbproitaly, npc_italy, pieronocerino1, excellentstyle.fitness, giulia_befierce, basicc99, gymitabody, bodyfitproathletes, vitastrong_ita, giusepperomanocoach, ludovico.lemme, giusi.cesarini, edwin_underwood, danielgoss_ifbbpro, alex__zuccaro, wabbaitalia]
+blogger-followers: [malatidipalestraofficial, ifbbproitaly, space.gym.official, wabbaitalia, emilio.dalessandro.92, anna.ladurner.ifbbpro, marco.casadei_, marcogrizz_photo, sara.evangelista, bodynutrition_tarquinia, greta.adamii_fit, omarnonni_pnbapro, danielacamboni, ornella_angileri_ifbbpro, eulyfitnesstudio, gretanicoletti_pt, kellysxv94, ross_sun_, paolozoncatrainer, _.paolalochi._, riccardo_cavallini, dario.pnbapro.coach, simonegenerali, francesco_arcidiacono90, simonearmaroli, nardin_nicole, ivano.vitagliano.coach, tieeco, leonardopratoo, lucacirillo_personaltrainer, fede_castell_, kristianluino_trainer, alex_ifbb_pro, dario_beloli_ifbbpro, agostomauro_pcaitaly, eloisostuni, ludovico.lemme, sayan.nickk, jack_fogli, japan_skin, wnbfitaly, npc_italy, davide.fanelli1, tm_nutrizione, vecchi_mattia, alex__zuccaro, giusi.cesarini, manu3lito_bb, carlo_ceglia_, alberto_gaz_gazzera, asteroidi_official, erica_fede94, emanuele_doc_fitness, marcovalentina_bodybuilding, matteo_classic_physique, federico_gare_bodybuilding, nicola_preparatore_agosta, stefano_natural_bb, riccardo_classic_italia, fabio_preparazione_agonistica, luca_bodybuilding_pt, marco_ifbb_coach, davide_gare_bb, alex_preparatorio_italia, giorgio_bodybuilding_natural, silvio_ifbb_prep, chiara_pugliesi, train.with.vish, carawolder, gianxfit, pugliese.fitness, flavio.ercoli, rickytorrestrainer, magnammsemp, catycastronpc, zahirkhudayarov, zagarella_ifbb_pro, cristian_ciampani92_, fabbian.lorenz, cbuzz93, afmi2_segrate, fit.italia, filipposoa, samuellfortuna, niccolo.balboni.coaching, massimo_personal_trainer, bodybuilding_italia_community_, federico_mariani_, ste_cossu96, annatfit.pt, thenewclassic_s, marcokoduzi, bodybuilding_italia_community, wbpf_italy, olgs_fitness, riccardo.oliver_, martaacap, coach_ginnytyro, manuel_santalucia_ifbbpro, punzetti_sara_ifbbpro, vitastrong_ita, andrea.presti_ifbbpro, giusepperomanocoach, gerard_ifbb_, edwin_underwood, ricette_ghisa, pieronocerino1, oneforall.hub, fitactivetorino, fitactivetorinobotticelli, fitactivetorinofontanesi, fitactivetorinogbruno, anytimefitness_torinolancia, anytimefitness_torinobogino, anytimefitnesstorinogrosseto, anytimefitness_torinolingotto]
+# Hashtag a tema fitness IT: pesca utenti che hanno MESSO LIKE ai post recenti
+# di questi hashtag. Lead piu' caldi dei semplici follower (interesse esplicito).
+# Tabella anti-ban 2026: hashtag-job e' meno rischioso del blogger-followers
+# perche' non scrolla "lista follower" ma "lista likers di un post" (UX simile
+# all'utente che apre un post da Esplora). Limite naturale dei post recenti:
+# se un hashtag ha 500 like, il bot ne pesca al max ~25-30 prima di dichiarare
+# esaurimento e passare al prossimo.
+# Hashtag generali fitness IT + nicchia locale Emilia + bodybuilding/coaching specifici
+hashtag-likers-recent: [garebodybuilding, bodybuildinggara, preparazioneagonistica, agonisticbodybuilding, classicphysiqueitalia, menphysiqueitalia, atletabodybuilding, preparatoreagonistico, coachbodybuilding, bodybuildingcoach, naturalbodybuildingitalia, palestraitalia, classicoitaliano, colosseumifbb, bbfitalia, nbfitalia, fifitalia, fitmodelitalia, dedizionebodybuilding, bodybuildinglife, fitnesslifestyleitalia, muscolazione, pesistica, determinatione, passionepalestra, workoutitalia, bodybuildingtraining, ipertrofia, massamuscolare, nopainnogain]
+hashtag-likers-top: [garebodybuilding, preparazioneagonistica, classicphysiqueitalia, coachbodybuilding, preparatoreagonistico, bodybuildingitalia, naturalbodybuildingitalia, colosseumifbb, bbfitalia]
+# [TORINO LOCAL] Lead locali per coaching in presenza. Pesca chi mette like / posta
+# da specifiche LOCATION IG (palestre/luoghi di Torino). I nomi DEVONO combaciare con
+# la ricerca "Luoghi" di Instagram. Scommenta e sostituisci con le tue palestre target.
+# place-likers-recent: [Nome Palestra Torino 1, McFIT Torino, Nome Box CrossFit Torino]
+# place-posts-recent: [Nome Palestra Torino 1, Nome Palestra Torino 2]
+## Watching content (umanizza)
+watch-video-time: 8-25
+watch-photo-time: 2-5
+delete-interacted-users: false             # tieni storico
+
+## Unfollow OFF in fase di crescita (le tabelle dicono: meglio separare unfollow dai follow,
+## farli in sessioni dedicate, in giorni diversi). Riattiva quando sei intorno a 7000+ following.
+sort-followers-newest-to-oldest: true
+unfollow-delay: 30
+
+## Remove followers OFF
+delete-removed-followers: false
+
+## Telegram reports OFF
+telegram-reports: false
+
+# ---------------------------------------------------------------------------
+# Source Limits (per singolo blogger, dentro una sessione)
+# ---------------------------------------------------------------------------
+interactions-count: 35-50                  # [yield-tune+] alzato 20-30 -> 35-50: con sorgenti gia' battute (50% utenti = "already interacted, skip"), servono piu' tentativi per estrarre 5-9 follow utili. Il vero freno resta total-successful-interactions-limit (sessione).
+likes-count: 2                             # 2 like per profilo (ridotto: meno chance di beccare Reel buggati)
+likes-percentage: 85-95                    # quasi sempre likka, mai 100% (anti-pattern)
+carousel-count: 1-2
+carousel-percentage: 30-50                 # [v2] abbassato da 50-70 a 30-50: log mostra 25-67 "Fail to like post"/giorno (178 totali in 4gg), causa probabile = doppio-tap su carosello che cambia slide invece di likare. Meno caroselli = meno fail.
+max-comments-pro-user: 1                   # max 1 commento per utente (anti-ban: mai 2 sullo stesso post)
+comment-percentage: 45-60                  # [safety #1] ridotto da 55-70: i commenti sono l'azione piu' a rischio ban. Margine di sicurezza, facilmente reversibile se vuoi ripingere.
+pm-percentage: 0                           # [DISABILITATO] DM completamente off su main (i DM sono gestiti solo nel branch personalcoaching tramite il plugin custom dm-followback)
+interact-percentage: 70-85
+follow-percentage: 50-65                   # ~55% di chi interagisce -> ~7-9 follow/sorgente
+follow-limit: 10-15                        # [soft-floor] alzato da 8-12: cosi' il cap per-sorgente non diventa il bottleneck quando una sorgente e' "calda" e la sessione e' ancora sotto il target follow
+skipped-list-limit: 50-70                  # [bumped] 50-70 (era 30-45): meno chiusure premature di sorgente per "Same users iterated 2 times". Scrolla piu' a lungo nella zona "calda" prima di abbandonare.
+skipped-posts-limit: 4
+fling-when-skipped: 0
+min-following: 50
+
+# ---------------------------------------------------------------------------
+# Total Limits Per Session - 5 sessioni/giorno (micro-sessioni)
+# Totali giornalieri target:
+#   follow:   5 x 13   = 65/g          (tabella: 60-70)              ✅
+#   like:     5 x 27   = 135/g         (tabella: 120-150)            ✅
+#   comment:  5 x 13   = 65-75/g       (tabella: 150-200, half-tank) ✅
+# Rate orario sessione (~90 min):
+#   follow:  ~8-9 follow/h             (max prudente: 8-10/h)        ✅
+#   like:    ~18 like/h                (max prudente: 15-20/h)       ✅
+#   comment: ~10-13 comment/h          (tabella: 10-15/h, al limite) ✅
+# ---------------------------------------------------------------------------
+total-likes-limit: 24-30                   # 24-30 like/sessione
+total-follows-limit: 11-15                 # 11-15 follow/sessione
+total-unfollows-limit: 999                 # [cosmetic] 0-0 produceva "Limit Reached" nei log; 999 = il bot non unfollowera' mai perche' non c'e' un job action-unfollow attivo. Solo cosmetica.
+total-watches-limit: 999                   # [cosmetic] 0-0 produceva "Limit Reached" nei log; 999 = stories OFF garantito da stories-count: 0 + stories-percentage: 0 sotto. Solo cosmetica.
+total-successful-interactions-limit: 11-15
+total-interactions-limit: 999              # IRRILEVANTE: questo conta solo i profili VISITATI (anche skippati). Il vero limite anti-ban e' total-successful-interactions-limit.
+total-comments-limit: 9-12                 # [safety #1] ridotto da 12-15: ~7-10/h, sotto il tetto tabella (10-15/h). Piu' margine anti-ban.
+total-pm-limit: 999                        # [cosmetic] 0-0 produceva "Limit Reached" nei log; DM gestiti solo dal branch personalcoaching, qui non partiranno mai (pm-percentage: 0). Solo cosmetica.
+total-scraped-limit: 200-300               # ALTO: NON deve mai scattare. 0-0 farebbe finire subito la sessione (bug GA: scraped fa parte della condizione di stop)
+
+# ---------------------------------------------------------------------------
+# Daily Budget (PERSISTENTE across riavvii del bot)
+# I limiti "total-*-limit" sopra sono per-sessione e si azzerano ad ogni avvio.
+# Se chiudi il PC e riapri, GramAddict NON sa quante azioni hai gia' fatto oggi
+# -> rischio di superare i tetti anti-ban. Questi cap sono salvati su disco
+# (accounts/<user>/daily_budget.json) e clippano automaticamente i limiti di
+# ogni nuova sessione a quanto rimane del cap giornaliero.
+# Reset automatico a mezzanotte (calendario locale).
+# ---------------------------------------------------------------------------
+daily-follows-cap: 70                      # tetto follow/giorno (tabella prudente: 60-70)
+daily-likes-cap: 150                       # tetto like/giorno   (tabella prudente: 120-150)
+daily-unfollows-cap: 100                   # tetto unfollow/giorno alzato a 100
+daily-comments-cap: 80                     # [safety #1] ridotto da 100: tetto giornaliero piu' prudente sull'azione piu' rischiosa.
+daily-pm-cap: 0                            # OFF su main (DM disabilitati, vedi total-pm-limit)
+
+# ---------------------------------------------------------------------------
+# AI Comments (Google Gemini) - DISABILITATO di default
+# Quando abilitato, prima di pescare un commento dal file txt il bot prova a
+# generarne uno via Gemini API basandosi sulla caption del post (estratta via
+# UI). On any error (no key, rete, rate-limit, safety block, output con
+# emoji/hashtag/!) cade automaticamente su comments_list.txt -> zero rischio
+# di crash o di postare commenti tipo-bot.
+#
+# Per attivare:
+#   1. ottieni una API key gratuita da https://aistudio.google.com/app/apikey
+#   2. esporta GEMINI_API_KEY=AIzaSy... nel tuo shell, OPPURE metti la key
+#      direttamente sotto ai-comments-api-key (ATTENZIONE: non committare!)
+#   3. setta ai-comments-enabled: true
+#   4. alza max-comments-pro-user e total-comments-limit (sono a 0 ora)
+#
+# NB: i commenti restano comunque uno strumento ad ALTO rischio anti-spam.
+# Tabelle anti-ban 2026: max 5-10 commenti/giorno, mai >2 nello stesso post,
+# pause >60s tra due commenti consecutivi (gia' enforce-ato dal throttler).
+# ---------------------------------------------------------------------------
+ai-comments-enabled: true                  # ATTIVO: usa Gemini per generare commenti context-aware
+# ai-comments-api-key: "AIzaSy..."         # NON mettere qui: usa env GEMINI_API_KEY (caricata da .env.local via run-dynamic.py / run-bot.sh)
+ai-comments-model: gemini-2.5-flash-lite   # PRIMARIO: economico e veloce. Se fallisce (rate-limit/5xx/safety) il bot prova in cascata 2.5-flash, 1.5-flash-8b, 1.5-flash.
+# ai-comments-models: "gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash-8b"  # OPZIONALE: catena custom (overrides il default cascade)
+ai-comments-language: Italian              # lingua dei commenti generati
+ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Mattia, competitive classic physique bodybuilding athlete based in Turin (Torino, Piemonte, Italy). He trains seriously, follows a structured prep, and is passionate about gym culture, hypertrophy, posing, and contest prep. Tone: technical when relevant (mention specific muscles, exercises, periodization, symmetry, conditioning), peer-to-peer between fellow athletes, casual Italian register, genuine and direct. NEVER salesy, NEVER mention coaching/services/DM/link. NEVER use emoji, hashtags or exclamation marks. Reference something specific from the caption or visible context (exercise, physique detail, competition, nutrition). 1 short sentence max, sound like a fellow competitive athlete."
+ai-comments-fallback-to-file: true         # on AI failure, fallback a comments_list.txt (consigliato)
+
+
+## Stories OFF: su IG 300 il ring storie NON si apre ("Failed to open the story container",
+## 0 storie viste in tutto lo storico + crash 14/06 23:44). Rischio/instabilita' per zero
+## beneficio -> disattivate. Il warm-follow si regge benissimo sui like.
+stories-count: 0
+stories-percentage: 0
+
+# ---------------------------------------------------------------------------
+# Ending Session Conditions
+# ---------------------------------------------------------------------------
+end-if-likes-limit-reached: false          # [v2] NON chiudere la sessione se solo i like sono al cap. Cosi' il bot continua a usare follow/commenti residui invece di aprire sessioni "fantasma" da 28s che terminano subito (vedi log 22:51-23:31 del 10/05). La fine sessione resta governata da end-if-follows-limit-reached: true.
+end-if-follows-limit-reached: true         # CRITICO: ferma quando arrivi al cap follow
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# Scheduling - 5 micro-sessioni distribuite su tutta la giornata
+# Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
+# attivita' concentrate nelle ore di reale uso umano di IG.
+# ---------------------------------------------------------------------------
+working-hours: [23.49-00.26, 00.39-01.16, 01.31-02.08, 02.11-02.48]   # generata dinamicamente da run-dynamic.py
+time-delta: 0-1                          # randomizza partenza di 5-25 min
+repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
+total-sessions: -1                         # loop infinito (rispetta working-hours)
