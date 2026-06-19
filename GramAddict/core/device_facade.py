@@ -11,10 +11,25 @@ from time import sleep
 from typing import Optional
 
 import uiautomator2
+from requests.exceptions import RequestException
+
+try:
+    from adbutils.errors import AdbError, AdbTimeout
+except Exception:  # pragma: no cover - adbutils is always present in practice
+    AdbError = OSError
+    AdbTimeout = OSError
 
 from GramAddict.core.utils import random_sleep
 
 logger = logging.getLogger(__name__)
+
+# Exceptions that mean the ADB server / atx-agent link dropped (device idle
+# during a long throttle sleep, USB hiccup, momentary adb-server restart) — as
+# opposed to a normal in-app UI error (JSONRPCError). These MUST be healed in
+# place: letting them bubble up to run_safely() costs a full Instagram restart
+# plus a counted crash (toward the crash limit that stops the bot), and loses
+# the half-done interaction (e.g. a comment already typed but not posted).
+CONNECTION_LOST_EXCEPTIONS = (RequestException, AdbError, AdbTimeout, OSError)
 
 
 def create_device(device_id, app_id):
@@ -258,15 +273,55 @@ class DeviceFacade:
         try:
             return self.deviceV2._is_alive()  # deprecated method
         except AttributeError:
-            return self.deviceV2.server.alive
+            try:
+                return self.deviceV2.server.alive
+            except Exception:
+                return False
+        except Exception:
+            return False
 
     def wake_up(self):
         """Make sure agent is alive or bring it back up before starting."""
         if self.deviceV2 is not None:
             attempts = 0
             while not self.is_alive() and attempts < 5:
-                self.get_info()
+                try:
+                    self.get_info()
+                except Exception:
+                    DeviceFacade._heal_connection(self.deviceV2, tries=1)
                 attempts += 1
+
+    @staticmethod
+    def _heal_connection(deviceV2, tries: int = 4, base_delay: float = 4.0) -> bool:
+        """Try to bring the atx-agent / adb link back after a connection drop.
+
+        Returns True if the device answers again. uiautomator2 re-establishes
+        the adb port-forward on every request, so a momentary adb-server hiccup
+        (the usual cause of ``RemoteDisconnected`` / ``AdbError`` after a long
+        idle throttle sleep) normally clears by probing again after a short
+        wait; we also force a uiautomator reset midway as a stronger remedy.
+        """
+        if deviceV2 is None:
+            return False
+        for attempt in range(1, tries + 1):
+            delay = base_delay * attempt
+            logger.warning(
+                f"[device] ADB/atx-agent link lost. Healing attempt "
+                f"{attempt}/{tries}, waiting {delay:.0f}s..."
+            )
+            sleep(delay)
+            try:
+                if attempt == 2 and hasattr(deviceV2, "reset_uiautomator"):
+                    deviceV2.reset_uiautomator("connection lost")
+                _ = deviceV2.info  # cheap probe; forces re-forward of port 7912
+                logger.info("[device] connection re-established.")
+                return True
+            except Exception as e:
+                logger.warning(
+                    f"[device] healing probe failed ({type(e).__name__}: {e})."
+                )
+        logger.error("[device] could not re-establish connection after retries.")
+        return False
 
     def unlock(self):
         self.swipe(Direction.UP, 0.8)
@@ -357,6 +412,23 @@ class DeviceFacade:
         def __init__(self, view, device):
             self.viewV2 = view
             self.deviceV2 = device
+
+        def _connection_safe(self, op, *, what: str):
+            """Run ``op`` (a no-arg callable that hits the device); if the
+            ADB/atx-agent link drops, heal it and retry once instead of letting
+            the exception bubble up to run_safely() — which would abort the
+            whole interaction and count a crash. JSONRPCError (a normal in-app
+            UI error) is left untouched for the caller to handle."""
+            try:
+                return op()
+            except CONNECTION_LOST_EXCEPTIONS as e:
+                logger.warning(
+                    f"[device] {what}: connection lost "
+                    f"({type(e).__name__}: {e}). Trying to recover in place."
+                )
+                if DeviceFacade._heal_connection(self.deviceV2):
+                    return op()
+                raise
 
         def __iter__(self):
             children = []
@@ -494,9 +566,12 @@ class DeviceFacade:
                 logger.debug(
                     f"Single click in ({x_abs},{y_abs}). Surface: ({visible_bounds['left']}-{visible_bounds['right']},{visible_bounds['top']}-{visible_bounds['bottom']})"
                 )
-                self.viewV2.click(
-                    self.get_ui_timeout(Timeout.LONG),
-                    offset=(x_offset, y_offset),
+                self._connection_safe(
+                    lambda: self.viewV2.click(
+                        self.get_ui_timeout(Timeout.LONG),
+                        offset=(x_offset, y_offset),
+                    ),
+                    what="click",
                 )
                 DeviceFacade.sleep_mode(sleep)
 
@@ -637,7 +712,9 @@ class DeviceFacade:
 
         def get_bounds(self) -> dict:
             try:
-                return self.viewV2.info["bounds"]
+                return self._connection_safe(
+                    lambda: self.viewV2.info["bounds"], what="get_bounds"
+                )
             except uiautomator2.JSONRPCError as e:
                 raise DeviceFacade.JsonRpcError(e)
 

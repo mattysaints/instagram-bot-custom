@@ -173,6 +173,16 @@ class ResourceID:
         )
         self.TAB_AVATAR = f"{APP_ID}:id/tab_avatar"
         self.TAB_BAR = f"{APP_ID}:id/tab_bar"
+        # Per-tab buttons inside the tab bar. These resource-ids are stable and
+        # language/A-B-test independent, unlike the content-description used as
+        # the primary matcher (which can shift wording, e.g. "Search and explore"
+        # vs "Search and Explore", or be localized).
+        self.FEED_TAB = f"{APP_ID}:id/feed_tab"
+        self.SEARCH_TAB = f"{APP_ID}:id/search_tab"
+        self.CLIPS_TAB = f"{APP_ID}:id/clips_tab"
+        self.CREATION_TAB = f"{APP_ID}:id/creation_tab"
+        self.NEWS_TAB = f"{APP_ID}:id/news_tab"
+        self.PROFILE_TAB = f"{APP_ID}:id/profile_tab"
         self.TAB_BUTTON_NAME_TEXT = f"{APP_ID}:id/tab_button_name_text"
         self.TAB_BUTTON_FALLBACK_ICON = f"{APP_ID}:id/tab_button_fallback_icon"
         self.TIMER = f"{APP_ID}:id/timer"

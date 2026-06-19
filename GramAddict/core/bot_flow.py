@@ -55,6 +55,37 @@ from GramAddict.core.views import AccountView, ProfileView, TabBarView, Universa
 from GramAddict.core.views import load_config as load_views
 
 
+def _ensure_ig_foreground(device, configs, max_attempts: int = 4) -> bool:
+    """Guarantee Instagram is in the foreground before we touch its UI.
+
+    open_instagram() returns once IG is up, but a transient between then and
+    the first find() (a BACK press from close_keyboard, a system popup, a
+    launcher flash on a slow emulator) can pull IG out of foreground. The next
+    find() would then raise AppHasCrashed and, at startup, kill the whole bot.
+    Poll the current package and reopen IG if it dropped.
+    """
+    logger = logging.getLogger(__name__)
+    app_id = configs.args.app_id
+    for attempt in range(1, max_attempts + 1):
+        try:
+            current = device.deviceV2.app_current().get("package")
+        except Exception as e:
+            logger.debug(f"_ensure_ig_foreground: app_current failed: {e}")
+            current = None
+        if current == app_id:
+            return True
+        logger.warning(
+            f"Instagram not in foreground (current: {current}). "
+            f"Reopening... ({attempt}/{max_attempts})"
+        )
+        if not open_instagram(device):
+            sleep(3)
+    try:
+        return device.deviceV2.app_current().get("package") == app_id
+    except Exception:
+        return False
+
+
 def start_bot(**kwargs):
     # Logging initialization
     logger = logging.getLogger(__name__)
@@ -179,10 +210,25 @@ def start_bot(**kwargs):
             UniversalActions.close_keyboard(device)
         else:
             break
-        profile_view = ProfileView(device)
-        account_view = AccountView(device)
-        tab_bar_view = TabBarView(device)
         try:
+            # close_keyboard() above can press BACK; on a slow emulator IG may
+            # momentarily fall back to the launcher. Building the views below
+            # calls find(), which raises AppHasCrashed when IG isn't in
+            # foreground — and at this startup point that exception is fatal
+            # (it's exactly the line that was killing the bot). Make sure IG is
+            # up (reopening if it dropped) and create the views INSIDE this try,
+            # so a transient is recovered by the except below (save_crash + 30s
+            # + continue) instead of crashing the whole process.
+            if not _ensure_ig_foreground(device, configs):
+                logger.error(
+                    "Instagram won't stay in foreground at startup; "
+                    "retrying session setup after 30s..."
+                )
+                sleep(30)
+                continue
+            profile_view = ProfileView(device)
+            account_view = AccountView(device)
+            tab_bar_view = TabBarView(device)
             account_view.navigate_to_main_account()
             check_if_english(device)
             if configs.args.username is not None:

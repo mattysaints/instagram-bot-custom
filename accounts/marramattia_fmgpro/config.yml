@@ -15,7 +15,7 @@
 # General Configuration
 # ---------------------------------------------------------------------------
 username: marramattia_fmgpro
-device: f2487e11                      # ADB device serial (adb devices -l)
+device: emulator-5554                 # ADB device serial (adb devices -l)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true
@@ -204,7 +204,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [23.49-00.26, 00.39-01.16, 01.31-02.08, 02.11-02.48]   # generata dinamicamente da run-dynamic.py
+working-hours: [09.09-10.39, 12.02-13.32, 14.54-16.24, 17.45-19.15, 20.33-22.03]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)

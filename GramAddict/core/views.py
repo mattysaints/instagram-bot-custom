@@ -182,15 +182,24 @@ class TabBarView:
             )
 
             if not button.exists():
-                # Some accounts display the search btn only in Home -> action bar
-                logger.debug("Didn't find search in the tab bar...")
-                # First navigate to home, then try action bar search
-                self._navigateTo(TabBarTabs.HOME)
-                home_view = HomeView(self.device)
-                if not home_view.navigateToSearch():
-                    logger.error("Couldn't navigate to Search via Home action bar either.")
+                # Resource-id is stable even when the content-desc wording
+                # differs (locale / A-B layout, e.g. "Search and explore" on
+                # IG 300.x). Try it before the heavier action-bar route.
+                by_id = self.device.find(
+                    resourceIdMatches=case_insensitive_re(ResourceID.SEARCH_TAB)
+                )
+                if by_id.exists(Timeout.MEDIUM):
+                    button = by_id
+                else:
+                    # Some accounts display the search btn only in Home -> action bar
+                    logger.debug("Didn't find search in the tab bar...")
+                    # First navigate to home, then try action bar search
+                    self._navigateTo(TabBarTabs.HOME)
+                    home_view = HomeView(self.device)
+                    if not home_view.navigateToSearch():
+                        logger.error("Couldn't navigate to Search via Home action bar either.")
+                        return
                     return
-                return
         elif tab == TabBarTabs.REELS:
             button = self.device.find(
                 classNameMatches=ClassName.BUTTON_OR_FRAME_LAYOUT_REGEX,
@@ -228,6 +237,28 @@ class TabBarView:
                         break
             if not button.exists():
                 button = self._get_new_profile_position()
+
+        # Resource-id fallback: the content-description matcher above can miss
+        # the tab on some IG builds (localized desc, A/B layout, accessibility
+        # quirk). The per-tab resource-ids are stable, so try them before
+        # giving up. This is what let the bot find HOME/SEARCH/PROFILE on the
+        # emulator's IG 300.x.
+        if button is None or not button.exists():
+            fallback_id = {
+                TabBarTabs.HOME: ResourceID.FEED_TAB,
+                TabBarTabs.SEARCH: ResourceID.SEARCH_TAB,
+                TabBarTabs.REELS: ResourceID.CLIPS_TAB,
+                TabBarTabs.ORDERS: ResourceID.CREATION_TAB,
+                TabBarTabs.ACTIVITY: ResourceID.NEWS_TAB,
+                TabBarTabs.PROFILE: ResourceID.PROFILE_TAB,
+            }.get(tab)
+            if fallback_id is not None:
+                by_id = self.device.find(
+                    resourceIdMatches=case_insensitive_re(fallback_id)
+                )
+                if by_id.exists(Timeout.MEDIUM):
+                    logger.debug(f"Found {tab_name} tab via resource-id fallback.")
+                    button = by_id
 
         if button is not None and button.exists(Timeout.MEDIUM):
             # Two clicks to reset tab content
