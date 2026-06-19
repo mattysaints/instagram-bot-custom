@@ -1,0 +1,11 @@
+# Fallback per AI DM nel job dm-followback quando Gemini fallisce.
+# Stile: icebreaker generico fitness. Niente coaching/prezzi/link/CTA.
+# Il bot pesca random uno di questi se l'AI cade.
+Ciao! Grazie per il follow back. Cosa ti piacerebbe vedere piu' spesso sul mio profilo?
+Hey, grazie del follow. Su cosa stai lavorando lato fitness in questo periodo?
+Grazie del follow! Qual e' la cosa che ti costa di piu' nel restare costante con l'allenamento?
+Ciao, grazie per esserti aggiunto. Cosa ti aspetteresti di vedere su un profilo come il mio?
+Hey! Grazie del follow back. Allenamenti, alimentazione o motivazione: quale ti interessa di piu'?
+Grazie del follow back. C'e' un argomento fitness su cui vorresti piu' chiarezza?
+Ciao! Grazie per il follow. Sei piu' tipo da allenamento a casa o palestra?
+Grazie del follow back! Cosa ti piacerebbe trovare tra i miei contenuti?

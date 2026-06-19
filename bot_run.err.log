@@ -1,0 +1,57 @@
+accounts/simonebestagno/config.yml has been saved last time at 2026-05-12 11:01:04
+[05/12 11:01:24]     INFO | Checking for updates...
+[05/12 11:01:25]     INFO | Bot is updated.
+[05/12 11:01:25]     INFO | GramAddict v.3.2.12
+[05/12 11:01:25]     INFO | Loading plugins . . .
+[05/12 11:01:25]     INFO |   - ActionUnfollowFollowers: Handles the functionality of unfollowing your followers
+[05/12 11:01:25]     INFO |   - ClonedApp: Adds support for cloned apps
+[05/12 11:01:25]     INFO |   - CoreArguments: Simply adds core arguments
+[05/12 11:01:25]     INFO |   - DataAnalytics: Generates a PDF analytics report of current username session data
+[05/12 11:01:25]     INFO |   - DmFollowback: Send a DM to users who followed me back after the bot followed them.
+[05/12 11:01:25]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger
+[05/12 11:01:25]     INFO |   - InteractBloggerFollowers_Following: Handles the functionality of interacting with a bloggers followers/following
+[05/12 11:01:25]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger post likers
+[05/12 11:01:25]     INFO |   - InteractOwnFeed: Handles the functionality of interacting with your own feed
+[05/12 11:01:25]     INFO |   - InteractHashtagLikers: Handles the functionality of interacting with a hashtags likers
+[05/12 11:01:25]     INFO |   - InteractHashtagPosts: Handles the functionality of interacting with a hashtags post owners
+[05/12 11:01:25]     INFO |   - InteractPlaceLikers: Handles the functionality of interacting with a places likers
+[05/12 11:01:25]     INFO |   - InteractPlacePosts: Handles the functionality of interacting with a places post owners
+[05/12 11:01:25]     INFO |   - LikeFromURLs: Likes a post from url. The urls are read from a plaintext file
+[05/12 11:01:25]     INFO |   - RemoveFollowersFromList: Remove account followers from a list of usernames
+[05/12 11:01:25]     INFO |   - TelegramReports: Generate reports at the end of the session and send them using telegram
+[05/12 11:01:25]     INFO | Time delta has set to 00:00:47.
+[05/12 11:01:26]     INFO | Screen timeout is fine!
+[05/12 11:01:26]     INFO | -------- START: 11:01:26 - 2026/05/12 --------
+[05/12 11:01:26]     INFO | Device screen ON and unlocked.
+[05/12 11:01:26]     INFO | Open Instagram app.
+[05/12 11:01:32]     INFO | Ready for botting!\U0001f92b
+[05/12 11:01:34]     INFO | FastInputIME is the default keyboard.
+[05/12 11:01:34]     INFO | Instagram version: 428.0.0.47.67
+[05/12 11:01:34]  WARNING | You have a newer version of IG then the one tested! (Tested version: 300.0.0.29.110).
+[05/12 11:01:34]  WARNING | Using an untested version of IG would cause unexpected behavior because some elements in the user interface may have been changed. Any crashes that occur with an untested version are not taken into account.
+[05/12 11:01:48]    ERROR | Cannot find following count view.
+[05/12 11:02:02]  WARNING | Can't get post/followers/following text for check the language! Save a crash to understand the reason.
+[05/12 11:02:03]     INFO | Crash saved as crashes\3.2.12_2026-05-12-11-02-02.zip
+[05/12 11:02:03]     INFO | If you want to report this crash, please upload the dump file via a ticket in the #lobby channel on discord 
+[05/12 11:02:03]     INFO | https://discord.gg/66zWWCDM7x
+
+[05/12 11:02:03]  WARNING | Failed to check your Instagram language. Be sure to set it to English or the bot won't work!
+[05/12 11:02:12]    ERROR | Unable to find action bar! (The element with the username at top)
+[05/12 11:02:12]    ERROR | Not able to change to simonebestagno, abort!
+[05/12 11:02:13]     INFO | Crash saved as crashes\3.2.12_2026-05-12-11-02-12.zip
+[05/12 11:02:13]     INFO | If you want to report this crash, please upload the dump file via a ticket in the #lobby channel on discord 
+[05/12 11:02:13]     INFO | https://discord.gg/66zWWCDM7x
+
+[05/12 11:02:17]     INFO | 
+[05/12 11:02:17]     INFO | TOTAL
+[05/12 11:02:17]     INFO | Completed sessions: 0
+[05/12 11:02:17]     INFO | Total duration: 0:00:51
+[05/12 11:02:17]     INFO | Total interactions: (0) 0
+[05/12 11:02:17]     INFO | Successful interactions: (0) 0
+[05/12 11:02:17]     INFO | Total followed: (0) 0
+[05/12 11:02:17]     INFO | Total likes: 0
+[05/12 11:02:17]     INFO | Total comments: 0
+[05/12 11:02:17]     INFO | Total PM sent: 0
+[05/12 11:02:17]     INFO | Total watched: 0
+[05/12 11:02:17]     INFO | Total unfollowed: 0
+[05/12 11:02:17]     INFO | This bot is backed with love by me for free. If you like using it, consider donating to help keep me motivated: https://www.buymeacoffee.com/mastrolube

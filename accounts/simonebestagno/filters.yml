@@ -1,0 +1,144 @@
+##############################################################################
+# Simone Bestagno - filtri profilo
+# Obiettivo: interagire con utenti "consumer" interessati al fitness,
+# NON con altri PT / palestre / influencer fitness / brand.
+#
+# Strategia attiva: blogger-followers (followers delle palestre locali).
+# Tutti gli altri comment_* sono OFF perche' non usiamo quei job.
+##############################################################################
+
+## Tipo profilo
+skip_if_private: true       # SKIP totale dei profili privati (no like/commento/follow)
+skip_if_public: false
+skip_business: true         # SKIP palestre, brand integratori, business
+skip_non_business: false
+skip_following: true        # non re-interagire con chi gia' segui
+skip_follower: true         # non re-interagire con chi ti segue gia'
+skip_if_link_in_bio: false  # NON skip: ammessi link (linktree ecc.)
+# Cambio 2026-05-14: NIENTE follow ai profili privati o con bio vuota.
+# Razionale: i follow ai privati generano follow REQUEST pendenti (non
+# follow effettivi) -> non contano nel follow-back metric, inquinano la
+# lista 'following' con richieste in sospeso che poi vanno gestite a mano,
+# e aumentano il sospetto di pattern automatico (molte richieste pendenti
+# = segnale per IG). Like e commenti sui privati restano permessi (vedi
+# skip_if_private: false sopra) perche' sono azioni a basso rischio che
+# l'utente vede comunque nelle notifiche.
+follow_private_or_empty: false
+
+## Numeri profilo - PERMISSIVI (cambio 2026-05-13).
+## Razionale: target = clienti potenziali per coaching e palestra a Fiorano.
+## I lead caldi sono spesso utenti "normali" con bassa visibilita' social
+## (poche centinaia di follower, ratio basso, pochi post). Filtri troppo
+## stretti escludevano proprio loro. Tagli ora generosi:
+##   - min_followers 50  (anche "casual users" che si allenano da poco)
+##   - max_followers 10000 (sotto influencer puri)
+##   - min_followings 30 (account "puliti" che seguono solo amici+palestre)
+##   - max_followings 5000 (utenti curiosi che seguono molto)
+##   - potency_ratio 0.15..15 (include sia low-engagement che mini-creator)
+##   - min_posts 3 (basta poco per capire se profilo reale)
+## Se nei prossimi giorni vediamo follow-back rate troppo basso, restringere
+## di nuovo (vedi tools/recompute_fbr.py).
+min_followers: 50
+max_followers: 10000
+min_followings: 30
+max_followings: 5000
+# Potency ratio = followers / followings.
+# < 0.15 = quasi sicuro bot/spam o account dormiente
+# > 15   = influencer puro (raramente diventa cliente)
+min_potency_ratio: 0.15
+max_potency_ratio: 15
+# Minimo 3 post: basta poco per confermare che il profilo non e' un fake.
+min_posts: 3
+mutual_friends: -1
+
+## Filtri su biografia (CRITICI per escludere PT/palestre)
+# Se trovate UNA di queste parole nella bio o nel nome -> SKIP.
+blacklist_words: [
+  # PT / coach (colleghi)
+  "personal trainer", "personaltrainer", "p.t.", " pt ", "coach", "trainer",
+  "preparatore", "allenatore", "istruttore",
+  # Palestre / centri fitness
+  "palestra", "gym ", "crossfit box", "centro fitness", "wellness center",
+  "fitness studio", "studio fitness", "fit active", "fitactive",
+  "green theory", "greentheory", "aktivarium",
+  "urbana centro", "befit club", "befitclub", "gimfive", "gim five",
+  "madonna di sotto", "body gym", "bodygym",
+  # Studi PT / brand locali (nuovi blogger 2026-05): NON seguire questi
+  # account stessi se compaiono nel feed (sono nostre sorgenti).
+  "lineup fitness", "lineupfitness", "line up fitness",
+  "lionheart training", "lionheart",
+  "studio 3r", "3r fit", "3rfit",
+  "nextfit", "next fit modena",
+  "sintesi studio", "syntesi studio",
+  "crossfit sassuolo", "crossfitsassuolo",
+  "live 4 fit", "live4fit",
+  "bodymood",
+  # PT individuali locali (loro account = blacklist)
+  "fantoni alessandro", "alessandro fantoni",
+  "albi malaguti", "bia malaguti", "malaguti coach",
+  "fabio spezzani", "marco giuliani",
+  "nicola balzerano", "latuapersonaltrainer",
+  "beamber", "amber fitness",
+  "giorgia fitwell", "fitwell",
+  "dav.modena", "davide modena",
+  # Nutrizione (colleghi non-PT ma simili)
+  "nutrizionist", "dietist", "biolog", "biologa nutrizionista",
+  # Influencer / creator etichettati
+  "influencer", "creator", "content creator", "blogger", "ambassador",
+  # Brand / shop / aziende
+  "shop", "store", "official", "azienda", "negozio", "ecommerce",
+  "supplements", "integratori", "marketing", "agenzia",
+  # Esclusioni generiche (sex/spam)
+  "onlyfans", "onlyf", "of profile", "linkinbio onlyfans",
+  "vip", "model", "🔞",
+  # Atleti / agonisti / brand fitness
+  "ifbb", "natural bodybuilder", "agonista", "atleta sponsor",
+  "team athlete", "wnbf", "nbfi", "pro card", "powerlifter",
+  "strongman", "calisthenics coach", "yoga teacher", "pilates instructor",
+]
+
+# NESSUNA mandatory_words: vogliamo persone "normali", non specializzate.
+
+# Cambio 2026-05-13: COMMENTATI specific_alphabet e biography_language. Motivo:
+# il filter.py salta automaticamente i profili con bio VUOTA quando uno
+# qualunque tra mandatory_words/biography_language/specific_alphabet e'
+# impostato (vedi filter.py:530). Tante ragazze/utenti reali italiani hanno
+# bio vuota ma sono lead validi -> skiparli era controproducente.
+# La protezione anti-spam internazionale resta tramite biography_banned_language
+# (ru/ar/zh/ja): blocca le bio NON vuote in lingue indesiderate, mentre
+# le bio vuote ora passano (e poi passano comunque tutti gli altri filtri:
+# followers, ratio, business, ecc.).
+# specific_alphabet: [LATIN]
+# biography_language: [it, en]
+biography_banned_language: [ru, ar, zh, ja]
+
+## Filtri per abilitare i COMMENTI (solo dove ha senso)
+# Strategia attuale: SOLO blogger-followers (palestre locali).
+comment_hashtag_likers_top: false
+comment_hashtag_likers_recent: false
+comment_hashtag_posts_top: false
+comment_hashtag_posts_recent: false
+comment_place_likers_top: false
+comment_place_likers_recent: false
+comment_place_posts_top: false
+comment_place_posts_recent: false
+comment_blogger_followers: true     # <-- ATTIVO: commenta sui followers palestre
+comment_blogger_following: false
+comment_blogger_post_likers: false
+comment_blogger: false
+comment_interact_usernames: false
+comment_interact_from_file: false
+comment_feed: false
+
+# Tipo di media commentabile:
+comment_photos: true
+comment_videos: true
+comment_carousels: true
+
+## Filtri DM
+pm_to_private_or_empty: false   # niente DM su privati (rumore alto, conv bassa)
+
+## Filtri likers post (irrilevanti per blogger-followers, lasciati a default)
+min_likers: 1
+max_likers: 800
+

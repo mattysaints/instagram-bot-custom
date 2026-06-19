@@ -1,0 +1,146 @@
+accounts/simonebestagno/config.yml has been saved last time at 2026-05-12 11:01:04
+[05/12 11:12:55]     INFO | Checking for updates...
+[05/12 11:12:56]     INFO | Bot is updated.
+[05/12 11:12:56]     INFO | GramAddict v.3.2.12
+[05/12 11:12:56]     INFO | Loading plugins . . .
+[05/12 11:12:56]     INFO |   - ActionUnfollowFollowers: Handles the functionality of unfollowing your followers
+[05/12 11:12:56]     INFO |   - ClonedApp: Adds support for cloned apps
+[05/12 11:12:56]     INFO |   - CoreArguments: Simply adds core arguments
+[05/12 11:12:56]     INFO |   - DataAnalytics: Generates a PDF analytics report of current username session data
+[05/12 11:12:56]     INFO |   - DmFollowback: Send a DM to users who followed me back after the bot followed them.
+[05/12 11:12:56]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger
+[05/12 11:12:56]     INFO |   - InteractBloggerFollowers_Following: Handles the functionality of interacting with a bloggers followers/following
+[05/12 11:12:56]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger post likers
+[05/12 11:12:56]     INFO |   - InteractOwnFeed: Handles the functionality of interacting with your own feed
+[05/12 11:12:56]     INFO |   - InteractHashtagLikers: Handles the functionality of interacting with a hashtags likers
+[05/12 11:12:56]     INFO |   - InteractHashtagPosts: Handles the functionality of interacting with a hashtags post owners
+[05/12 11:12:56]     INFO |   - InteractPlaceLikers: Handles the functionality of interacting with a places likers
+[05/12 11:12:56]     INFO |   - InteractPlacePosts: Handles the functionality of interacting with a places post owners
+[05/12 11:12:56]     INFO |   - LikeFromURLs: Likes a post from url. The urls are read from a plaintext file
+[05/12 11:12:56]     INFO |   - RemoveFollowersFromList: Remove account followers from a list of usernames
+[05/12 11:12:56]     INFO |   - TelegramReports: Generate reports at the end of the session and send them using telegram
+[05/12 11:12:56]     INFO | Time delta has set to 00:00:55.
+[05/12 11:12:57]     INFO | Screen timeout is fine!
+[05/12 11:12:57]     INFO | -------- START: 11:12:57 - 2026/05/12 --------
+[05/12 11:12:57]     INFO | Device screen ON and unlocked.
+[05/12 11:12:57]     INFO | Open Instagram app.
+[05/12 11:13:02]     INFO | Ready for botting!\U0001f92b
+[05/12 11:13:05]     INFO | FastInputIME is the default keyboard.
+[05/12 11:13:05]     INFO | Instagram version: 428.0.0.47.67
+[05/12 11:13:05]  WARNING | You have a newer version of IG then the one tested! (Tested version: 300.0.0.29.110).
+[05/12 11:13:05]  WARNING | Using an untested version of IG would cause unexpected behavior because some elements in the user interface may have been changed. Any crashes that occur with an untested version are not taken into account.
+[05/12 11:13:22]     INFO | You are already logged as simonebestagno!
+[05/12 11:13:23]     INFO | Refresh account...
+[05/12 11:13:30]     INFO | Hello, @simonebestagno! You have 35900 followers and 823 followings so far.
+[05/12 11:13:30]     INFO | You have 1 session(s) left. You can stop the bot by pressing CTRL+C in console.
+[05/12 11:13:33]     INFO | There is/are 1 active-job(s) and 0 unfollow-job(s) scheduled for this session.
+[05/12 11:13:33]  WARNING | Filters are disabled! (The default values in the documentation have been chosen!)
+[05/12 11:13:33]     INFO | [throttle] ActionThrottler disabled by config.
+[05/12 11:13:33]     INFO | ----------------------------------------------------------------------
+[05/12 11:13:33]     INFO | Session ending conditions:          Value
+[05/12 11:13:33]     INFO | ----------------------------------------------------------------------
+[05/12 11:13:33]     INFO | Likes:                              True
+[05/12 11:13:33]     INFO | Follows:                            False
+[05/12 11:13:33]     INFO | Watches:                            False
+[05/12 11:13:33]     INFO | Comments:                           False
+[05/12 11:13:33]     INFO | PM:                                 False
+[05/12 11:13:33]     INFO | Total actions:                      True (not mutable)
+[05/12 11:13:33]     INFO | Total successfull actions:          True (not mutable)
+[05/12 11:13:33]     INFO | For more info -> https://github.com/GramAddict/docs/blob/main/configuration.md#ending-session-conditions
+[05/12 11:13:33]     INFO | ----------------------------------------------------------------------
+[05/12 11:13:43]     INFO | Checking session limits:
+[05/12 11:13:43]     INFO | - Total Likes:				OK (0/1)
+[05/12 11:13:43]     INFO | - Total Comments:				Limit Reached (0/0)
+[05/12 11:13:43]     INFO | - Total PM:					Limit Reached (0/0)
+[05/12 11:13:43]     INFO | - Total Followed:				OK (0/1)
+[05/12 11:13:43]     INFO | - Total Unfollowed:				OK (0/1)
+[05/12 11:13:43]     INFO | - Total Watched:				OK (0/1)
+[05/12 11:13:43]     INFO | - Real Interactions (like/follow/cmt/dm):	OK (0/1)
+[05/12 11:13:43]     INFO | - Profiles Visited (visits, also skipped):	OK (0/1)
+[05/12 11:13:43]     INFO | - Total Crashes:				OK (0/1)
+[05/12 11:13:43]     INFO | - Total Successful Scraped Users:		OK (0/50)
+[05/12 11:13:43]     INFO | Current active-job: feed
+[05/12 11:13:43]     INFO | Interact with your own feed
+[05/12 11:13:43]     INFO | Interactions count: 1
+[05/12 11:13:43]     INFO | Chance of liking: 100%
+[05/12 11:13:43]     INFO | Chance of following: 0%
+[05/12 11:13:43]     INFO | Chance of commenting: 0%
+[05/12 11:13:43]     INFO | Chance of interacting: 100%
+[05/12 11:13:43]     INFO | Chance of send PM: 0%
+[05/12 11:13:43]     INFO | Skipped post limit: 1
+[05/12 11:13:48]     INFO | Feed interact count: 1
+[05/12 11:13:48]     INFO | Refresh feed..
+[05/12 11:14:13]     INFO | This post hasn't the description...
+[05/12 11:14:17]     INFO | @dorothy_2.0: interact
+[05/12 11:14:18]     INFO | - Total Likes:				OK (0/1)
+[05/12 11:14:24]     INFO | Scroll down to see next post.
+[05/12 11:15:46]     INFO | This post hasn't the description...
+[05/12 11:16:04]     INFO | @simonebestagno: interact
+[05/12 11:16:05]     INFO | - Total Likes:				OK (0/1)
+[05/12 11:16:10]     INFO | Scroll down to see next post.
+[05/12 11:16:23]    ERROR | Traceback (most recent call last):
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\core\device_facade.py", line 620, in get_bounds
+    return self.viewV2.info["bounds"]
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\decorator.py", line 235, in fun
+    return caller(func, *(extras + args), **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\retry\api.py", line 73, in retry_decorator
+    return __retry_internal(partial(f, *args, **kwargs), exceptions, tries, delay, max_delay, backoff, jitter,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\retry\api.py", line 33, in __retry_internal
+    return f()
+           ^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\uiautomator2\_selector.py", line 130, in info
+    return self.jsonrpc.objInfo(self.selector)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\uiautomator2\__init__.py", line 479, in __call__
+    return self.server._jsonrpc_retry_call(self.method, params,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\uiautomator2\__init__.py", line 486, in _jsonrpc_retry_call
+    return self._jsonrpc_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\.venv\Lib\site-packages\uiautomator2\__init__.py", line 556, in _jsonrpc_call
+    raise err
+uiautomator2.exceptions.UiObjectNotFoundError: -32001 Jsonrpc error: <androidx.test.uiautomator.UiObjectNotFoundException> data: UiSelector[RESOURCE_ID_REGEX=com.instagram.android:id/gap_view|com.instagram.android:id/footer_space], method: objInfo
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\core\decorators.py", line 31, in wrapper
+    func(*args, **kwargs)
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\plugins\interact_feed.py", line 79, in job
+    self.handle_feed(
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\plugins\interact_feed.py", line 134, in handle_feed
+    handle_posts(
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\core\handle_sources.py", line 838, in handle_posts
+    post_view_list.swipe_to_fit_posts(SwipeTo.NEXT_POST)
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\core\views.py", line 672, in swipe_to_fit_posts
+    obj1 = gap_view_obj.get_bounds()["bottom"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Simone\PycharmProjects\instagram-bot-custom\GramAddict\core\device_facade.py", line 622, in get_bounds
+    raise DeviceFacade.JsonRpcError(e)
+GramAddict.core.device_facade.DeviceFacade.JsonRpcError: -32001 Jsonrpc error: <androidx.test.uiautomator.UiObjectNotFoundException> data: UiSelector[RESOURCE_ID_REGEX=com.instagram.android:id/gap_view|com.instagram.android:id/footer_space], method: objInfo
+
+[05/12 11:16:25]     INFO | Crash saved as crashes\3.2.12_2026-05-12-11-16-23.zip
+[05/12 11:16:25]     INFO | If you want to report this crash, please upload the dump file via a ticket in the #lobby channel on discord 
+[05/12 11:16:25]     INFO | https://discord.gg/66zWWCDM7x
+
+[05/12 11:16:26]     INFO | List of running apps: com.google.android.packageinstaller, com.android.systemui, com.google.android.setupwizard, com.android.emulator.multidisplay, com.google.android.permissioncontroller, com.google.android.ext.services, com.google.android.apps.photos, com.google.android.networkstack, com.google.android.inputmethod.latin, com.google.android.gms, com.github.uiautomator, com.google.android.videos, com.android.smspush, com.android.vending, com.android.se, com.google.android.apps.nexuslauncher, com.google.android.ims, com.android.phone, com.google.android.apps.maps, com.instagram.android, com.google.android.gm.
+[05/12 11:16:26]     INFO | - Total Crashes:				Limit Reached (1/1)
+[05/12 11:16:26]    ERROR | Reached crashes limit. Bot has crashed too much! Please check what's going on.
+[05/12 11:16:26]     INFO | Close Instagram app.
+[05/12 11:16:31]     INFO | -------- FINISH: 11:16:31 --------
+[05/12 11:16:31]     INFO | 
+[05/12 11:16:31]     INFO | TOTAL
+[05/12 11:16:31]     INFO | Completed sessions: 0
+[05/12 11:16:31]     INFO | Total duration: 0:03:33
+[05/12 11:16:31]     INFO | Total interactions: (0) 0
+[05/12 11:16:31]     INFO | Successful interactions: (0) 0
+[05/12 11:16:31]     INFO | Total followed: (0) 0
+[05/12 11:16:31]     INFO | Total likes: 0
+[05/12 11:16:31]     INFO | Total comments: 0
+[05/12 11:16:31]     INFO | Total PM sent: 0
+[05/12 11:16:31]     INFO | Total watched: 0
+[05/12 11:16:31]     INFO | Total unfollowed: 0
+[05/12 11:16:31]     INFO | This bot is backed with love by me for free. If you like using it, consider donating to help keep me motivated: https://www.buymeacoffee.com/mastrolube

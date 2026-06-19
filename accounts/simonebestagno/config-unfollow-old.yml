@@ -1,0 +1,101 @@
+##############################################################################
+# Simone Bestagno - UNFOLLOW OLD (interactive)
+#
+# Scopo: sganciare TUTTI gli utenti che il bot ha followato/richiesto >= 2
+# giorni fa, INDIPENDENTEMENTE dal fatto che ti ri-seguano o no. Differisce
+# da config-unfollow.yml (che invece sgancia solo i non-followers).
+#
+# Use case: "ripulitura" periodica dei follow vecchi per:
+#   - liberare slot di following (IG ha cap di ~7500 following totali)
+#   - migliorare il ratio followers/followings del tuo account
+#   - non lasciare follow "morti" su lead che non hanno mai convertito
+#
+# Tracciamento: ogni unfollow viene salvato in interacted_users.json con
+# following_status="unfollowed" + unfollowed=true. Le sessioni successive
+# di questo job NON riprenderanno gli stessi (FollowingStatus.UNFOLLOWED
+# -> skip nel plugin) e neanche i normali job follow (skip_following e
+# logica re-interaction in handle_sources.py).
+#
+# Engagement-protect: gli utenti in accounts/simonebestagno/engaged_users.json
+# vengono saltati automaticamente (vedi action_unfollow_followers.py).
+#
+# Deeplink: open_instagram_with_url() ora forza -p com.instagram.android
+# nell'intent, quindi nessun chooser "Open with..." pop-up.
+#
+# Lancio:
+#   ./run-bot.sh unfollow-old   (se aggiungi il caso nello script)
+#   oppure direttamente:
+#   python run.py --config accounts/simonebestagno/config-unfollow-old.yml
+##############################################################################
+
+username: simonebestagno
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: true
+screen-record: false
+speed-multiplier: 1
+debug: false
+close-apps: false
+disable-block-detection: false
+disable-filters: false
+dont-type: false
+total-crashes-limit: 5
+count-app-crashes: false
+shuffle-jobs: false
+
+# Throttle: lasciamo qualche secondo tra un unfollow e l'altro (25-55s).
+# Niente burst -> meno rischio di soft-ban da IG.
+action-throttle-enabled: true
+action-throttle-unfollow-min: 25-55
+
+##############################################################################
+# Job: unfollow TUTTI quelli followati dal bot (senza distinzione follower
+# o non-follower). Il plugin "unfollow" usa UnfollowRestriction.FOLLOWED_BY_SCRIPT
+# (vedi action_unfollow_followers.py:142) -> guarda interacted_users.json
+# e sgancia chi ha following_status=followed/requested ed e' stato seguito
+# da >= unfollow-delay giorni fa.
+##############################################################################
+
+unfollow: 50-70                  # quanti unfollow per sessione (range random) - 2026-05-14: 30-50 -> 50-70
+sort-followers-newest-to-oldest: false   # sganciamo dal piu' vecchio
+unfollow-delay: 2                # GIORNI (non ore!) da aspettare dal follow
+                                 # prima di poter unfolloware
+
+# Hard cap di sessione e giornaliero. Tutti i `daily-*-cap` vengono moltiplicati
+# dal weekday_multiplier comune (vedi sotto), quindi al sabato/domenica il bot
+# fa meno unfollow per restare "umano".
+# Cambio 2026-05-14: total-unfollows-limit 50 -> 70 per smaltire il backlog
+# (ci sono ~140 follow da pulire, ne sgancia ~3-7 per sessione).
+total-unfollows-limit: 90
+daily-unfollows-cap: 100
+
+# Modulazione weekday come in config.yml: weekend piu' calmo.
+daily-caps-weekday-multiplier: mon:1.0,tue:1.15,wed:1.15,thu:1.15,fri:0.9,sat:0.55,sun:0.5
+
+# Minimo following sotto cui NON unfollowi piu' (safety: non vogliamo finire
+# a 10 following ridicoli).
+min-following: 500
+
+##############################################################################
+# Filtri: la whitelist statica (whitelist.txt) e la soft-whitelist dinamica
+# (engaged_users.json) sono SEMPRE attive. Non c'e' bisogno di altri filtri:
+# stiamo solo decidendo CHI sganciare tra utenti gia' followati dal bot.
+##############################################################################
+
+##############################################################################
+# Scheduling
+#
+# Singola sessione per run. Lanciare a mano quando vuoi pulire (di solito
+# 1 volta a settimana basta). Niente loop / repeat.
+#
+# working-hours COMMENTATO + time-delta: 0 -> il job parte SUBITO appena
+# lanciato (es. da PyCharm), senza attendere la prossima finestra oraria
+# ne' jitter iniziale. Per riattivare le finestre orarie, decommentare
+# working-hours e rimettere time-delta a 8-15.
+##############################################################################
+
+# working-hours: [10.30-12.30, 15.30-17.30, 20.30-22.00]
+time-delta: 0
+total-sessions: 1
+

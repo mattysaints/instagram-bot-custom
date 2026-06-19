@@ -1,0 +1,98 @@
+accounts/simonebestagno/config.yml has been saved last time at 2026-05-12 11:01:04
+[05/12 11:21:30]     INFO | Checking for updates...
+[05/12 11:21:31]     INFO | Bot is updated.
+[05/12 11:21:31]     INFO | GramAddict v.3.2.12
+[05/12 11:21:31]     INFO | Loading plugins . . .
+[05/12 11:21:31]     INFO |   - ActionUnfollowFollowers: Handles the functionality of unfollowing your followers
+[05/12 11:21:31]     INFO |   - ClonedApp: Adds support for cloned apps
+[05/12 11:21:31]     INFO |   - CoreArguments: Simply adds core arguments
+[05/12 11:21:31]     INFO |   - DataAnalytics: Generates a PDF analytics report of current username session data
+[05/12 11:21:31]     INFO |   - DmFollowback: Send a DM to users who followed me back after the bot followed them.
+[05/12 11:21:31]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger
+[05/12 11:21:31]     INFO |   - InteractBloggerFollowers_Following: Handles the functionality of interacting with a bloggers followers/following
+[05/12 11:21:31]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger post likers
+[05/12 11:21:31]     INFO |   - InteractOwnFeed: Handles the functionality of interacting with your own feed
+[05/12 11:21:31]     INFO |   - InteractHashtagLikers: Handles the functionality of interacting with a hashtags likers
+[05/12 11:21:31]     INFO |   - InteractHashtagPosts: Handles the functionality of interacting with a hashtags post owners
+[05/12 11:21:31]     INFO |   - InteractPlaceLikers: Handles the functionality of interacting with a places likers
+[05/12 11:21:31]     INFO |   - InteractPlacePosts: Handles the functionality of interacting with a places post owners
+[05/12 11:21:31]     INFO |   - LikeFromURLs: Likes a post from url. The urls are read from a plaintext file
+[05/12 11:21:31]     INFO |   - RemoveFollowersFromList: Remove account followers from a list of usernames
+[05/12 11:21:31]     INFO |   - TelegramReports: Generate reports at the end of the session and send them using telegram
+[05/12 11:21:31]     INFO | Time delta has set to 00:00:48.
+[05/12 11:21:32]     INFO | Screen timeout is fine!
+[05/12 11:21:32]     INFO | -------- START: 11:21:32 - 2026/05/12 --------
+[05/12 11:21:32]     INFO | Device screen ON and unlocked.
+[05/12 11:21:32]     INFO | Open Instagram app.
+[05/12 11:21:37]     INFO | Ready for botting!\U0001f92b
+[05/12 11:21:40]     INFO | FastInputIME is the default keyboard.
+[05/12 11:21:40]     INFO | Instagram version: 428.0.0.47.67
+[05/12 11:21:40]  WARNING | You have a newer version of IG then the one tested! (Tested version: 300.0.0.29.110).
+[05/12 11:21:40]  WARNING | Using an untested version of IG would cause unexpected behavior because some elements in the user interface may have been changed. Any crashes that occur with an untested version are not taken into account.
+[05/12 11:21:59]     INFO | You are already logged as simonebestagno!
+[05/12 11:21:59]     INFO | Refresh account...
+[05/12 11:22:06]     INFO | Hello, @simonebestagno! You have 35900 followers and 823 followings so far.
+[05/12 11:22:06]     INFO | You have 1 session(s) left. You can stop the bot by pressing CTRL+C in console.
+[05/12 11:22:09]     INFO | There is/are 1 active-job(s) and 0 unfollow-job(s) scheduled for this session.
+[05/12 11:22:09]  WARNING | Filters are disabled! (The default values in the documentation have been chosen!)
+[05/12 11:22:09]     INFO | [throttle] ActionThrottler disabled by config.
+[05/12 11:22:09]     INFO | ----------------------------------------------------------------------
+[05/12 11:22:09]     INFO | Session ending conditions:          Value
+[05/12 11:22:09]     INFO | ----------------------------------------------------------------------
+[05/12 11:22:09]     INFO | Likes:                              True
+[05/12 11:22:09]     INFO | Follows:                            False
+[05/12 11:22:09]     INFO | Watches:                            False
+[05/12 11:22:09]     INFO | Comments:                           False
+[05/12 11:22:09]     INFO | PM:                                 False
+[05/12 11:22:09]     INFO | Total actions:                      True (not mutable)
+[05/12 11:22:09]     INFO | Total successfull actions:          True (not mutable)
+[05/12 11:22:09]     INFO | For more info -> https://github.com/GramAddict/docs/blob/main/configuration.md#ending-session-conditions
+[05/12 11:22:09]     INFO | ----------------------------------------------------------------------
+[05/12 11:22:19]     INFO | Checking session limits:
+[05/12 11:22:19]     INFO | - Total Likes:				OK (0/1)
+[05/12 11:22:19]     INFO | - Total Comments:				Limit Reached (0/0)
+[05/12 11:22:19]     INFO | - Total PM:					Limit Reached (0/0)
+[05/12 11:22:19]     INFO | - Total Followed:				OK (0/1)
+[05/12 11:22:19]     INFO | - Total Unfollowed:				OK (0/1)
+[05/12 11:22:19]     INFO | - Total Watched:				OK (0/1)
+[05/12 11:22:19]     INFO | - Real Interactions (like/follow/cmt/dm):	OK (0/1)
+[05/12 11:22:19]     INFO | - Profiles Visited (visits, also skipped):	OK (0/1)
+[05/12 11:22:19]     INFO | - Total Crashes:				OK (0/1)
+[05/12 11:22:19]     INFO | - Total Successful Scraped Users:		OK (0/50)
+[05/12 11:22:20]     INFO | Current active-job: feed
+[05/12 11:22:20]     INFO | Interact with your own feed
+[05/12 11:22:20]     INFO | Interactions count: 1
+[05/12 11:22:20]     INFO | Chance of liking: 100%
+[05/12 11:22:20]     INFO | Chance of following: 0%
+[05/12 11:22:20]     INFO | Chance of commenting: 0%
+[05/12 11:22:20]     INFO | Chance of interacting: 100%
+[05/12 11:22:20]     INFO | Chance of send PM: 0%
+[05/12 11:22:20]     INFO | Skipped post limit: 1
+[05/12 11:22:26]     INFO | Feed interact count: 1
+[05/12 11:22:26]     INFO | Refresh feed..
+[05/12 11:22:49]     INFO | This post hasn't the description...
+[05/12 11:23:05]     INFO | @credem: interact
+[05/12 11:23:07]     INFO | - Total Likes:				OK (0/1)
+[05/12 11:23:08]     INFO | That media is missing content description, so I don't know which kind of video it is.
+[05/12 11:23:09]     INFO | Watching video for 28.63s.
+[05/12 11:23:38]     INFO | Double click on post.
+[05/12 11:23:40]     INFO | Interacted feed bloggers: 1/1
+[05/12 11:23:40]     INFO | Limit reached, finish.
+[05/12 11:23:44]     INFO | [daily-budget] Updated daily totals: follows 0->0, likes 0->1, unfollows 0->0, comments 0->0, pms 0->0.
+[05/12 11:23:44]     INFO | Close Instagram app.
+[05/12 11:23:49]     INFO | -------- FINISH: 11:23:44 - 2026/05/12 --------
+[05/12 11:23:49]     INFO | You completed 1 session(s). 0 session(s) left.
+[05/12 11:23:49]     INFO | You reached the total-sessions limit! Finish.
+[05/12 11:23:49]     INFO | 
+[05/12 11:23:49]     INFO | TOTAL
+[05/12 11:23:49]     INFO | Completed sessions: 1
+[05/12 11:23:49]     INFO | Total duration: 0:02:11
+[05/12 11:23:49]     INFO | Total interactions: (0) 0
+[05/12 11:23:49]     INFO | Successful interactions: (0) 0
+[05/12 11:23:49]     INFO | Total followed: (0) 0
+[05/12 11:23:49]     INFO | Total likes: 1
+[05/12 11:23:49]     INFO | Total comments: 0
+[05/12 11:23:49]     INFO | Total PM sent: 0
+[05/12 11:23:49]     INFO | Total watched: 0
+[05/12 11:23:49]     INFO | Total unfollowed: 0
+[05/12 11:23:49]     INFO | This bot is backed with love by me for free. If you like using it, consider donating to help keep me motivated: https://www.buymeacoffee.com/mastrolube

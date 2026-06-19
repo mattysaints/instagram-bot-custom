@@ -1,0 +1,68 @@
+##############################################################################
+# Simone Bestagno - UNFOLLOW DAY (giorni pari)
+# Sgancia chi non ti ha ri-seguito entro 3 giorni dal follow.
+##############################################################################
+
+username: simonebestagno
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: true
+screen-record: false
+speed-multiplier: 1
+debug: false
+close-apps: false
+disable-block-detection: false
+disable-filters: false
+dont-type: false
+total-crashes-limit: 5
+count-app-crashes: false
+shuffle-jobs: false
+
+action-throttle-enabled: true
+action-throttle-unfollow-min: 25-55
+
+##############################################################################
+# Job: solo unfollow di chi non ha rifollowato
+# 'unfollow-non-followers' usa la lista che il bot ha tracciato in
+# interacted_users.json e sgancia chi non ha ri-seguito.
+#
+# Engagement-protect (#3 di IDEAS): prima di unfolloware un utente, il bot
+# controlla la lista accounts/simonebestagno/engaged_users.json. Se l'utente
+# e' li' dentro -> SKIP unfollow (anche se non ti segue). Use case: clienti
+# che mettono like ai tuoi post ma non ti seguono (account principale vs
+# personal). Per aggiungere utenti a quella lista a mano, basta editare il
+# JSON: { "username": { "source": "manual", "note": "cliente" } }. La
+# whitelist statica (whitelist.txt) continua a funzionare come prima ed e'
+# il filtro hard; engaged_users.json e' la "soft whitelist" dinamica.
+##############################################################################
+
+unfollow-non-followers: 20-30
+sort-followers-newest-to-oldest: false
+# IMPORTANTE: l'unita' di unfollow-delay e' GIORNI (vedi storage.py:124,
+# timedelta(days=...)). Prima era 72 -> 72 GIORNI di attesa = mai
+# sganciato in pratica. Fixato: 3 giorni e' coerente con la strategia
+# "sgancia chi non rifollowa entro 3gg" descritta nello header.
+unfollow-delay: 3                # GIORNI dal follow prima di unfolloware
+
+# Hard caps
+total-unfollows-limit: 75
+daily-unfollows-cap: 70
+
+##############################################################################
+# Filtri minimi: niente serve qui (e' un job di unfollow).
+##############################################################################
+
+##############################################################################
+# Scheduling
+#
+# working-hours COMMENTATO + time-delta: 0 -> il job parte SUBITO appena
+# lanciato, senza attendere finestre orarie ne' jitter iniziale.
+# Per riattivare le finestre orarie, decommentare working-hours e rimettere
+# time-delta a 8-15.
+##############################################################################
+
+# working-hours: [11.00-13.00, 19.00-21.30]
+time-delta: 0
+total-sessions: 1
+

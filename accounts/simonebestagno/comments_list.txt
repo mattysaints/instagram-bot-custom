@@ -1,0 +1,24 @@
+# Fallback per AI comments quando Gemini fallisce (rete, rate-limit, ecc.)
+# Volutamente NEUTRI, NO emoji, NO ! e niente CTA. Il bot pesca random uno
+# di questi. Se Gemini funziona (default), questi vengono usati raramente.
+forte
+bel mood
+contenuto solido
+si vede l'impegno
+roba di valore
+post che fa pensare
+mi piace l'approccio
+bel punto di vista
+condivido in pieno
+ben detto
+spiegato benissimo
+chiaro e diretto
+quotabile
+il messaggio arriva
+piace l'idea di fondo
+bel ritmo nel video
+intuizione interessante
+mi parla questo contenuto
+materia da prendere appunti
+ottima chiave di lettura
+

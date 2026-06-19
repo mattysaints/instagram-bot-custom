@@ -1,0 +1,26 @@
+accounts/simonebestagno/config.yml has been saved last time at 2026-05-12 11:01:04
+[05/12 11:30:33]     INFO | Checking for updates...
+[05/12 11:30:34]     INFO | Bot is updated.
+[05/12 11:30:34]     INFO | GramAddict v.3.2.12
+[05/12 11:30:34]     INFO | Loading plugins . . .
+[05/12 11:30:34]     INFO |   - ActionUnfollowFollowers: Handles the functionality of unfollowing your followers
+[05/12 11:30:34]     INFO |   - ClonedApp: Adds support for cloned apps
+[05/12 11:30:34]     INFO |   - CoreArguments: Simply adds core arguments
+[05/12 11:30:34]     INFO |   - DataAnalytics: Generates a PDF analytics report of current username session data
+[05/12 11:30:34]     INFO |   - DmFollowback: Send a DM to users who followed me back after the bot followed them.
+[05/12 11:30:34]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger
+[05/12 11:30:34]     INFO |   - InteractBloggerFollowers_Following: Handles the functionality of interacting with a bloggers followers/following
+[05/12 11:30:34]     INFO |   - InteractBloggerPostLikers: Handles the functionality of interacting with a blogger post likers
+[05/12 11:30:34]     INFO |   - InteractOwnFeed: Handles the functionality of interacting with your own feed
+[05/12 11:30:34]     INFO |   - InteractHashtagLikers: Handles the functionality of interacting with a hashtags likers
+[05/12 11:30:34]     INFO |   - InteractHashtagPosts: Handles the functionality of interacting with a hashtags post owners
+[05/12 11:30:34]     INFO |   - InteractPlaceLikers: Handles the functionality of interacting with a places likers
+[05/12 11:30:34]     INFO |   - InteractPlacePosts: Handles the functionality of interacting with a places post owners
+[05/12 11:30:34]     INFO |   - LikeFromURLs: Likes a post from url. The urls are read from a plaintext file
+[05/12 11:30:34]     INFO |   - RemoveFollowersFromList: Remove account followers from a list of usernames
+[05/12 11:30:34]     INFO |   - TelegramReports: Generate reports at the end of the session and send them using telegram
+"adb" non Š riconosciuto come comando interno o esterno,
+ un programma eseguibile o un file batch.
+"adb" non Š riconosciuto come comando interno o esterno,
+ un programma eseguibile o un file batch.
+[05/12 11:30:34]    ERROR | Connected devices via adb: 0. Cannot proceed.

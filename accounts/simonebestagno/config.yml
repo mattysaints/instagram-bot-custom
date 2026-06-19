@@ -1,0 +1,285 @@
+##############################################################################
+# Simone Bestagno - Personal Trainer & Coach @ Fiorano Modenese
+# Engagement + nuovi follower: 70% fitness consumer ITA + 30% iperlocale Modena.
+##############################################################################
+
+username: simonebestagno
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: true
+screen-record: false
+speed-multiplier: 1
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: false
+disable-block-detection: false
+disable-filters: false
+dont-type: false
+total-crashes-limit: 5
+count-app-crashes: false
+shuffle-jobs: true
+truncate-sources: 4-8
+
+# Riprende dove ha lasciato: niente piu' loop sugli stessi profili in cima.
+resume-from-last-position: true
+resume-anchor-search-limit: 50
+resume-cooldown-days: 14
+scroll-skip-start: 5-15
+
+# Anti-burst guard (essenziale per la salute dell'account).
+action-throttle-enabled: true
+action-throttle-follow-min: 35-75
+action-throttle-like-min: 12-25
+action-throttle-comment-min: 90-240
+action-throttle-pm-min: 180-360
+
+##############################################################################
+# Sources - Palestre locali Modena/Sassuolo (Simone PT)
+#
+# Strategia: target = utenti che seguono ATTIVAMENTE una palestra in zona
+# Modena/Sassuolo. Sono clienti reali o potenziali clienti di palestra che
+# abitano nei dintorni -> conversione altissima per coaching in presenza
+# o online.
+#
+# Usiamo blogger-followers: il bot apre il profilo di ciascuna palestra,
+# entra nella lista followers e scrolla. I filtri (filters.yml) decidono
+# CHI merita interazione/follow in base a follower count, ratio, # post,
+# bio, ecc.
+#
+# IMPORTANTE - LIMITAZIONI SINTASSI:
+# 1) configargparse usa il DefaultConfigFileParser (parser INI riga-per-riga,
+#    NON YAML). Liste su UNA sola riga in flow-style [a, b, c]. NIENTE
+#    block-style con '-'. NIENTE virgole interne ai valori.
+# 2) NON e' supportato il formato "<nome> <range>" per blogger/hashtag/place
+#    (verrebbe digitato letteralmente nella searchbar).
+##############################################################################
+
+## 🏋️ Pagine palestre / PT / nutrizionisti Emilia (Modena / Sassuolo / Fiorano /
+## Maranello / Baggiovara / Reggio Emilia / Parma). Il bot scrolla i followers
+## di queste pagine. Lista su UNA RIGA SOLA: il parser INI di configargparse
+## NON supporta YAML block / multi-line.
+##
+## Composizione (62 sorgenti totali, ordinate per priorita' di conversione):
+##   1) Palestre core Modena/Sassuolo/Fiorano/Maranello/Baggiovara (catene +
+##      indipendenti + CrossFit + boutique): greentheory_* (5), fitactive_modena,
+##      fitactivesassuolo, newaktivarium, davidlloydmodena, muoviti_fitness,
+##      crossfitteam059, crossfitsassuolo, bodysun_modena, athena_modena,
+##      polisp_morane, all_jolli_sports, palestrametagymmodena, newfitnessmodena,
+##      urbana_centro_fitness, befitclub, gim_five, madonna_di_sotto_gym,
+##      bodygymmaranello.
+##   2) Palestre Reggio Emilia: fitactivereggioemiliatiananmen, edenfitnessre,
+##      edensportesalute.
+##   3) Palestre Parma (zona estesa, conversione minore): fitactive_parma,
+##      upfitnessparma, anytimefitnessparma, supergymparma, essereilfitness,
+##      wellfitparma.
+##   4) Studi PT / boutique locali: lineup_fitnessperformance,
+##      lionheart_trainingstudio, studio3rfit, nextfitmodena, sintesistudiofitness.
+##   5) PT / coach individuali locali: fantonialessandro.coach, dav.modena,
+##      beamber_fitness, biamalaguti_, coach_spezzani, live.4.fit,
+##      albimalaguti, giorgiafitwell, marcogiulianicoach,
+##      latuapersonaltrainer, nicolabalzerano, bodymoodsassuolo,
+##      soniaantolini_, manuelevezzali.
+##   6) Nutrizionisti / PT con audience piu' grande (alcuni non solo locali ->
+##      i filtri di filters.yml devono filtrare bene la geo dalla bio):
+##      nutrizionista_cavallini, menodieta, nutrizionista_cristinaspotti,
+##      nutrizionistaparma, nicolamalpighi, stefanobemasc, fede_nica,
+##      giuliaaltemani, filippozondini, lucaanzano (200k),
+##      nutrizionista.rachelelaforesta (44k).
+##
+## NOTA blacklist: gli account "_coach", "_trainer", studi PT, nutrizionisti
+## sono SORGENTI ottime (i loro followers = nostri clienti potenziali) ma i
+## loro PROFILI stessi vanno blacklistati in filters.yml (parole 'coach',
+## 'trainer', 'palestra', 'nutrizion', 'dietist' fanno skip). Cosi' scrolliamo
+## la loro audience ma non li seguiamo/commentiamo mai per errore.
+##
+## NOTA mcfit_it: ESCLUSO volutamente. E' catena nazionale -> follower
+## prevalentemente NON locali Emilia -> diluisce il targeting iperlocale.
+##
+## ATTENZIONE typo: 'fitactivereggioemiliatiananmen' (Tiananmen non Tienanmen).
+## Verificare l'handle reale su IG prima del primo run.
+blogger-followers: [greentheory_modena_est, greentheory_modena_centro, greentheory_sassuolo_modena, greentheory_modena_ovest, greentheory_baggiovara_modena, fitactive_modena, fitactivesassuolo, newaktivarium, davidlloydmodena, muoviti_fitness, crossfitteam059, crossfitsassuolo, bodysun_modena, athena_modena, polisp_morane, all_jolli_sports, palestrametagymmodena, newfitnessmodena, urbana_centro_fitness, befitclub, gim_five, madonna_di_sotto_gym, bodygymmaranello, fitactivereggioemiliatiananmen, edenfitnessre, edensportesalute, fitactive_parma, upfitnessparma, anytimefitnessparma, supergymparma, essereilfitness, wellfitparma, lineup_fitnessperformance, lionheart_trainingstudio, studio3rfit, nextfitmodena, sintesistudiofitness, fantonialessandro.coach, dav.modena, beamber_fitness, biamalaguti_, coach_spezzani, live.4.fit, albimalaguti, giorgiafitwell, marcogiulianicoach, latuapersonaltrainer, nicolabalzerano, bodymoodsassuolo, soniaantolini_, manuelevezzali, nutrizionista_cavallini, menodieta, nutrizionista_cristinaspotti, nutrizionistaparma, nicolamalpighi, stefanobemasc, fede_nica, giuliaaltemani, filippozondini, lucaanzano, nutrizionista.rachelelaforesta]
+
+watch-video-time: 12-28
+# Foto: lette velocemente (2-4s) per accelerare la sessione e arrivare
+# a piu' utenti per ora. Vid/reel restano piu' "umani" (12-28s).
+watch-photo-time: 2-4
+can-reinteract-after: 720
+delete-interacted-users: false
+
+##############################################################################
+# Actions per utente
+#
+# Regola richiesta: per ogni utente NUOVO che passa i filtri di filters.yml
+# (skip_follower + skip_following in filters.yml escludono gia' chi ti segue
+# e chi tu segui -> nessuna re-interazione):
+#   - 3 like su 3 post (sempre)
+#   - ~35% follow (in base a follow-percentage)
+#   - ~30% commento AI (NON ogni utente, solo "a volte")
+#
+# Semantica GramAddict (NON intuitiva):
+#   - interactions-count = quanti UTENTI processare per sorgente (palestra),
+#                          NON like per utente
+#   - likes-count        = quanti like dare a ciascun utente (sui suoi post)
+#   - *-percentage       = probabilita' di compiere l'azione
+##############################################################################
+
+# Quanti utenti tentare per ogni palestra (sorgente). 8 palestre x 12-18 ~ 100-144
+# tentativi totali; dopo i filtri ne resteranno meno, e il limite di sessione
+# (total-*-limit sotto) tagliera' comunque. Alzato (era 6-10) dopo aver visto
+# che la sessione del 12/05 si chiudeva su total-interactions-limit con solo
+# 2 successful interactions su 167 visite -> serve piu' "carburante" per palestra.
+interactions-count: 12-18
+
+# 3 like a ciascun utente meritevole (sui suoi post recenti).
+likes-count: 3
+likes-percentage: 100
+
+# Stories disattivate per ora (focus su like + commento).
+stories-count: 0
+stories-percentage: 0
+
+# Caroselli: guardiamo 1-2 foto interne per dare segnale di engagement "umano".
+carousel-count: 1-2
+carousel-percentage: 50-65
+
+# Interagisci con TUTTI gli utenti che superano i filtri (no skip random).
+interact-percentage: 100
+
+# Follow ~45-50% degli utenti meritevoli (chi ha ratio buono / bio coerente).
+# Alzato (era 35) perche' il follow e' l'azione che converte di piu' in
+# assoluto: l'utente riceve la notifica push "X ha iniziato a seguirti" e
+# nella maggioranza dei casi va a vedere il profilo. Il range 45-50 viene
+# campionato a ciascun utente (non e' un fisso), aggiungendo "rumore" che
+# rende il pattern meno regolare agli occhi di IG.
+# I criteri "ratio, min post" sono in filters.yml -> qui e' solo la
+# probabilita' AGGIUNTIVA di seguire chi gia' ha superato i filtri.
+follow-percentage: 60-70
+# Max 30 follow per sorgente (palestra). Alzato 2026-05-14 da 25.
+follow-limit: 30
+
+# Commento AI: ~30% degli utenti meritevoli (1 ogni ~3 utenti, non sempre).
+# Massimo 1 commento per utente quando capita.
+comment-percentage: 30
+max-comments-pro-user: 1
+
+# DM follow-back DISATTIVATO (richiesta utente 2026-05-12).
+# Tutto il job rimosso: il bot non invia piu' alcun DM automatico a chi
+# ti ri-segue. Per riattivare, decommentare le 4 righe sotto e rimettere
+# ai-dm-enabled: true piu' giu', total-pm-limit/daily-pm-cap > 0.
+# dm-followback: 3-5
+# dm-followback-min-hours: 4
+# dm-followback-max-days: 5
+# dm-followback-skipped-list-limit: 100
+
+skipped-list-limit: 15-25
+skipped-posts-limit: 5
+fling-when-skipped: 0
+min-following: 30
+
+##############################################################################
+# Total Limits per sessione (hard cap)
+#
+# Calibrati per "3 like sempre + commento al 30% + follow al 45-50%" per utente:
+#   target = 25-40 utenti meritevoli per sessione
+#   -> like:     25-40 * 3       = 75-120  (limit 120-150 alzato per margine)
+#   -> comments: 25-40 * 0.30    = 7-12    (limit 8-12)
+#   -> follow:   25-40 * 0.475   = 12-19   (limit 12-18 -> potrebbe saturare)
+##############################################################################
+
+# Like piu' alti: con filtri "soft" e piu' utenti meritevoli, serve cap
+# generoso (alzato da 90-120 a 120-150).
+total-likes-limit: 150-190
+total-follows-limit: 18-25
+total-watches-limit: 30-50
+total-successful-interactions-limit: 25-40
+# I "tentativi" includono profili scartati dai filtri -> molto piu' alto del
+# numero di utenti che riceveranno azioni. Con tasso filtri ~1-2% osservato
+# (sessione 12/05: 2 successful su 167) serve un cap generoso per non chiudere
+# la sessione prima del tempo. Alzato da 120-180 a 200-280.
+total-interactions-limit: 200-280
+total-comments-limit: 8-12
+# DM disattivati -> hard cap 0 (defense in depth oltre al job rimosso sopra).
+total-pm-limit: 0
+# NON impostare total-scraped-limit: 0 -> chiude la sessione subito perche'
+# sum(scraped) >= 0 e' sempre vero. Lasciare il default (200) o un valore alto.
+total-scraped-limit: 200
+
+##############################################################################
+# Daily Budget (persistente tra restart). Calibrati su strategia palestre con
+# commento AI al 30%: 1-2 sessioni/giorno -> ~15-25 commenti/giorno totali,
+# valore molto sicuro per IG su account warm.
+##############################################################################
+
+daily-follows-cap: 90
+daily-likes-cap: 300
+daily-unfollows-cap: 60
+daily-comments-cap: 25
+# DM disattivati -> daily cap 0 (richiesta utente 2026-05-12).
+daily-pm-cap: 0
+
+# Modulatore daily-cap per giorno della settimana (#9 di IDEAS).
+# Strategia: weekend = bot piu' calmo (meno traffico organico IG = bot
+# piu' visibile -> piu' rischio audit). Picco Mar-Gio (giorni di massimo
+# traffico organico). I valori sono moltiplicatori applicati a TUTTI i
+# daily-*-cap sopra. Esempio: martedi' -> follows_cap effettivo = 70*1.15 = 80.
+# Format: "mon:X,tue:X,wed:X,thu:X,fri:X,sat:X,sun:X" tutto su una riga.
+# Range valido per ogni valore: 0.1 .. 3.0 (clamp). Lasciare stringa
+# vuota per disattivare e usare i caps base 7/7.
+daily-caps-weekday-multiplier: mon:1.0,tue:1.15,wed:1.15,thu:1.15,fri:0.9,sat:0.55,sun:0.5
+
+##############################################################################
+# AI Comments (Gemini). Key letta da .env.local (GEMINI_API_KEY).
+##############################################################################
+
+ai-comments-enabled: true
+ai-comments-model: gemini-2.5-flash-lite
+ai-comments-language: Italian
+# IMPORTANTE: configargparse non supporta YAML multi-line (>, |): le righe
+# successive verrebbero interpretate come chiavi separate. Tenere il prompt
+# su una sola riga, tra virgolette doppie.
+ai-comments-prompt-hint: "L'autore del commento e' un personal trainer / coach in zona Modena (Fiorano Modenese / Sassuolo / Baggiovara). Sta commentando il post di una persona che segue una palestra locale (probabilmente si allena gia' o sta iniziando). Tono colloquiale peer-to-peer come un altro membro della palestra. Mai venditore. Niente menzioni di coaching/PT/programmi. Niente CTA niente link. Solo un commento empatico e specifico al contenuto del post (allenamento foto progressi cibo motivazione). Massimo 1-2 frasi brevi naturali."
+
+##############################################################################
+# AI Direct Messages (DM follow-back) - DISATTIVATO.
+# Tenuto qui solo per riferimento futuro: per riattivare, rimettere
+# ai-dm-enabled: true e ripristinare anche il job dm-followback piu' sopra
+# e i pm-limit (total/daily).
+##############################################################################
+
+ai-dm-enabled: false
+ai-dm-model: gemini-2.5-flash
+ai-dm-language: Italian
+ai-dm-allow-emoji: true
+ai-dm-fetch-bio: false
+ai-dm-fallback-to-file: true
+ai-dm-prompt-hint: "Sono Simone personal trainer e coach. Sto scrivendo a una persona che mi ha appena ri-seguito su Instagram. Voglio SOLO rompere il ghiaccio con un saluto caldo e UNA domanda generica sul suo mondo fitness alternando in modo casuale tra: (a) cosa ti aspetteresti di vedere sul mio profilo? (b) cosa ti piacerebbe vedere piu' spesso allenamenti alimentazione motivazione mindset? (c) su cosa stai lavorando in palestra o a casa in questo periodo? (d) qual e' la cosa che ti costa di piu' nel restare costante? (e) c'e' un argomento fitness su cui vorresti piu' chiarezza? Scegline UNA sola in modo casuale e rendila colloquiale. NIENTE menzioni di coaching NIENTE prezzi NIENTE proposte di collaborazione NIENTE link NIENTE CTA. Massimo 2-3 frasi brevi. Il messaggio deve sembrare scritto di getto da un essere umano non un template."
+
+##############################################################################
+# Ending Session Conditions
+##############################################################################
+
+end-if-likes-limit-reached: false
+end-if-follows-limit-reached: true
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+##############################################################################
+# Scheduling
+#
+# working-hours e' COMMENTATO -> il bot parte SUBITO appena lo lanci, senza
+# aspettare nessuna finestra oraria. Se in futuro vuoi rimettere fasce orarie
+# riattivare la riga e usare il formato [HH.MM-HH.MM, HH.MM-HH.MM].
+#
+# 5 sessioni consecutive per run, con pausa 45-90 min tra una sessione e
+# l'altra (simula uso umano: piu' "scrollate" durante la giornata anziche'
+# 1 super-sessione lunga). Per arrivare ai cap daily piu' alti (70 follow,
+# 250 like) serve appunto distribuire l'attivita' su piu' sessioni brevi.
+##############################################################################
+
+# working-hours: [10.15-12.30, 18.30-22.15]
+time-delta: 0
+repeat: 45-90
+total-sessions: 5

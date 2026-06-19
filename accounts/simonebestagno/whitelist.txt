@@ -1,0 +1,6 @@
+# Whitelist: utenti che il bot NON deve mai sganciare/seguire/dm-are.
+# Uno per riga, senza @. Esempi:
+# tuo_socio_pt
+# tua_compagna
+# tuo_account_business
+

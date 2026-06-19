@@ -1,0 +1,3 @@
+# Blacklist: utenti che il bot NON deve mai toccare (no follow, no like, no DM).
+# Uno per riga, senza @. Utile contro account fake/spam ricorrenti.
+
