@@ -9,7 +9,7 @@ from GramAddict import __tested_ig_version__
 from GramAddict.core.config import Config
 from GramAddict.core.daily_budget import DailyBudget
 from GramAddict.core.action_throttler import init_throttler
-from GramAddict.core.device_facade import create_device, get_device_info
+from GramAddict.core.device_facade import DeviceFacade, create_device, get_device_info
 from GramAddict.core.filter import Filter
 from GramAddict.core.filter import load_config as load_filter
 from GramAddict.core.interaction import load_config as load_interaction
@@ -52,6 +52,34 @@ from GramAddict.core.utils import (
 )
 from GramAddict.core.views import AccountView, ProfileView, TabBarView, UniversalActions
 from GramAddict.core.views import load_config as load_views
+
+
+def _ensure_ig_foreground(device, max_attempts: int = 4) -> bool:
+    """Garantisce che Instagram sia in foreground prima di toccarne la UI.
+
+    open_instagram() ritorna quando IG e' su, ma tra quel momento e la prima
+    find() un transitorio (il BACK di close_keyboard, un popup di sistema, un
+    flash del launcher su emulatore lento) puo' togliere IG dal foreground.
+    La find() successiva solleverebbe AppHasCrashed e, all'avvio, ucciderebbe
+    l'intero bot. Verifichiamo il package corrente e riapriamo IG se e' caduto.
+    """
+    logger = logging.getLogger(__name__)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if device._ig_is_opened():
+                return True
+        except Exception as e:
+            logger.debug(f"_ensure_ig_foreground: controllo foreground fallito: {e}")
+        logger.warning(
+            f"Instagram non e' in foreground. Riapertura... "
+            f"({attempt}/{max_attempts})"
+        )
+        if not open_instagram(device):
+            sleep(3)
+    try:
+        return device._ig_is_opened()
+    except Exception:
+        return False
 
 
 def start_bot(**kwargs):
@@ -178,20 +206,34 @@ def start_bot(**kwargs):
             UniversalActions.close_keyboard(device)
         else:
             break
-        profile_view = ProfileView(device)
-        account_view = AccountView(device)
-        tab_bar_view = TabBarView(device)
         # Retry transitorio: dopo un downgrade APK / primo cold-start, IG
         # puo' perdere il foreground per qualche secondo (popup di sistema,
-        # init dei moduli, dialog "what's new"). Il decorator
-        # @check_if_ig_is_opened solleva subito AppHasCrashed -> il bot
-        # uscirebbe alla prima sessione senza fare nulla. Riproviamo fino
-        # a 3 volte chiudendo/riaprendo IG prima di abbandonare.
+        # init dei moduli, dialog "what's new", il BACK di close_keyboard).
+        # Il decorator @check_if_ig_is_opened solleva subito AppHasCrashed ->
+        # il bot uscirebbe alla prima sessione senza fare nulla. Riproviamo
+        # fino a 3 volte chiudendo/riaprendo IG prima di abbandonare.
         init_attempts = 3
         init_ok = False
         last_init_error = None
         for init_try in range(1, init_attempts + 1):
             try:
+                # Le view vanno costruite QUI dentro: il loro __init__ chiama
+                # find() (es. ProfileView -> _getActionBar), che se IG non e'
+                # in foreground solleva AppHasCrashed. Prima ci assicuriamo che
+                # IG sia su (riaprendolo se e' caduto), poi creiamo le view nel
+                # try cosi' un transitorio viene recuperato dall'except sotto
+                # (close+reopen IG + retry) invece di uccidere il processo.
+                if not _ensure_ig_foreground(device):
+                    logger.error(
+                        "Instagram non resta in foreground all'avvio; "
+                        "nuovo tentativo tra poco..."
+                    )
+                    raise DeviceFacade.AppHasCrashed(
+                        "Instagram non in foreground all'avvio"
+                    )
+                profile_view = ProfileView(device)
+                account_view = AccountView(device)
+                tab_bar_view = TabBarView(device)
                 account_view.navigate_to_main_account()
                 check_if_english(device)
                 if configs.args.username is not None:
