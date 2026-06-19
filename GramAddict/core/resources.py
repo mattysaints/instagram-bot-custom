@@ -188,6 +188,10 @@ class ResourceID:
         )
         self.TAB_AVATAR = f"{APP_ID}:id/tab_avatar"
         self.TAB_BAR = f"{APP_ID}:id/tab_bar"
+        # Per-tab button resource-id: stabile e indipendente da locale / A-B
+        # layout, a differenza della content-description ("Profile") usata come
+        # matcher primario, che cambia tra le build di IG (es. 278 vs 300).
+        self.PROFILE_TAB = f"{APP_ID}:id/profile_tab"
         self.TAB_BUTTON_NAME_TEXT = f"{APP_ID}:id/tab_button_name_text"
         self.TAB_BUTTON_FALLBACK_ICON = f"{APP_ID}:id/tab_button_fallback_icon"
         self.TIMER = f"{APP_ID}:id/timer"
