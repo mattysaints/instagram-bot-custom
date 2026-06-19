@@ -2048,26 +2048,57 @@ class ProfileView(ActionBarView):
         found = False
         buttons = self.device.find(className=ResourceID.BUTTON)
         for button in buttons:
-            if button.get_desc() == "Profile":
+            desc = button.get_desc() or ""
+            # Match allentato: su alcune build IG la desc e' "Profile", su
+            # altre "Profile photo" / localizzata. Confronto case-insensitive
+            # con "profile" come sottostringa invece dell'uguaglianza esatta.
+            if "profile" in desc.casefold():
                 button.click()
                 found = True
         return found
 
     def _old_ui_profile_button(self) -> bool:
         found = False
-        obj = self.device.find(resourceIdMatches=ResourceID.TAB_AVATAR)
+        # tab_avatar (UI vecchia) oppure profile_tab (UI nuova, IG 300.x):
+        # entrambi sono resource-id stabili e indipendenti dalla locale.
+        obj = self.device.find(
+            resourceIdMatches=case_insensitive_re(
+                f"{ResourceID.TAB_AVATAR}|{ResourceID.PROFILE_TAB}"
+            )
+        )
         if obj.exists(Timeout.MEDIUM):
             obj.click()
             found = True
         return found
 
     def click_on_avatar(self):
-        while True:
+        # Limita i BACK: se il pulsante profilo non viene trovato, premere
+        # BACK all'infinito finisce per portare IG in background (e la find()
+        # successiva, protetta da @check_if_ig_is_opened, solleva AppHasCrashed
+        # uccidendo il bot all'avvio). Proviamo i vari matcher, premiamo BACK
+        # solo finche' IG resta in foreground e per un numero limitato di volte.
+        max_back = 4
+        for _ in range(max_back + 1):
             if self._new_ui_profile_button():
-                break
+                return
             if self._old_ui_profile_button():
-                break
+                return
+            try:
+                ig_opened = self.device._ig_is_opened()
+            except Exception:
+                ig_opened = True  # nel dubbio non assumiamo che sia chiuso
+            if not ig_opened:
+                logger.warning(
+                    "Instagram non e' piu' in foreground durante "
+                    "click_on_avatar(); interrompo i BACK per non farlo "
+                    "uscire del tutto."
+                )
+                return
             self.device.back()
+        logger.error(
+            "Impossibile trovare il pulsante del profilo nella tab bar "
+            "dopo vari tentativi."
+        )
 
     def getFollowButton(self):
         button_regex = f"{ClassName.BUTTON}|{ClassName.TEXT_VIEW}"
