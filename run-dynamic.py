@@ -31,6 +31,16 @@ import time
 from pathlib import Path
 from typing import Optional
 
+# Forza UTF-8 su stdout/stderr PRIMA che colorama (importato da GramAddict)
+# avvolga lo stream: lo script stampa emoji (ℹ️ ✅ 🚀 ⏳) e su Windows la
+# console di default e' cp1252 -> UnicodeEncodeError che fa crashare il lancio.
+# reconfigure e' un no-op innocuo se lo stream e' gia' utf-8.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import GramAddict  # noqa: F401  # bootstrap runtime env for IDE launches
 
 DEFAULT_CONFIG = "accounts/simonebestagno/config.yml"

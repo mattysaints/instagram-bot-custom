@@ -33,3 +33,5 @@ apk_cache/
 ui_*.xml
 ui_profile_ids.txt
 crashes
+
+.venv/
