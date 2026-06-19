@@ -54,16 +54,22 @@ from GramAddict.core.views import AccountView, ProfileView, TabBarView, Universa
 from GramAddict.core.views import load_config as load_views
 
 
-def _ensure_ig_foreground(device, max_attempts: int = 4) -> bool:
+def _ensure_ig_foreground(device, max_attempts: int = 5) -> bool:
     """Garantisce che Instagram sia in foreground prima di toccarne la UI.
 
-    open_instagram() ritorna quando IG e' su, ma tra quel momento e la prima
-    find() un transitorio (il BACK di close_keyboard, un popup di sistema, un
-    flash del launcher su emulatore lento) puo' togliere IG dal foreground.
-    La find() successiva solleverebbe AppHasCrashed e, all'avvio, ucciderebbe
-    l'intero bot. Verifichiamo il package corrente e riapriamo IG se e' caduto.
+    open_instagram() ritorna quando IG e' su, ma poi imposta FastInputIME come
+    tastiera di default: il cambio di input method ruba il foreground a IG
+    (app_current torna com.github.uiautomator) per un istante. Anche un BACK di
+    close_keyboard o un popup di sistema possono farlo cadere. La find()
+    successiva solleverebbe AppHasCrashed e, all'avvio, ucciderebbe il bot.
+
+    Qui riportiamo IG davanti con un semplice app_start, SENZA richiamare
+    open_instagram(): quella reimposterebbe di nuovo l'IME rubando ancora il
+    foreground e creando un ciclo (1/4, 2/4, ...). L'IME e' gia' stato
+    impostato dal primo open_instagram, non serve rifarlo.
     """
     logger = logging.getLogger(__name__)
+    app_id = device.app_id
     for attempt in range(1, max_attempts + 1):
         try:
             if device._ig_is_opened():
@@ -71,11 +77,14 @@ def _ensure_ig_foreground(device, max_attempts: int = 4) -> bool:
         except Exception as e:
             logger.debug(f"_ensure_ig_foreground: controllo foreground fallito: {e}")
         logger.warning(
-            f"Instagram non e' in foreground. Riapertura... "
+            f"Instagram non e' in foreground. Lo riporto davanti... "
             f"({attempt}/{max_attempts})"
         )
-        if not open_instagram(device):
-            sleep(3)
+        try:
+            device.deviceV2.app_start(app_id, use_monkey=True)
+        except Exception as e:
+            logger.debug(f"_ensure_ig_foreground: app_start fallito: {e}")
+        sleep(2)
     try:
         return device._ig_is_opened()
     except Exception:
