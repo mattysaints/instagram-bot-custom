@@ -159,6 +159,16 @@ follow-percentage: 60-70
 # Max 30 follow per sorgente (palestra). Alzato 2026-05-14 da 25.
 follow-limit: 30
 
+# WARM-FOLLOW (2026-06-19): segui un utente SOLO se in questa interazione gli
+# hai dato engagement reale (almeno 1 tra like/commento/storia/PM). Un follow
+# "caldo" (preceduto da like) viene ricambiato molto piu' spesso di un follow
+# "freddo". Prima il bot poteva seguire anche quando il like falliva (post gia'
+# likato / errore media) -> follow a vuoto che non torna. follow-min-engagement
+# = 1 significa "basta 1 like dato". I profili privati/vuoti NON sono toccati da
+# questo gate (sono gestiti prima, da follow_private_or_empty in filters.yml).
+follow-only-if-engaged: true
+follow-min-engagement: 1
+
 # Commento AI: ~30% degli utenti meritevoli (1 ogni ~3 utenti, non sempre).
 # Massimo 1 commento per utente quando capita.
 comment-percentage: 30

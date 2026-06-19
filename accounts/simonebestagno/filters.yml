@@ -7,6 +7,19 @@
 # Tutti gli altri comment_* sono OFF perche' non usiamo quei job.
 ##############################################################################
 
+## Pre-filtri USERNAME (2026-06-19) - valutati PRIMA di aprire il profilo
+## (risparmiano 3-5s per ogni scarto: niente nav + back). Pensati per essere
+## ad ALTA precisione, cioe' niente falsi positivi su utenti italiani reali:
+##   - patterns: solo handle palesemente spam (official/shop/crypto/forex/
+##     onlyfans/bot). re.search case-insensitive.
+##   - digit-ratio 0.45: scarta username con >45% cifre (es. user12345678).
+##     "mario95"/"giulia2000" passano (ratio < 0.45), restano i lead reali.
+##   - longer_than 25: gli handle IG arrivano a 30 char; >25 e' quasi sempre
+##     spam/auto-generato.
+skip_username_patterns: [".*_official$", ".*\\.shop$", "^crypto", "forex", "onlyfans", ".*_bot$"]
+skip_username_digit_ratio_above: 0.45
+skip_username_longer_than: 25
+
 ## Tipo profilo
 skip_if_private: true       # SKIP totale dei profili privati (no like/commento/follow)
 skip_if_public: false
@@ -50,6 +63,14 @@ max_potency_ratio: 15
 # Minimo 3 post: basta poco per confermare che il profilo non e' un fake.
 min_posts: 3
 mutual_friends: -1
+
+# ULTIMO POST max 45 giorni (2026-06-19): interagisci SOLO con utenti ATTIVI.
+# Chi non posta da mesi e' meno presente su IG -> vede meno la notifica di
+# follow e ricambia meno. NB: fail-open -> se la tua versione IG non espone la
+# data del primo post nella content-description (es. IG 300), il filtro NON
+# scatta e semplicemente non taglia nessuno (innocuo). Per verificare se sta
+# lavorando, cerca nei log la riga "most recent post is X day(s) old ... skip".
+last_post_max_age_days: 45
 
 ## Filtri su biografia (CRITICI per escludere PT/palestre)
 # Se trovate UNA di queste parole nella bio o nel nome -> SKIP.
