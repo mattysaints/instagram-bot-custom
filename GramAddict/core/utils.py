@@ -720,6 +720,21 @@ def sample_sources(sources, n_sources, storage=None, job_name=None):
     """
     from random import sample
 
+    # Drop quarantined dead sources (accounts that failed IG search N times in
+    # a row) so we don't waste ~30s re-attempting them every session. Guard:
+    # never let this empty the list — if every source is quarantined, fall back
+    # to the full list rather than stalling the job.
+    _qstats = getattr(storage, "source_stats", None) if storage is not None else None
+    if _qstats is not None and job_name:
+        alive = [s for s in sources if not _qstats.is_quarantined(job_name, s)]
+        skipped = len(sources) - len(alive)
+        if skipped and alive:
+            logger.info(
+                f"[source-stats] {skipped} sorgente/i in quarantena (dead) "
+                f"saltate per {job_name}."
+            )
+            sources = alive
+
     sources_limit_input = n_sources.split("-")
     if len(sources_limit_input) > 1:
         sources_limit = randint(

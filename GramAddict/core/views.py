@@ -563,7 +563,9 @@ class SearchView:
         _adb("input", "keyevent", "67")  # KEYCODE_DEL
         sleep(0.4)
 
-    def navigate_to_target(self, target: str, job: str) -> bool:
+    def navigate_to_target(
+        self, target: str, job: str, source_has_history: bool = False
+    ) -> bool:
         target = emoji.emojize(target, use_aliases=True)
         logger.info(f"Navigate to {target}")
         search_edit_text = self._getSearchEditText()
@@ -624,6 +626,20 @@ class SearchView:
             )
         except Exception as e:
             logger.debug(f"navigate_to_target: could not enumerate rows: {e}")
+        # Slow-vs-dead: a source we've followed from before is real and just
+        # slow to load (IG search still showing shimmer). Give it ONE longer
+        # wait + recheck before giving up, instead of treating it like a dead
+        # account. Unknown / never-followed sources skip this and fail fast,
+        # so dead ones reach the quarantine threshold quickly.
+        if source_has_history:
+            logger.info(
+                f"🔍 {target!r} ha storico ma 0 risultati: probabile caricamento "
+                f"lento, attendo e riprovo una volta."
+            )
+            random_sleep(5, 8, modulable=False)
+            if self._check_current_view(target, job):
+                logger.info(f"{target} is in top view (dopo attesa lunga).")
+                return True
         # Even more diagnostics: read what the EditText actually contains so we
         # know whether typing hit the right widget at all.
         try:

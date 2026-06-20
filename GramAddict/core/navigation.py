@@ -32,7 +32,7 @@ def check_if_english(device):
     return ProfileView(device, is_own_profile=True)
 
 
-def nav_to_blogger(device, username, current_job):
+def nav_to_blogger(device, username, current_job, source_has_history=False):
     """navigate to blogger (followers list or posts).
 
     Returns:
@@ -58,7 +58,9 @@ def nav_to_blogger(device, username, current_job):
             profile_view.navigateToFollowing()
     else:
         search_view = TabBarView(device).navigateToSearch()
-        if not search_view.navigate_to_target(username, current_job):
+        if not search_view.navigate_to_target(
+            username, current_job, source_has_history=source_has_history
+        ):
             return False, None
 
         profile_view = ProfileView(device, is_own_profile=False)
@@ -85,11 +87,13 @@ def nav_to_blogger(device, username, current_job):
     return True, target_followers_count
 
 
-def nav_to_hashtag_or_place(device, target, current_job):
+def nav_to_hashtag_or_place(device, target, current_job, source_has_history=False):
     """navigate to hashtag/place/feed list"""
     logger.info(f"🔎 nav_to_hashtag_or_place: target={target!r} job={current_job!r}")
     search_view = TabBarView(device).navigateToSearch()
-    if not search_view.navigate_to_target(target, current_job):
+    if not search_view.navigate_to_target(
+        target, current_job, source_has_history=source_has_history
+    ):
         logger.warning(f"🔎 navigate_to_target fallita per {target!r} — hashtag/place saltato.")
         return False
 

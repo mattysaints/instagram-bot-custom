@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from atomicwrites import atomic_write
@@ -42,6 +42,13 @@ logger = logging.getLogger(__name__)
 
 FILENAME = "source_stats.json"
 SCHEMA_VERSION = 1
+
+# Dead-source quarantine: after this many consecutive navigation/search
+# failures (the source never resolves in IG search -> deleted/renamed/typo'd
+# account, or a fake one), stop sampling it for QUARANTINE_DAYS so it can't
+# keep wasting ~30s per session. A single successful navigation resets it.
+NAV_FAIL_THRESHOLD = 3
+QUARANTINE_DAYS = 7
 
 
 def _key(job: str, source: str) -> str:
@@ -152,6 +159,58 @@ class SourceStats:
     def follows_done(self, job: str, source: str) -> int:
         e = self._data.get("sources", {}).get(_key(job, source))
         return int(e.get("follows_done", 0)) if e else 0
+
+    # -- Dead-source quarantine -----------------------------------------------
+    def register_nav_failure(
+        self,
+        job: str,
+        source: str,
+        threshold: int = NAV_FAIL_THRESHOLD,
+        quarantine_days: int = QUARANTINE_DAYS,
+    ) -> bool:
+        """Record that navigation/search to this source returned nothing.
+
+        After ``threshold`` consecutive failures the source is quarantined for
+        ``quarantine_days`` (so ``is_quarantined`` returns True and the sampler
+        skips it). Returns True if THIS call tripped the quarantine.
+        """
+        if not job or not source:
+            return False
+        e = self._entry(job, source)
+        e["nav_failures"] = int(e.get("nav_failures", 0)) + 1
+        e["last_nav_failure_at"] = datetime.now().isoformat(timespec="seconds")
+        tripped = False
+        if e["nav_failures"] >= threshold:
+            until = datetime.now() + timedelta(days=quarantine_days)
+            e["quarantined_until"] = until.isoformat(timespec="seconds")
+            tripped = True
+        self._save()
+        return tripped
+
+    def register_nav_success(self, job: str, source: str) -> None:
+        """Reset the failure counter / lift quarantine after a good navigation.
+        Only writes if there was state to clear (avoids pointless disk churn)."""
+        if not job or not source:
+            return
+        e = self._data.get("sources", {}).get(_key(job, source))
+        if not e:
+            return
+        if e.get("nav_failures") or e.get("quarantined_until"):
+            e["nav_failures"] = 0
+            e["quarantined_until"] = None
+            self._save()
+
+    def is_quarantined(self, job: str, source: str) -> bool:
+        e = self._data.get("sources", {}).get(_key(job, source))
+        if not e:
+            return False
+        ts = e.get("quarantined_until")
+        if not ts:
+            return False
+        try:
+            return datetime.fromisoformat(ts) > datetime.now()
+        except (ValueError, TypeError):
+            return False
 
     # -- Weighting helpers ----------------------------------------------------
     def weight(

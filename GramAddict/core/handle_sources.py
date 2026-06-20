@@ -38,6 +38,28 @@ from GramAddict.core.views import (
 logger = logging.getLogger(__name__)
 
 
+def _record_nav_result(storage, job, source, ok: bool) -> None:
+    """Feed the dead-source quarantine: on a failed navigation bump the
+    failure counter (and quarantine after N in a row), on success reset it.
+    Best-effort — never let stats bookkeeping break the run."""
+    stats = getattr(storage, "source_stats", None)
+    if stats is None or not job or not source:
+        return
+    try:
+        if ok:
+            stats.register_nav_success(job, source)
+        else:
+            tripped = stats.register_nav_failure(job, source)
+            if tripped:
+                logger.warning(
+                    f"[source-stats] '{source}' messo in QUARANTENA "
+                    f"(troppe ricerche a vuoto): non verra' piu' campionato per "
+                    f"qualche giorno. Rimuovilo dal config se e' un account morto."
+                )
+    except Exception as e:
+        logger.debug(f"[source-stats] _record_nav_result failed: {e}")
+
+
 def _get_scroll_skip_start(args, label: str) -> int:
     """Read --scroll-skip-start from args and resolve to an int (supports ranges).
 
@@ -430,12 +452,18 @@ def handle_likers(
     interaction,
     is_follow_limit_reached,
 ):
-    if (
-        current_job == "blogger-post-likers"
-        and not nav_to_post_likers(device, target, session_state.my_username)
-        or current_job != "blogger-post-likers"
-        and not nav_to_hashtag_or_place(device, target, current_job)
-    ):
+    _stats = getattr(storage, "source_stats", None)
+    has_history = bool(
+        _stats is not None and _stats.follows_done(current_job, target) > 0
+    )
+    if current_job == "blogger-post-likers":
+        nav_ok = nav_to_post_likers(device, target, session_state.my_username)
+    else:
+        nav_ok = nav_to_hashtag_or_place(
+            device, target, current_job, source_has_history=has_history
+        )
+    _record_nav_result(storage, current_job, target, ok=nav_ok)
+    if not nav_ok:
         logger.warning(f"⛔ handle_likers: navigazione fallita per {target!r} ({current_job}). Sorgente saltata.")
         return False
     logger.info(f"📋 handle_likers: inizio scansione likers di {target!r} ({current_job})")
@@ -940,7 +968,19 @@ def handle_followers(
     profile_filter=None,
 ):
     is_myself = username == session_state.my_username
-    nav_ok, target_followers_count = nav_to_blogger(device, username, current_job)
+    # A source with follow history is real (just slow to load in search); give
+    # it a longer retry instead of failing fast. done==0/unknown -> fail fast.
+    _stats = getattr(storage, "source_stats", None)
+    has_history = bool(
+        _stats is not None
+        and not is_myself
+        and _stats.follows_done(current_job, username) > 0
+    )
+    nav_ok, target_followers_count = nav_to_blogger(
+        device, username, current_job, source_has_history=has_history
+    )
+    if not is_myself:
+        _record_nav_result(storage, current_job, username, ok=nav_ok)
     if not nav_ok:
         return
 
