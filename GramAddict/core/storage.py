@@ -4,11 +4,49 @@ import os
 import sys
 from datetime import datetime, timedelta
 from enum import Enum, unique
+from time import sleep
 from typing import Optional, Union
 
 from atomicwrites import atomic_write
 
 logger = logging.getLogger(__name__)
+
+
+def _resilient_write(path: str, payload: str, tries: int = 4) -> bool:
+    """Persist ``payload`` to ``path`` without ever crashing the bot.
+
+    ``atomic_write`` on Windows intermittently fails the final rename with
+    ``PermissionError: [WinError 5] Access denied`` when an antivirus / sync
+    client (OneDrive, Dropbox, Defender) momentarily locks the target file
+    (more likely on big files like interacted_users.json). Letting it bubble up
+    crashed the whole session and burned the crash limit. Retry the atomic
+    write, then fall back to a plain in-place write; if even that fails, keep
+    the in-memory state and let the next call try again. Returns True on
+    success."""
+    last_err = None
+    for attempt in range(tries):
+        try:
+            with atomic_write(path, overwrite=True, encoding="utf-8") as outfile:
+                outfile.write(payload)
+            return True
+        except (PermissionError, OSError) as e:
+            last_err = e
+            sleep(0.3 * (attempt + 1))
+    logger.warning(
+        f"[storage] atomic write to {os.path.basename(path)} failed after "
+        f"{tries} tries ({type(last_err).__name__}: {last_err}); trying a "
+        f"direct write."
+    )
+    try:
+        with open(path, "w", encoding="utf-8") as outfile:
+            outfile.write(payload)
+        return True
+    except (PermissionError, OSError) as e:
+        logger.error(
+            f"[storage] could not persist {os.path.basename(path)} ({e}); "
+            f"keeping in-memory state, will retry on next update."
+        )
+        return False
 
 ACCOUNTS = "accounts"
 REPORTS = "reports"
@@ -203,10 +241,10 @@ class Storage:
         user["skip_reason"] = None if skip_reason is None else skip_reason.name
         self.history_filter_users[username] = user
         if self.history_filter_users_path is not None:
-            with atomic_write(
-                self.history_filter_users_path, overwrite=True, encoding="utf-8"
-            ) as outfile:
-                json.dump(self.history_filter_users, outfile, indent=4, sort_keys=False)
+            _resilient_write(
+                self.history_filter_users_path,
+                json.dumps(self.history_filter_users, indent=4, sort_keys=False),
+            )
 
     def add_interacted_user(
         self,
@@ -316,10 +354,10 @@ class Storage:
 
     def _update_file(self):
         if self.interacted_users_path is not None:
-            with atomic_write(
-                self.interacted_users_path, overwrite=True, encoding="utf-8"
-            ) as outfile:
-                json.dump(self.interacted_users, outfile, indent=4, sort_keys=False)
+            _resilient_write(
+                self.interacted_users_path,
+                json.dumps(self.interacted_users, indent=4, sort_keys=False),
+            )
 
 
 @unique

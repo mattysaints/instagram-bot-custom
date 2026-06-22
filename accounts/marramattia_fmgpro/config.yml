@@ -204,7 +204,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [07.42-09.12, 10.47-12.17, 13.47-15.17, 16.47-18.17, 19.39-21.09]   # generata dinamicamente da run-dynamic.py
+working-hours: [09.34-11.04, 12.24-13.54, 15.29-16.59, 18.41-20.11, 21.44-23.14]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
