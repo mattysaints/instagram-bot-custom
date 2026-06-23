@@ -194,7 +194,7 @@ stories-percentage: 0
 # Ending Session Conditions
 # ---------------------------------------------------------------------------
 end-if-likes-limit-reached: false          # [v2] NON chiudere la sessione se solo i like sono al cap. Cosi' il bot continua a usare follow/commenti residui invece di aprire sessioni "fantasma" da 28s che terminano subito (vedi log 22:51-23:31 del 10/05). La fine sessione resta governata da end-if-follows-limit-reached: true.
-end-if-follows-limit-reached: true         # CRITICO: ferma quando arrivi al cap follow
+end-if-follows-limit-reached: false        # [v3] NON chiudere la sessione al cap follow: il budget follow giornaliero (70/gg) si esaurisce a meta' giornata e con 'true' TUTTE le sessioni successive erano fantasma (0 azioni, ~1min) pur avendo like/commenti residui. Con 'false' la sessione prosegue con like+commenti e termina correttamente al limite interazioni/successful (governato da total-interactions/total-successful, non mutabili).
 end-if-watches-limit-reached: false
 end-if-comments-limit-reached: false
 end-if-pm-limit-reached: false
@@ -204,7 +204,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [09.34-11.04, 12.24-13.54, 15.29-16.59, 18.41-20.11, 21.44-23.14]   # generata dinamicamente da run-dynamic.py
+working-hours: [14.37-16.07, 18.07-19.37, 21.46-23.16, 01.16-02.46]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
