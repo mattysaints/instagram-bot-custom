@@ -726,11 +726,20 @@ def sample_sources(sources, n_sources, storage=None, job_name=None):
     # to the full list rather than stalling the job.
     _qstats = getattr(storage, "source_stats", None) if storage is not None else None
     if _qstats is not None and job_name:
-        alive = [s for s in sources if not _qstats.is_quarantined(job_name, s)]
+        # Drop both kinds of dead source: nav-quarantined (account never resolves
+        # in search) and low-FBR (enough verified follows but almost nobody
+        # follows back -> wastes the daily follow budget). Guard: never empty the
+        # list — if every source is dead, fall back to the full list.
+        def _dead(s):
+            return _qstats.is_quarantined(job_name, s) or _qstats.is_low_fbr(
+                job_name, s
+            )
+
+        alive = [s for s in sources if not _dead(s)]
         skipped = len(sources) - len(alive)
         if skipped and alive:
             logger.info(
-                f"[source-stats] {skipped} sorgente/i in quarantena (dead) "
+                f"[source-stats] {skipped} sorgente/i morte (quarantena/FBR basso) "
                 f"saltate per {job_name}."
             )
             sources = alive

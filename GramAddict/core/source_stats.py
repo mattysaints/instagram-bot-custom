@@ -50,6 +50,15 @@ SCHEMA_VERSION = 1
 NAV_FAIL_THRESHOLD = 3
 QUARANTINE_DAYS = 7
 
+# FBR quarantine: a source that, after enough verified follows, keeps returning
+# almost nobody is dead weight — it wastes the daily follow budget on people who
+# never follow back. Once its verifiable sample reaches FBR_MIN_SAMPLE and its
+# follow-back-rate is below FBR_FLOOR, stop sampling it. This is re-evaluated
+# every session from the (auto-refreshed) stats, so a source that recovers above
+# the floor is picked again automatically — no timer needed.
+FBR_MIN_SAMPLE = 10
+FBR_FLOOR = 0.08
+
 
 def _key(job: str, source: str) -> str:
     return f"{job}|{source}"
@@ -212,14 +221,31 @@ class SourceStats:
         except (ValueError, TypeError):
             return False
 
+    def is_low_fbr(
+        self,
+        job: str,
+        source: str,
+        min_sample: int = FBR_MIN_SAMPLE,
+        floor: float = FBR_FLOOR,
+    ) -> bool:
+        """True if the source has a statistically meaningful follow-back sample
+        (>= ``min_sample`` verified follows) yet an FBR below ``floor`` — i.e.
+        proven low-converting dead weight that should not be sampled."""
+        e = self._data.get("sources", {}).get(_key(job, source))
+        if not e:
+            return False
+        rate = e.get("follow_back_rate")
+        sample = int(e.get("fbr_sample", 0))
+        return rate is not None and sample >= min_sample and rate < floor
+
     # -- Weighting helpers ----------------------------------------------------
     def weight(
         self,
         job: str,
         source: str,
         min_follows_for_signal: int = 10,
-        low_fbr_threshold: float = 0.05,
-        high_fbr_threshold: float = 0.15,
+        low_fbr_threshold: float = 0.20,
+        high_fbr_threshold: float = 0.50,
         low_factor: float = 0.3,
         high_factor: float = 1.5,
     ) -> float:
@@ -227,6 +253,13 @@ class SourceStats:
         selection of sources. Sources with too few signals get neutral weight
         (1.0). FBR < low_threshold → low_factor; FBR > high_threshold →
         high_factor. Linear interpolation in-between.
+
+        Thresholds are calibrated to a warm-follow account whose source FBRs
+        span ~15-80% (overall ~42%). The old 5%/15% band saturated — every
+        source above 15% got the same max boost, so the great sources (50-78%)
+        were not actually favored over the mediocre (~16%) ones. With 20%/50%
+        the weight discriminates across the real range and pushes more follows
+        toward the high-FBR sources.
         """
         rate = self.fbr(job, source)
         # Gate on the VERIFIABLE sample (denominator the rate is based on), not
