@@ -1232,7 +1232,9 @@ def iterate_over_followers(
     # superficie anti-ban (azioni a vuoto). Comprimiamo le soglie hot-zone
     # cosi' il bot abbandona la sorgente DOPO MENO schermate vuote e passa al
     # prossimo blogger della lista, dove probabilmente trovera' yield > 0.
-    LARGE_TARGET_THRESHOLD = 30_000
+    LARGE_TARGET_THRESHOLD = 15_000  # [yield-tune v3] da 30k: anche le medie 15-30k
+    # (es. liste sature di already-interacted/unfollowed, basso rendimento e costose
+    # da scrollare) vengono abbandonate prima invece di consumare la sessione.
     HUGE_TARGET_THRESHOLD = 100_000
     is_large_target = (
         target_followers_count is not None

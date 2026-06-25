@@ -35,7 +35,7 @@ shuffle-jobs: false                        # ordine fisso: blogger-followers pri
 truncate-sources: 10-12                    # [yield-tune] piu' sorgenti per sessione: riduce il peso delle hot-zone gia' viste e aumenta il bacino fresco
 scroll-skip-start: 35-120                  # [yield-tune] quando manca anchor, salta piu' in profondita' per evitare utenti gia' processati in alto
 resume-from-last-position: true            # ricorda l'ULTIMO utente analizzato per ogni sorgente e riprende da li' la sessione dopo
-resume-anchor-search-limit: 30             # [yield-tune] limita tempo perso in ricerca anchor lunga; fallback random prima
+resume-anchor-search-limit: 12             # [yield-tune v3] da 30 a 12: con 30, le sorgenti medie (8-26k) sprecavano ~3min/ciascuna a cercare l'anchor (quasi mai trovato su liste enormi/rimescolate) -> sessione mangiata, like/commenti sotto target. A 12 una ricerca fallita costa ~1.2min e ripiega su scroll-skip-start.
 resume-cooldown-days: 5                    # [yield-tune v2] da 3gg a 5gg: log mostra che le sorgenti top vengono ri-visitate troppo presto e producono "Same users iterated 5 times" + 0 fresh. Dare piu' respiro alla lista.
 hot-zone-screens: 2                        # [yield-tune] reagisci prima alle schermate senza utenti freschi
 hot-zone-jump-flings: 6                    # [yield-tune] salto piu' profondo per uscire dalle zone gia' battute
@@ -204,7 +204,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [15.26-16.56, 17.52-19.22, 20.22-21.52, 23.00-00.30, 01.21-02.51]   # generata dinamicamente da run-dynamic.py
+working-hours: [11.51-13.21, 15.04-16.34, 18.18-19.48, 21.12-22.42, 00.03-01.33]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
