@@ -1,3 +1,4 @@
+setuptools<81  # uiautomator2 2.16.x usa pkg_resources, rimosso da setuptools>=81 (Py3.14). NON aggiornare setuptools oltre 80.x ne' uiautomator2 a 3.x (3.x rimuove JSONRPCError/GatewayError usate ovunque).
 colorama==0.4.4
 ConfigArgParse==1.5.3
 PyYAML==6.0.1
