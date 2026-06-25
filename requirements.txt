@@ -9,4 +9,4 @@ langdetect==1.0.9
 atomicwrites==1.4.0
 spintax==1.0.4
 requests~=2.31.0
-packaging~=20.9
+packaging>=24  # NON pinnare a 20.x: usa distutils, rimosso in Python 3.12+ (qui Py3.14) -> ModuleNotFoundError. 24+ e' distutils-free.
