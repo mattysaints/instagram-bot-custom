@@ -283,40 +283,30 @@ class CoreArguments(Plugin):
                 "metavar": "1-2",
                 "default": "1",
             },
-            # ---- AI comments (Gemini) -----------------------------------------------
+            # ---- AI comments (HF Space) ---------------------------------------------
             # Quando abilitato, prima di pescare un commento dal file txt il bot
-            # prova a generarne uno via Gemini API basandosi sulla caption del
-            # post. Su qualunque errore (no key, rete, rate-limit, safety block)
-            # cade automaticamente sul commento del txt: zero rischio di crash.
+            # POSTa caption+metadata a un HuggingFace Space (mattysaints/instagram_bot).
+            # Lo Space usa HF Inference Providers (Llama 3.3 70B, Qwen 2.5 72B,
+            # Mistral Small 3.1 24B in cascata). Su qualunque errore (rete,
+            # timeout, 5xx, guardrail hit) il bot cade su comments_list.txt:
+            # zero rischio di crash.
             {
                 "arg": "--ai-comments-enabled",
-                "help": "enable AI-generated comments via Google Gemini (fallback to comments_list.txt on any error)",
+                "help": "enable AI-generated comments via HF Space (fallback to comments_list.txt on any error)",
                 "action": "store_true",
             },
             {
-                "arg": "--ai-comments-api-key",
+                "arg": "--ai-comments-space-url",
                 "nargs": None,
-                "help": "Google Gemini API key. If unset, reads env GEMINI_API_KEY / GOOGLE_AI_API_KEY",
-                "metavar": "AIzaSy...",
-                "default": None,
+                "help": "URL of the HF Space that generates comments (default: mattysaints/instagram_bot). Must expose POST /api/generate.",
+                "metavar": "https://mattysaints-instagram-bot.hf.space",
+                "default": "https://mattysaints-instagram-bot.hf.space",
             },
             {
-                "arg": "--ai-comments-model",
+                "arg": "--ai-comments-space-key",
                 "nargs": None,
-                "help": "Gemini model id (default: gemini-2.5-flash-lite). Used as primary; fallback cascade kicks in automatically if it fails.",
-                "metavar": "gemini-2.5-flash-lite",
-                "default": "gemini-2.5-flash-lite",
-            },
-            {
-                "arg": "--ai-comments-models",
-                "nargs": None,
-                "help": (
-                    "OPTIONAL explicit fallback chain: comma-separated list of Gemini "
-                    "models to try in order. If set, OVERRIDES the default cascade. "
-                    "Example: 'gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash-8b'. "
-                    "Leave unset to use the smart default cascade."
-                ),
-                "metavar": "model1,model2,model3",
+                "help": "Bearer token for the Space endpoint. If unset, reads env IG_COMMENT_SPACE_KEY.",
+                "metavar": "sk_...",
                 "default": None,
             },
             {

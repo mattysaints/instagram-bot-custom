@@ -1,79 +1,60 @@
 """
 AI-powered comment generation for GramAddict.
 
-Ispirato a https://github.com/dzeveckij/instagram-ai-commenter-bot
-(adattato da Playwright/Node a uiautomator2/Python).
+Backend: HuggingFace Space (mattysaints/instagram_bot).
+Lo Space usa HF Inference Providers con cascata Llama 3.3 70B -> Qwen 2.5 72B
+-> Mistral Small 3.1 24B. Vedi C:\\Users\\mat.marra\\PycharmProjects\\ig-comment-space
+per il codice dello Space.
 
 Strategia:
-    - Provider attualmente supportato: Google Gemini (REST API, no SDK).
-    - Input: caption del post (se estraibile via UI), media_type, hint
-      opzionale specifico per l'account, lingua target.
-    - Output: SINGOLO commento corto, plain text, senza emoji/hashtag/!.
-    - Fallback robusto: se la chiamata fallisce (no key, rete giu', rate
-      limit, prompt-injection rifiutato dal modello), il caller riceve
-      None e usa il file `comments_list.txt` come fallback.
+    - Il bot POSTa {caption, media_type, target_username, hint, language}
+      al `/api/generate` dello Space.
+    - Lo Space fa tutto: prompt engineering, chiamata LLM, cascata modelli,
+      sanitize output, guardrail anti-emoji/#/!.
+    - Se lo Space fallisce (rete giu', 5xx, timeout, response None), il bot
+      cade sul file `comments_list.txt` come da configurazione.
+    - Circuit breaker: se rileviamo che la rete e' down (DNS/refused/no
+      route) apriamo il breaker per 10 minuti per non sprecare tempo.
 
-Le regole anti-bot (no emoji/hashtag/exclamation/I-me/generic) ricalcano
-lo stile del repo TypeScript di riferimento, perche' sono empiricamente
-quelle che fanno apparire i commenti AI come "umani" agli occhi sia di
-Instagram che di chi legge.
-
-NB: nessun logging della API key, nessun crash hard se la dipendenza
-manca: tutto viene gestito a livello di flag `enabled`/return-None.
+Compatibilita' storica: i vecchi flag Gemini (--ai-comments-api-key,
+--ai-comments-model, --ai-comments-models, GEMINI_API_KEY env) restano
+riconosciuti da argparse ma vengono ignorati - vedi core_arguments.py.
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# .env.local auto-loader: carichiamo le credenziali (GEMINI_API_KEY, ecc.)
-# direttamente all'import, cosi' chi importa questo modulo ha SEMPRE le env
-# vars disponibili a prescindere da come ha lanciato il bot:
-#   - run-bot.sh           -> gia' faceva 'source .env.local'
-#   - run-dynamic.py       -> gia' parsava .env.local prima di subprocess
-#   - python run.py ...    -> NON caricava nulla -> ai_comment falliva
-#   - IDE PyCharm run cfg  -> idem
-# Cerchiamo .env.local risalendo le directory fino alla root del repo
-# (max 5 livelli) per supportare cwd diverse. Non sovrascriviamo env vars
-# gia' settate (chi le ha gia' export-ate manualmente vince).
+# .env.local auto-loader (invariato rispetto alla versione Gemini).
+# Serve a garantire che IG_COMMENT_SPACE_KEY sia sempre disponibile
+# a prescindere da come e' stato lanciato il bot.
 # ---------------------------------------------------------------------------
 def _autoload_env_local() -> None:
-    """Carica .env.local in os.environ se trovato.
-
-    Idempotente: chi ha gia' exportato GEMINI_API_KEY a mano (es. da shell
-    rc) NON viene sovrascritto. Tutto in try/except: un .env.local malformato
-    non deve mai bloccare l'import del modulo.
-    """
     try:
-        # parti dal file ai_comment.py e risali al massimo 5 livelli
         here = Path(__file__).resolve().parent
         for _ in range(6):
             candidate = here / ".env.local"
             if candidate.is_file():
                 _parse_and_apply_env(candidate)
                 return
-            if here.parent == here:  # root filesystem raggiunta
+            if here.parent == here:
                 break
             here = here.parent
-        # fallback: cwd corrente (utile se l'utente lo mette altrove)
         cwd_candidate = Path.cwd() / ".env.local"
         if cwd_candidate.is_file():
             _parse_and_apply_env(cwd_candidate)
     except Exception as e:
-        # NON loggare lo stack: vogliamo un import 100% silenzioso
         logger.debug(f"[ai-comment] autoload .env.local skipped: {e}")
 
 
 def _parse_and_apply_env(path: Path) -> None:
-    """Parser minimale (no python-dotenv dependency): ignora commenti,
-    supporta `export KEY=val`, `KEY=val`, e value virgolettati."""
     try:
         content = path.read_text(encoding="utf-8")
     except Exception:
@@ -90,10 +71,7 @@ def _parse_and_apply_env(path: Path) -> None:
         k, v = line.split("=", 1)
         k = k.strip()
         v = v.strip().strip('"').strip("'")
-        if not k:
-            continue
-        # NON sovrascrivere env vars gia' settate (precedenza all'utente)
-        if os.environ.get(k):
+        if not k or os.environ.get(k):
             continue
         os.environ[k] = v
         loaded_keys.append(k)
@@ -104,88 +82,43 @@ def _parse_and_apply_env(path: Path) -> None:
         )
 
 
-# Esegui all'import (una volta sola).
 _autoload_env_local()
 
-# Endpoint REST Gemini (v1beta, generateContent). Lo costruiamo a runtime
-# dal nome del modello cosi' l'utente puo' switchare modello senza toccare
-# il codice (gemini-2.5-flash-lite, gemini-1.5-flash-8b, ecc.).
-_GEMINI_URL_TPL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-)
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+_DEFAULT_SPACE_URL = "https://mattysaints-instagram-bot.hf.space"
+_GENERATE_PATH = "/api/generate"
 
-# Hard cap per evitare di pagare token assurdi se il prompt diventa
-# enorme per qualche motivo (caption > 2k char).
-_MAX_CAPTION_CHARS = 800
-# Se l'API risponde piu' lentamente di questo, abbandoniamo: meglio
-# usare un commento dal file txt che far aspettare il bot per minuti
-# (il bot deve restare "umano" nei tempi di risposta).
-_REQUEST_TIMEOUT_S = 8
-
-# Cascata di modelli di fallback. Se il primo (configurato dall'utente)
-# fallisce con un errore "transitorio" (rate-limit, 5xx, timeout, blocco
-# safety), proviamo i successivi in ordine. Costo crescente, qualita'
-# crescente: di default partiamo dal piu' economico.
-# Aggiornato a maggio 2026: i modelli Gemini Flash 2.5 sono GA.
-_DEFAULT_MODEL_CASCADE = [
-    "gemini-2.5-flash-lite",   # super-economico, default
-    "gemini-2.5-flash",        # piu' qualita', ~3x costo
-    "gemini-1.5-flash-8b",     # legacy stabile, ottimo fallback se i 2.5 hanno disagi
-    "gemini-1.5-flash",        # ultima spiaggia, stabile da anni
-]
-
-# Errori HTTP che hanno senso ritentare con un altro modello:
-#   429 -> rate-limit (forse il modello specifico e' saturo, prova un altro)
-#   500, 502, 503, 504 -> errori server transitori
-#   408 -> timeout server-side
-# 401/403/400 NON ha senso ritentare: la key e' sbagliata o il prompt e'
-# vietato. Stessa cosa per 404 (modello inesistente -> proviamo il prossimo
-# nella cascata).
-_RETRYABLE_HTTP = {408, 429, 500, 502, 503, 504}
+_REQUEST_TIMEOUT_S = 15  # lo Space chiama un LLM esterno, un po' piu' generoso di Gemini diretto
 
 # ---------------------------------------------------------------------------
-# Circuit breaker: se la rete e' DOWN (DNS bloccato, connessione assente,
-# firewall che droppa) NON ha senso tentare i 4 modelli in cascata ad ogni
-# commento -- ogni cascata costa 4 * _REQUEST_TIMEOUT_S = ~32s sprecati
-# (osservato in produzione: rete con DNS aziendale che blocca
-# generativelanguage.googleapis.com -> NXDOMAIN -> 4 fallimenti immediati,
-# ma anche con timeout veri sono 32+ secondi a vuoto).
-#
-# Soluzione: appena rileviamo un network error "strutturale" (DNS / unable
-# to resolve / connection refused), apriamo il breaker e per i prossimi
-# _BREAKER_COOLDOWN_S secondi rispondiamo subito None senza nemmeno tentare
-# la prima chiamata. Dopo il cooldown ritentiamo (la rete potrebbe essere
-# tornata: cambio Wi-Fi, VPN, ecc.).
+# Circuit breaker: se la rete e' DOWN (DNS bloccato, connessione rifiutata,
+# no route) NON ha senso continuare a colpire lo Space per ogni commento.
 # ---------------------------------------------------------------------------
 _BREAKER_COOLDOWN_S = 600  # 10 minuti
-# Marker errori di rete strutturali (case-insensitive sul repr della
-# exception). Se compaiono, apriamo il breaker. Altri errori (timeout
-# read/write puri) NON aprono il breaker: potrebbe essere solo
-# l'endpoint specifico lento.
 _NETWORK_DOWN_MARKERS = (
-    "nodename nor servname",        # DNS lookup failed (macOS)
-    "name or service not known",    # DNS lookup failed (Linux)
+    "nodename nor servname",
+    "name or service not known",
     "temporary failure in name resolution",
     "no address associated with hostname",
-    "newconnectionerror",           # urllib3 wrapper su errori sock di basso livello
+    "newconnectionerror",
     "failed to establish a new connection",
     "network is unreachable",
     "no route to host",
     "connection refused",
 )
 
-_breaker_opened_at: Optional[float] = None  # epoch seconds, None = chiuso
+_breaker_opened_at: Optional[float] = None
 
 
 def _breaker_is_open() -> bool:
-    """True se il circuit breaker e' aperto (network ritenuto down)."""
     global _breaker_opened_at
     if _breaker_opened_at is None:
         return False
     import time as _t
     elapsed = _t.time() - _breaker_opened_at
     if elapsed >= _BREAKER_COOLDOWN_S:
-        # cooldown scaduto: chiudiamo e diamo un'altra chance.
         _breaker_opened_at = None
         logger.info(
             f"[ai-comment] circuit breaker: cooldown di {_BREAKER_COOLDOWN_S}s "
@@ -196,7 +129,6 @@ def _breaker_is_open() -> bool:
 
 
 def _breaker_open(reason: str) -> None:
-    """Apre il breaker: prossime chiamate skip-pano subito al fallback txt."""
     global _breaker_opened_at
     import time as _t
     _breaker_opened_at = _t.time()
@@ -208,249 +140,103 @@ def _breaker_open(reason: str) -> None:
 
 
 def _looks_like_network_down(err_repr: str) -> bool:
-    """True se l'errore ha l'odore di una rete down strutturale
-    (DNS, no route, refused) piuttosto che di un timeout/lentezza."""
     low = err_repr.lower()
     return any(marker in low for marker in _NETWORK_DOWN_MARKERS)
 
 
-def _build_prompt(
-    caption: str,
-    target_username: Optional[str],
-    media_type: str,
-    hint: Optional[str],
-    language: str,
-) -> str:
-    """Costruisce il system+user prompt.
+# ---------------------------------------------------------------------------
+# Space call
+# ---------------------------------------------------------------------------
+def _get_space_url(args) -> str:
+    url = getattr(args, "ai_comments_space_url", None) or _DEFAULT_SPACE_URL
+    return str(url).rstrip("/")
 
-    Le 14 regole sono volutamente assertive ('ABSOLUTELY NO ...') perche'
-    Gemini Flash tende altrimenti a infilare emoji/hashtag/'I love ...'
-    di default. Vedi anche src/genai.ts del repo di riferimento.
-    """
-    safe_caption = (caption or "").strip()
-    if len(safe_caption) > _MAX_CAPTION_CHARS:
-        safe_caption = safe_caption[:_MAX_CAPTION_CHARS] + "…"
-    target_clause = (
-        f"by @{target_username}" if target_username else "by an Instagram user"
-    )
-    caption_clause = (
-        f'Post caption: "{safe_caption}"'
-        if safe_caption
-        else "The post has no caption, comment on the photo/video itself."
-    )
-    hint_clause = f"Context for tone: {hint}\n\n" if hint else ""
 
-    rules = f"""Rules (follow ALL):
-1. Write ONE short, relevant comment. 1 sentence ideal, max 2 short.
-2. Sound 100% authentic, like a real follower, NEVER like a bot.
-3. If possible, refer to something specific from the caption.
-4. ABSOLUTELY NO emojis.
-5. ABSOLUTELY NO hashtags.
-6. ABSOLUTELY NO exclamation marks.
-7. NO generic compliments ("Great post", "Love this", "So inspiring", "Amazing").
-8. NO questions, do not try to start a conversation.
-9. NO first-person pronouns ("I", "me", "my", "io", "mi", "mio").
-10. NO opinions, NO personal experiences.
-11. Vary tone and phrasing; do not reuse common patterns.
-12. Media type is: {media_type}. If video/reel, comment on motion/action.
-13. Output language: {language}.
-14. Output ONLY the final comment text. No quotes, no prefix, no explanation."""
-
+def _get_space_key(args) -> Optional[str]:
     return (
-        f"You write engaging human-like Instagram comments.\n"
-        f"Write a comment for a post {target_clause}.\n\n"
-        f"{caption_clause}\n\n"
-        f"{hint_clause}"
-        f"{rules}\n"
+        getattr(args, "ai_comments_space_key", None)
+        or os.environ.get("IG_COMMENT_SPACE_KEY")
+        or None
     )
 
 
-def _sanitize_output(text: str) -> str:
-    """Rimuove rumore comune dei modelli: virgolette wrap, prefissi tipo
-    'Comment:', newline interni, spazi doppi, tag HTML, e taglia a 220 char."""
-    if not text:
-        return ""
-    t = text.strip()
-    # rimuovi tag HTML (es. </blockquote>, <br>, ecc.)
-    t = re.sub(r"<[^>]+>", "", t).strip()
-    # rimuovi un eventuale wrap di virgolette singole/doppie/back-tick
-    for q in ('"', "'", "`"):
-        if len(t) >= 2 and t.startswith(q) and t.endswith(q):
-            t = t[1:-1].strip()
-    # togli prefissi comuni
-    for prefix in ("Comment:", "comment:", "Output:", "Reply:"):
-        if t.lower().startswith(prefix.lower()):
-            t = t[len(prefix):].strip()
-    # collassa whitespace
-    t = " ".join(t.split())
-    if len(t) > 220:
-        t = t[:217].rstrip() + "..."
-    return t
+def is_enabled(args) -> bool:
+    """True se la generazione AI e' abilitata.
 
-
-def _call_gemini(
-    api_key: str,
-    model: str,
-    prompt: str,
-) -> tuple[Optional[str], bool]:
-    """Chiamata REST a Gemini.
-
-    Returns:
-        (text, retryable):
-          - text: il commento o None su errore.
-          - retryable: True se l'errore suggerisce di provare un altro
-            modello (rate-limit, 5xx, timeout, modello-non-trovato, blocco
-            safety). False se e' un errore "definitivo" che non migliora
-            cambiando modello (key invalida, prompt malformato, ecc.).
-
-    Importiamo `requests` lazy: cosi' chi non usa l'AI non paga niente,
-    e in caso di import error degradiamo a None invece di crashare.
+    Non e' piu' richiesta una API key locale (la key vera vive nei Secrets
+    dello Space). Basta che l'utente abbia messo `ai-comments-enabled: true`
+    e un URL Space (che ha default).
     """
+    if not getattr(args, "ai_comments_enabled", False):
+        return False
+    return bool(_get_space_url(args))
+
+
+def _call_space(
+    space_url: str,
+    space_key: Optional[str],
+    payload: dict,
+) -> Optional[str]:
+    """Chiama /api/generate. Ritorna il commento o None su qualunque errore."""
     try:
         import requests  # type: ignore
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         logger.warning(f"[ai-comment] 'requests' non disponibile: {e}")
-        return None, False
+        return None
 
-    url = _GEMINI_URL_TPL.format(model=model)
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.9,
-            "topP": 1.0,
-            "topK": 40,
-            "maxOutputTokens": 120,
-        },
-        # Filtri di sicurezza: lasciamo i default (BLOCK_MEDIUM_AND_ABOVE).
-    }
+    url = space_url + _GENERATE_PATH
+    headers = {"Content-Type": "application/json"}
+    if space_key:
+        headers["Authorization"] = f"Bearer {space_key}"
+
     try:
         r = requests.post(
             url,
-            params={"key": api_key},
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             data=json.dumps(payload),
             timeout=_REQUEST_TIMEOUT_S,
         )
     except Exception as e:
-        # network/timeout -> sempre retryable: prova un altro modello,
-        # magari sta saturo solo quel pool.
         err_repr = repr(e)
-        logger.warning(f"[ai-comment] {model}: errore di rete: {e}")
-        # Se l'errore puzza di "rete down strutturale" (DNS bloccato,
-        # connessione rifiutata, no route), apri il circuit breaker:
-        # tentare gli altri 3 modelli e' solo spreco di tempo (~24s).
+        logger.warning(f"[ai-comment] space call network error: {e}")
         if _looks_like_network_down(err_repr):
-            _breaker_open(f"network down detected on {model}")
-            # retryable=False per fermare la cascata immediatamente nel
-            # chiamante generate_comment().
-            return None, False
-        return None, True
+            _breaker_open("network down detected on Space call")
+        return None
 
+    if r.status_code == 401:
+        # key sbagliata: fatal, non ha senso ritentare
+        logger.warning("[ai-comment] Space returned 401 (invalid SPACE_API_KEY).")
+        return None
+    if r.status_code == 503:
+        # Space in cold-start / sleep: ritentare piu' tardi ha senso, ma per
+        # ora skippiamo semplicemente al fallback.
+        logger.info(f"[ai-comment] Space returned 503 (probable cold-start).")
+        return None
     if r.status_code != 200:
-        # NON loggo r.text intero: puo' contenere echo del prompt /
-        # snippet della key se l'utente ha sbagliato setup. Solo status.
-        retryable = r.status_code in _RETRYABLE_HTTP or r.status_code == 404
-        # 404: probabilmente modello inesistente o non disponibile per la
-        # tua region/tier -> ha senso passare al prossimo della cascata.
-        logger.warning(
-            f"[ai-comment] {model}: HTTP {r.status_code} "
-            f"({'retryable' if retryable else 'fatal'})"
-        )
-        return None, retryable
+        logger.warning(f"[ai-comment] Space HTTP {r.status_code}")
+        return None
+
     try:
         data = r.json()
     except Exception as e:
-        logger.warning(f"[ai-comment] {model}: risposta non e' JSON: {e}")
-        return None, True
-    # Schema: candidates[0].content.parts[0].text
-    try:
-        candidates = data.get("candidates") or []
-        if not candidates:
-            # blockReason / safety: il modello ha rifiutato. Provare un
-            # altro modello PUO' funzionare (modelli diversi hanno safety
-            # filter leggermente diversi); marchiamo retryable.
-            block = data.get("promptFeedback", {}).get("blockReason")
-            if block:
-                logger.info(f"[ai-comment] {model}: prompt bloccato ({block})")
-            return None, True
-        # finishReason "SAFETY" / "RECITATION" / "OTHER": il singolo
-        # candidate e' stato bloccato a meta' generazione. Anche qui
-        # un altro modello puo' fare meglio.
-        finish_reason = candidates[0].get("finishReason", "")
-        parts = (
-            candidates[0].get("content", {}).get("parts", [])
-            if candidates[0].get("content")
-            else []
+        logger.warning(f"[ai-comment] Space non-JSON response: {e}")
+        return None
+
+    comment = data.get("comment")
+    err = data.get("error")
+    model_used = data.get("model_used")
+    latency_ms = data.get("latency_ms")
+
+    if comment:
+        logger.info(
+            f"[ai-comment] generated via {model_used} in {latency_ms}ms "
+            f"(attempts={data.get('attempts')})"
         )
-        text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
-        cleaned = _sanitize_output(text)
-        if not cleaned:
-            logger.info(
-                f"[ai-comment] {model}: output vuoto (finishReason={finish_reason})"
-            )
-            return None, True
-        return cleaned, False
-    except Exception as e:
-        logger.warning(f"[ai-comment] {model}: parsing fallito: {e}")
-        return None, True
+        return str(comment).strip()
 
-
-def is_enabled(args) -> bool:
-    """True se la generazione AI e' abilitata e c'e' una API key utile.
-
-    L'utente puo' attivare via flag CLI/YAML (`ai-comments-enabled: true`)
-    OPPURE settando solo la env var GEMINI_API_KEY (utile in CI / docker).
-    """
-    if not getattr(args, "ai_comments_enabled", False):
-        return False
-    key = (
-        getattr(args, "ai_comments_api_key", None)
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_AI_API_KEY")
-    )
-    return bool(key and str(key).strip() and not str(key).startswith("YOUR_"))
-
-
-def _build_model_chain(args) -> list[str]:
-    """Costruisce la catena di modelli da provare, in ordine.
-
-    Logica:
-      1. Se l'utente ha specificato `ai-comments-models` (lista), usa quella
-         AS-IS, niente cascata default.
-      2. Altrimenti: parte dal `ai-comments-model` (singolo, default
-         gemini-2.5-flash-lite) e appende i restanti della cascata default
-         che non sono uguali al primo (no duplicati).
-    Output: lista di modelli unici, ordine preservato.
-    """
-    # 1. lista esplicita?
-    explicit = getattr(args, "ai_comments_models", None)
-    if explicit:
-        chain: list[str]
-        if isinstance(explicit, str):
-            # supporta "model1,model2,model3" come singola stringa
-            chain = [m.strip() for m in explicit.split(",") if m.strip()]
-        elif isinstance(explicit, (list, tuple)):
-            chain = [str(m).strip() for m in explicit if str(m).strip()]
-        else:
-            chain = []
-        if chain:
-            return _dedup_keep_order(chain)
-
-    # 2. singolo + cascata default
-    primary = getattr(args, "ai_comments_model", None) or _DEFAULT_MODEL_CASCADE[0]
-    primary = str(primary).strip()
-    chain = [primary] + [m for m in _DEFAULT_MODEL_CASCADE if m != primary]
-    return _dedup_keep_order(chain)
-
-
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen = set()
-    out: list[str] = []
-    for it in items:
-        if it not in seen:
-            seen.add(it)
-            out.append(it)
-    return out
+    if err:
+        logger.info(f"[ai-comment] Space returned no comment: {err}")
+    return None
 
 
 def generate_comment(
@@ -461,14 +247,9 @@ def generate_comment(
 ) -> Optional[str]:
     """Genera un commento AI. Ritorna None per fallback al file txt.
 
-    Tenta i modelli della cascata in ordine: se il primo fallisce con un
-    errore retryable (rate-limit, 5xx, safety block), passa al successivo.
-    Se l'errore e' "fatal" (key invalida, prompt malformato, parametri
-    sbagliati) si ferma subito - inutile sprecare chiamate.
-
     Args:
-        args: namespace CLI (deve avere gli ai_* attributes - aggiunti in
-            core_arguments.py). Se manca tutto, ritorna None.
+        args: namespace CLI (deve avere gli ai_comments_* attributes -
+            vedi core_arguments.py). Se AI e' disabilitato, ritorna None.
         caption: caption del post. Stringa vuota OK.
         target_username: chi ha postato (per personalizzare il prompt).
             Puo' essere None.
@@ -476,99 +257,23 @@ def generate_comment(
     """
     if not is_enabled(args):
         return None
-    # Circuit breaker: se l'ultima chiamata ha rilevato rete giu'
-    # (DNS bloccato / no connection), skippiamo direttamente al fallback
-    # txt senza tentare nemmeno il primo modello. Riproviamo dopo
-    # _BREAKER_COOLDOWN_S (vedi _breaker_is_open).
     if _breaker_is_open():
         logger.debug(
             "[ai-comment] circuit breaker aperto: skip diretto al fallback txt."
         )
         return None
-    api_key = (
-        getattr(args, "ai_comments_api_key", None)
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_AI_API_KEY")
-    )
+
+    space_url = _get_space_url(args)
+    space_key = _get_space_key(args)
     hint = getattr(args, "ai_comments_prompt_hint", None) or None
     language = getattr(args, "ai_comments_language", None) or "Italian"
 
-    prompt = _build_prompt(
-        caption=caption or "",
-        target_username=target_username,
-        media_type=str(media_type).lower(),
-        hint=hint,
-        language=language,
-    )
+    payload = {
+        "caption": caption or "",
+        "media_type": str(media_type or "photo").lower(),
+        "target_username": target_username,
+        "hint": hint,
+        "language": language,
+    }
 
-    chain = _build_model_chain(args)
-    api_key_clean = str(api_key).strip()
-    last_error_was_fatal = False
-
-    for idx, model in enumerate(chain):
-        attempt_label = f"[{idx + 1}/{len(chain)}]"
-        logger.debug(f"[ai-comment] {attempt_label} trying model {model}")
-        text, retryable = _call_gemini(
-            api_key=api_key_clean, model=model, prompt=prompt
-        )
-        if text:
-            # validazione guardrail: se il modello ha sgarrato (emoji/!/#),
-            # NON e' un errore "del modello", e' un output non conforme:
-            # un altro modello potrebbe fare la stessa cosa, ma vale la
-            # pena tentare 1 volta.
-            cleaned = _validate_output(text)
-            if cleaned is not None:
-                if idx > 0:
-                    logger.info(
-                        f"[ai-comment] cascata ha funzionato: modello "
-                        f"{model} ha generato dopo che {idx} modello/i "
-                        f"avevano fallito."
-                    )
-                return cleaned
-            else:
-                logger.info(
-                    f"[ai-comment] {model}: output non conforme alle regole, "
-                    f"provo prossimo modello."
-                )
-                continue
-
-        # text e' None
-        if not retryable:
-            last_error_was_fatal = True
-            logger.warning(
-                f"[ai-comment] {model}: errore fatale (key/auth/payload). "
-                f"Interrompo cascata."
-            )
-            break
-        # altrimenti loop continua sul prossimo modello
-
-    if last_error_was_fatal:
-        logger.info("[ai-comment] cascata interrotta da errore fatale.")
-    else:
-        logger.info(
-            f"[ai-comment] tutti i {len(chain)} modelli hanno fallito; "
-            f"fallback al file txt."
-        )
-    return None
-
-
-def _validate_output(text: str) -> Optional[str]:
-    """Applica i guardrail anti-emoji/hashtag/! e ritorna il testo pulito
-    o None se non passa. Centralizzato per riuso nella cascata."""
-    if not text:
-        return None
-    # Hard guardrail anti-emoji/hashtag/!: se il modello sgarra, scarto.
-    if any(ch in text for ch in "#!"):
-        logger.debug(
-            f"[ai-comment] guardrail HIT (#/!): '{text[:60]}...'"
-        )
-        return None
-    # heuristic emoji check senza dipendere da `emoji` lib qui:
-    # qualunque codepoint > U+27BF e' quasi sempre emoji/dingbat.
-    if any(ord(ch) > 0x27BF for ch in text):
-        logger.debug(
-            f"[ai-comment] guardrail HIT (emoji): '{text[:60]}...'"
-        )
-        return None
-    return text
-
+    return _call_space(space_url, space_key, payload)

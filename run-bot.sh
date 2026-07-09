@@ -59,7 +59,7 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
-# Carica secrets locali (GEMINI_API_KEY, ecc.) se presenti.
+# Carica secrets locali (IG_COMMENT_SPACE_KEY, ecc.) se presenti.
 # Il file .env.local e' gitignored: ci tieni le chiavi senza rischio commit.
 if [ -f ".env.local" ]; then
     # shellcheck disable=SC1091

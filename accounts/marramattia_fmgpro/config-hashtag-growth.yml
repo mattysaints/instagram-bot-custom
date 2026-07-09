@@ -159,14 +159,14 @@ daily-comments-cap: 100                    # allineato a config.yml (AI -> quali
 daily-pm-cap: 0
 
 # ---------------------------------------------------------------------------
-# AI Comments (Google Gemini) - PILASTRO DI QUESTA CONFIG
+# AI Comments (HF Space mattysaints/instagram_bot) - PILASTRO DI QUESTA CONFIG
 # I commenti AI contestuali sono la differenza maggiore tra "bot generico" e
-# "interazione umana credibile". Gemini legge la caption del post e genera 1
-# frase coerente in italiano, mai salesy. Fallback su comments_list.txt se
-# qualcosa fallisce.
+# "interazione umana credibile". Lo Space legge la caption del post e genera
+# 1 frase coerente in italiano (cascata gpt-oss-120b -> Llama 3.3 -> Mistral),
+# mai salesy. Fallback su comments_list.txt se qualcosa fallisce.
 # ---------------------------------------------------------------------------
 ai-comments-enabled: true
-ai-comments-model: gemini-2.5-flash-lite
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
 ai-comments-language: Italian
 ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Mattia, competitive classic physique bodybuilding athlete based in Turin (Torino, Piemonte, Italy). He trains seriously, follows a structured prep, and is passionate about gym culture, hypertrophy, posing, and contest prep. Tone: technical when relevant (mention specific muscles, exercises, periodization, symmetry, conditioning), peer-to-peer between fellow athletes, casual Italian register, genuine and direct. NEVER salesy, NEVER mention coaching/services/DM/link. NEVER use emoji, hashtags or exclamation marks. Reference something specific from the caption or visible context (exercise, physique detail, competition, nutrition). 1 short sentence max, sound like a fellow competitive athlete."
 ai-comments-fallback-to-file: true

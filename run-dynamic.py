@@ -411,7 +411,7 @@ def main():
     cmd = [sys.executable, "run.py", "--config", str(config_path)]
     print(f"\n🚀 Lancio: {' '.join(cmd)}\n")
 
-    # Carica .env.local (GEMINI_API_KEY, ecc.) se presente.
+    # Carica .env.local (IG_COMMENT_SPACE_KEY, ecc.) se presente.
     env = os.environ.copy()
     env_file = Path(".env.local")
     if env_file.exists():
@@ -426,8 +426,8 @@ def main():
             k, v = line.split("=", 1)
             v = v.strip().strip('"').strip("'")
             env[k.strip()] = v
-        if "GEMINI_API_KEY" in env and env["GEMINI_API_KEY"]:
-            print("🔑 GEMINI_API_KEY caricata da .env.local")
+        if env.get("IG_COMMENT_SPACE_KEY"):
+            print("🔑 IG_COMMENT_SPACE_KEY caricata da .env.local")
 
     subprocess.run(cmd, check=False, env=env)
 

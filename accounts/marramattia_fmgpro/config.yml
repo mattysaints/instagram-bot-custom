@@ -5,7 +5,7 @@
 # questo branch (main): solo follow + like + commenti AI.
 #
 # Target giornaliero:
-#   follow:   60-70    | like: 120-150 | commenti: 60-90 (AI Gemini) | DM: 0
+#   follow:   60-70    | like: 120-150 | commenti: 60-90 (AI via HF Space) | DM: 0
 # Rate orario garantito:
 #   follow:  <= 8-10/h | like: <= 15-20/h | commenti: <= 10-15/h
 # Strategia: 5 micro-sessioni brevi in fasce umane, niente raffiche.
@@ -69,7 +69,7 @@ action-throttle-pm-min: 300-540            # 5-9 min tra 2 DM -> max ~7-8 DM/h (
 # Linee guida: 3-5 blogger del tuo settore con 5k-50k follower (non celebrita').
 # NB: usare SEMPRE il formato inline [a, b, c] -- la sintassi YAML "a lista" rompe il parser.
 #blogger-followers: [afmi2_segrate, manuel_santalucia_ifbbpro, malatidipalestraofficial, ifbbproitaly, npc_italy, pieronocerino1, excellentstyle.fitness, giulia_befierce, basicc99, gymitabody, bodyfitproathletes, vitastrong_ita, giusepperomanocoach, ludovico.lemme, giusi.cesarini, edwin_underwood, danielgoss_ifbbpro, alex__zuccaro, wabbaitalia]
-blogger-followers: [malatidipalestraofficial, ifbbproitaly, space.gym.official, wabbaitalia, emilio.dalessandro.92, anna.ladurner.ifbbpro, marco.casadei_, marcogrizz_photo, sara.evangelista, bodynutrition_tarquinia, greta.adamii_fit, omarnonni_pnbapro, danielacamboni, ornella_angileri_ifbbpro, eulyfitnesstudio, gretanicoletti_pt, kellysxv94, ross_sun_, paolozoncatrainer, _.paolalochi._, riccardo_cavallini, dario.pnbapro.coach, simonegenerali, francesco_arcidiacono90, simonearmaroli, nardin_nicole, ivano.vitagliano.coach, tieeco, leonardopratoo, lucacirillo_personaltrainer, fede_castell_, kristianluino_trainer, alex_ifbb_pro, dario_beloli_ifbbpro, agostomauro_pcaitaly, eloisostuni, ludovico.lemme, sayan.nickk, jack_fogli, japan_skin, wnbfitaly, npc_italy, davide.fanelli1, tm_nutrizione, vecchi_mattia, alex__zuccaro, giusi.cesarini, manu3lito_bb, alberto_gaz_gazzera, asteroidi_official, erica_fede94, train.with.vish, carawolder, gianxfit, pugliese.fitness, flavio.ercoli, rickytorrestrainer, magnammsemp, zahirkhudayarov, zagarella_ifbb_pro, cristian_ciampani92_, fabbian.lorenz, cbuzz93, afmi2_segrate, fit.italia, samuellfortuna, niccolo.balboni.coaching, massimo_personal_trainer, bodybuilding_italia_community_, federico_mariani_, ste_cossu96, annatfit.pt, thenewclassic_s, marcokoduzi, bodybuilding_italia_community, wbpf_italy, olgs_fitness, riccardo.oliver_, coach_ginnytyro, manuel_santalucia_ifbbpro, punzetti_sara_ifbbpro, vitastrong_ita, andrea.presti_ifbbpro, giusepperomanocoach, gerard_ifbb_, edwin_underwood, ricette_ghisa, pieronocerino1, oneforall.hub, fitactivetorino, fitactivetorinobotticelli, fitactivetorinofontanesi, fitactivetorinogbruno, anytimefitness_torinolancia, anytimefitness_torinobogino, anytimefitnesstorinogrosseto, anytimefitness_torinolingotto, daniele_gelmi, viveredipalestra, fabioflumeri_pt, riccardobacile_, ema.fitness]
+blogger-followers: [il.pump.quotidiano, lorenzo.coppola_ifbbpro, nutraff_team, marcodallabattista_pt, malatidipalestraofficial, ifbbproitaly, space.gym.official, wabbaitalia, emilio.dalessandro.92, anna.ladurner.ifbbpro, marco.casadei_, marcogrizz_photo, sara.evangelista, bodynutrition_tarquinia, greta.adamii_fit, omarnonni_pnbapro, danielacamboni, ornella_angileri_ifbbpro, eulyfitnesstudio, gretanicoletti_pt, kellysxv94, ross_sun_, paolozoncatrainer, _.paolalochi._, riccardo_cavallini, dario.pnbapro.coach, simonegenerali, francesco_arcidiacono90, simonearmaroli, nardin_nicole, ivano.vitagliano.coach, tieeco, leonardopratoo, lucacirillo_personaltrainer, fede_castell_, kristianluino_trainer, alex_ifbb_pro, dario_beloli_ifbbpro, agostomauro_pcaitaly, eloisostuni, ludovico.lemme, sayan.nickk, jack_fogli, japan_skin, wnbfitaly, npc_italy, davide.fanelli1, tm_nutrizione, vecchi_mattia, alex__zuccaro, giusi.cesarini, manu3lito_bb, alberto_gaz_gazzera, asteroidi_official, erica_fede94, train.with.vish, carawolder, gianxfit, pugliese.fitness, flavio.ercoli, rickytorrestrainer, magnammsemp, zahirkhudayarov, zagarella_ifbb_pro, cristian_ciampani92_, fabbian.lorenz, cbuzz93, afmi2_segrate, fit.italia, samuellfortuna, niccolo.balboni.coaching, massimo_personal_trainer, bodybuilding_italia_community_, federico_mariani_, ste_cossu96, annatfit.pt, thenewclassic_s, marcokoduzi, bodybuilding_italia_community, wbpf_italy, olgs_fitness, riccardo.oliver_, coach_ginnytyro, manuel_santalucia_ifbbpro, punzetti_sara_ifbbpro, vitastrong_ita, andrea.presti_ifbbpro, giusepperomanocoach, gerard_ifbb_, edwin_underwood, ricette_ghisa, pieronocerino1, oneforall.hub, fitactivetorino, fitactivetorinobotticelli, fitactivetorinofontanesi, fitactivetorinogbruno, anytimefitness_torinolancia, anytimefitness_torinobogino, anytimefitnesstorinogrosseto, anytimefitness_torinolingotto, daniele_gelmi, viveredipalestra, fabioflumeri_pt, riccardobacile_, ema.fitness, ililatorree, alessia__spahiu, marcello.burgener, robertaxcoppola, denny_caramia, dario_paolozzi_iffbpro, no_buffer_, ariannazadra]
 # Hashtag a tema fitness IT: pesca utenti che hanno MESSO LIKE ai post recenti
 # di questi hashtag. Lead piu' caldi dei semplici follower (interesse esplicito).
 # Tabella anti-ban 2026: hashtag-job e' meno rischioso del blogger-followers
@@ -157,28 +157,26 @@ daily-comments-cap: 80                     # [safety #1] ridotto da 100: tetto g
 daily-pm-cap: 0                            # OFF su main (DM disabilitati, vedi total-pm-limit)
 
 # ---------------------------------------------------------------------------
-# AI Comments (Google Gemini) - DISABILITATO di default
-# Quando abilitato, prima di pescare un commento dal file txt il bot prova a
-# generarne uno via Gemini API basandosi sulla caption del post (estratta via
-# UI). On any error (no key, rete, rate-limit, safety block, output con
-# emoji/hashtag/!) cade automaticamente su comments_list.txt -> zero rischio
-# di crash o di postare commenti tipo-bot.
+# AI Comments (HuggingFace Space mattysaints/instagram_bot) - ATTIVO
+# Il bot POSTa caption+metadata al Space, lo Space usa HF Inference Providers
+# (gpt-oss-120b -> Llama 3.3 70B -> Mistral Small 3.1 24B in cascata) e
+# risponde con un commento breve, in italiano, senza emoji/#/!. Se lo Space
+# fallisce (rete, 5xx, timeout, cold-start, guardrail) il bot cade su
+# comments_list.txt -> zero rischio di crash.
 #
-# Per attivare:
-#   1. ottieni una API key gratuita da https://aistudio.google.com/app/apikey
-#   2. esporta GEMINI_API_KEY=AIzaSy... nel tuo shell, OPPURE metti la key
-#      direttamente sotto ai-comments-api-key (ATTENZIONE: non committare!)
-#   3. setta ai-comments-enabled: true
-#   4. alza max-comments-pro-user e total-comments-limit (sono a 0 ora)
+# Setup:
+#   1. Lo Space e' gia' deployato: https://huggingface.co/spaces/mattysaints/instagram_bot
+#   2. La bearer key vive in .env.local come IG_COMMENT_SPACE_KEY=sk_...
+#      (caricata automaticamente da ai_comment.py, o via run-dynamic.py / run-bot.sh)
+#   3. Per switchare Space (o testare localmente): cambia ai-comments-space-url.
 #
 # NB: i commenti restano comunque uno strumento ad ALTO rischio anti-spam.
 # Tabelle anti-ban 2026: max 5-10 commenti/giorno, mai >2 nello stesso post,
 # pause >60s tra due commenti consecutivi (gia' enforce-ato dal throttler).
 # ---------------------------------------------------------------------------
-ai-comments-enabled: true                  # ATTIVO: usa Gemini per generare commenti context-aware
-# ai-comments-api-key: "AIzaSy..."         # NON mettere qui: usa env GEMINI_API_KEY (caricata da .env.local via run-dynamic.py / run-bot.sh)
-ai-comments-model: gemini-2.5-flash-lite   # PRIMARIO: economico e veloce. Se fallisce (rate-limit/5xx/safety) il bot prova in cascata 2.5-flash, 1.5-flash-8b, 1.5-flash.
-# ai-comments-models: "gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash-8b"  # OPZIONALE: catena custom (overrides il default cascade)
+ai-comments-enabled: true                                              # ATTIVO: usa lo Space HF
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space      # override se testi in locale (es. http://localhost:7860)
+# ai-comments-space-key: "sk_..."                                       # NON mettere qui: usa env IG_COMMENT_SPACE_KEY
 ai-comments-language: Italian              # lingua dei commenti generati
 ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Mattia, competitive classic physique bodybuilding athlete based in Turin (Torino, Piemonte, Italy). He trains seriously, follows a structured prep, and is passionate about gym culture, hypertrophy, posing, and contest prep. Tone: technical when relevant (mention specific muscles, exercises, periodization, symmetry, conditioning), peer-to-peer between fellow athletes, casual Italian register, genuine and direct. NEVER salesy, NEVER mention coaching/services/DM/link. NEVER use emoji, hashtags or exclamation marks. Reference something specific from the caption or visible context (exercise, physique detail, competition, nutrition). 1 short sentence max, sound like a fellow competitive athlete."
 ai-comments-fallback-to-file: true         # on AI failure, fallback a comments_list.txt (consigliato)
@@ -204,7 +202,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [11.51-13.21, 15.04-16.34, 18.18-19.48, 21.12-22.42, 00.03-01.33]   # generata dinamicamente da run-dynamic.py
+working-hours: [07.03-08.33, 10.01-11.31, 12.46-14.16, 15.40-17.10, 18.41-20.11]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)
