@@ -240,11 +240,12 @@ daily-pm-cap: 0
 daily-caps-weekday-multiplier: mon:1.0,tue:1.15,wed:1.15,thu:1.15,fri:0.9,sat:0.55,sun:0.5
 
 ##############################################################################
-# AI Comments (Gemini). Key letta da .env.local (GEMINI_API_KEY).
+# AI Comments (HF Space mattysaints/instagram_bot).
+# Bearer key letta da .env.local (IG_COMMENT_SPACE_KEY).
 ##############################################################################
 
 ai-comments-enabled: true
-ai-comments-model: gemini-2.5-flash-lite
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
 ai-comments-language: Italian
 # IMPORTANTE: configargparse non supporta YAML multi-line (>, |): le righe
 # successive verrebbero interpretate come chiavi separate. Tenere il prompt
@@ -259,7 +260,6 @@ ai-comments-prompt-hint: "L'autore del commento e' un personal trainer / coach i
 ##############################################################################
 
 ai-dm-enabled: false
-ai-dm-model: gemini-2.5-flash
 ai-dm-language: Italian
 ai-dm-allow-emoji: true
 ai-dm-fetch-bio: false

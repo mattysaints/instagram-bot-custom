@@ -5,7 +5,7 @@
 # questo branch (main): solo follow + like + commenti AI.
 #
 # Target giornaliero:
-#   follow:   60-70    | like: 120-150 | commenti: 60-90 (AI Gemini) | DM: 0
+#   follow:   60-70    | like: 120-150 | commenti: 60-90 (AI via HF Space) | DM: 0
 # Rate orario garantito:
 #   follow:  <= 8-10/h | like: <= 15-20/h | commenti: <= 10-15/h
 # Strategia: 5 micro-sessioni brevi in fasce umane, niente raffiche.
@@ -157,28 +157,26 @@ daily-comments-cap: 80                     # [safety #1] ridotto da 100: tetto g
 daily-pm-cap: 0                            # OFF su main (DM disabilitati, vedi total-pm-limit)
 
 # ---------------------------------------------------------------------------
-# AI Comments (Google Gemini) - DISABILITATO di default
-# Quando abilitato, prima di pescare un commento dal file txt il bot prova a
-# generarne uno via Gemini API basandosi sulla caption del post (estratta via
-# UI). On any error (no key, rete, rate-limit, safety block, output con
-# emoji/hashtag/!) cade automaticamente su comments_list.txt -> zero rischio
-# di crash o di postare commenti tipo-bot.
+# AI Comments (HF Space mattysaints/instagram_bot) - ATTIVO
+# Il bot POSTa caption+metadata al Space, lo Space usa HF Inference Providers
+# (Llama 3.3 70B -> Qwen 2.5 72B -> Mistral Small 3.1 24B in cascata) e
+# risponde con un commento breve, in italiano, senza emoji/#/!. Se lo Space
+# fallisce (rete, 5xx, timeout, cold-start, guardrail) il bot cade su
+# comments_list.txt -> zero rischio di crash.
 #
-# Per attivare:
-#   1. ottieni una API key gratuita da https://aistudio.google.com/app/apikey
-#   2. esporta GEMINI_API_KEY=AIzaSy... nel tuo shell, OPPURE metti la key
-#      direttamente sotto ai-comments-api-key (ATTENZIONE: non committare!)
-#   3. setta ai-comments-enabled: true
-#   4. alza max-comments-pro-user e total-comments-limit (sono a 0 ora)
+# Setup:
+#   1. Lo Space e' gia' deployato: https://huggingface.co/spaces/mattysaints/instagram_bot
+#   2. La bearer key vive in .env.local come IG_COMMENT_SPACE_KEY=sk_...
+#      (caricata automaticamente da ai_comment.py, o via run-dynamic.py / run-bot.sh)
+#   3. Per switchare Space (o testare localmente): cambia ai-comments-space-url.
 #
 # NB: i commenti restano comunque uno strumento ad ALTO rischio anti-spam.
 # Tabelle anti-ban 2026: max 5-10 commenti/giorno, mai >2 nello stesso post,
 # pause >60s tra due commenti consecutivi (gia' enforce-ato dal throttler).
 # ---------------------------------------------------------------------------
-ai-comments-enabled: true                  # ATTIVO: usa Gemini per generare commenti context-aware
-# ai-comments-api-key: "AIzaSy..."         # NON mettere qui: usa env GEMINI_API_KEY (caricata da .env.local via run-dynamic.py / run-bot.sh)
-ai-comments-model: gemini-2.5-flash-lite   # PRIMARIO: economico e veloce. Se fallisce (rate-limit/5xx/safety) il bot prova in cascata 2.5-flash, 1.5-flash-8b, 1.5-flash.
-# ai-comments-models: "gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash-8b"  # OPZIONALE: catena custom (overrides il default cascade)
+ai-comments-enabled: true                                              # ATTIVO: usa lo Space HF
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space      # override se testi in locale (es. http://localhost:7860)
+# ai-comments-space-key: "sk_..."                                       # NON mettere qui: usa env IG_COMMENT_SPACE_KEY
 ai-comments-language: Italian              # lingua dei commenti generati
 ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Mattia, competitive classic physique bodybuilding athlete based in Turin (Torino, Piemonte, Italy). He trains seriously, follows a structured prep, and is passionate about gym culture, hypertrophy, posing, and contest prep. Tone: technical when relevant (mention specific muscles, exercises, periodization, symmetry, conditioning), peer-to-peer between fellow athletes, casual Italian register, genuine and direct. NEVER salesy, NEVER mention coaching/services/DM/link. NEVER use emoji, hashtags or exclamation marks. Reference something specific from the caption or visible context (exercise, physique detail, competition, nutrition). 1 short sentence max, sound like a fellow competitive athlete."
 ai-comments-fallback-to-file: true         # on AI failure, fallback a comments_list.txt (consigliato)

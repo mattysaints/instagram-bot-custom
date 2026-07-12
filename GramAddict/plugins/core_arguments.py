@@ -283,40 +283,30 @@ class CoreArguments(Plugin):
                 "metavar": "1-2",
                 "default": "1",
             },
-            # ---- AI comments (Gemini) -----------------------------------------------
+            # ---- AI comments (HF Space) ---------------------------------------------
             # Quando abilitato, prima di pescare un commento dal file txt il bot
-            # prova a generarne uno via Gemini API basandosi sulla caption del
-            # post. Su qualunque errore (no key, rete, rate-limit, safety block)
-            # cade automaticamente sul commento del txt: zero rischio di crash.
+            # POSTa caption+metadata a un HuggingFace Space (mattysaints/instagram_bot).
+            # Lo Space usa HF Inference Providers (Llama 3.3 70B, Qwen 2.5 72B,
+            # Mistral Small 3.1 24B in cascata). Su qualunque errore (rete,
+            # timeout, 5xx, guardrail hit) il bot cade su comments_list.txt:
+            # zero rischio di crash.
             {
                 "arg": "--ai-comments-enabled",
-                "help": "enable AI-generated comments via Google Gemini (fallback to comments_list.txt on any error)",
+                "help": "enable AI-generated comments via HF Space (fallback to comments_list.txt on any error)",
                 "action": "store_true",
             },
             {
-                "arg": "--ai-comments-api-key",
+                "arg": "--ai-comments-space-url",
                 "nargs": None,
-                "help": "Google Gemini API key. If unset, reads env GEMINI_API_KEY / GOOGLE_AI_API_KEY",
-                "metavar": "AIzaSy...",
-                "default": None,
+                "help": "URL of the HF Space that generates comments (default: mattysaints/instagram_bot). Must expose POST /api/generate.",
+                "metavar": "https://mattysaints-instagram-bot.hf.space",
+                "default": "https://mattysaints-instagram-bot.hf.space",
             },
             {
-                "arg": "--ai-comments-model",
+                "arg": "--ai-comments-space-key",
                 "nargs": None,
-                "help": "Gemini model id (default: gemini-2.5-flash-lite). Used as primary; fallback cascade kicks in automatically if it fails.",
-                "metavar": "gemini-2.5-flash-lite",
-                "default": "gemini-2.5-flash-lite",
-            },
-            {
-                "arg": "--ai-comments-models",
-                "nargs": None,
-                "help": (
-                    "OPTIONAL explicit fallback chain: comma-separated list of Gemini "
-                    "models to try in order. If set, OVERRIDES the default cascade. "
-                    "Example: 'gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash-8b'. "
-                    "Leave unset to use the smart default cascade."
-                ),
-                "metavar": "model1,model2,model3",
+                "help": "Bearer token for the Space endpoint. If unset, reads env IG_COMMENT_SPACE_KEY.",
+                "metavar": "sk_...",
                 "default": None,
             },
             {
@@ -338,35 +328,29 @@ class CoreArguments(Plugin):
                 "help": "if AI generation fails, fall back to comments_list.txt (default: on). Set to false to skip the comment entirely on AI failure.",
                 "action": "store_true",
             },
-            # ---- AI direct messages (Gemini) ----------------------------------------
+            # ---- AI direct messages (HF Space) --------------------------------------
             # Personalizza i DM del job dm-followback usando bio + nome + caption
-            # ultimo post del destinatario. Fallback su pm_list.txt in caso di
-            # errore (rete, rate-limit, safety block, output non conforme).
+            # ultimo post del destinatario. Backend: stesso Space dei commenti,
+            # endpoint POST /api/generate_dm. Ereditano URL/key da --ai-comments-*
+            # se non specificati. Fallback su pm_list.txt in caso di errore.
             # Se ai-dm-enabled non e' settato, eredita da ai-comments-enabled.
             {
                 "arg": "--ai-dm-enabled",
-                "help": "enable AI-generated personalized DMs via Google Gemini for the dm-followback job (fallback to pm_list.txt on any error). If unset, inherits ai-comments-enabled.",
+                "help": "enable AI-generated personalized DMs via HF Space for the dm-followback job (fallback to pm_list.txt on any error). If unset, inherits ai-comments-enabled.",
                 "action": "store_true",
             },
             {
-                "arg": "--ai-dm-api-key",
+                "arg": "--ai-dm-space-url",
                 "nargs": None,
-                "help": "Google Gemini API key for DMs. If unset, falls back to ai-comments-api-key, then env GEMINI_API_KEY / GOOGLE_AI_API_KEY.",
-                "metavar": "AIzaSy...",
+                "help": "URL of the HF Space for DMs (default: inherits ai-comments-space-url). Must expose POST /api/generate_dm.",
+                "metavar": "https://mattysaints-instagram-bot.hf.space",
                 "default": None,
             },
             {
-                "arg": "--ai-dm-model",
+                "arg": "--ai-dm-space-key",
                 "nargs": None,
-                "help": "Gemini model id for DMs (default: inherits ai-comments-model). Used as primary; cascade kicks in on failure.",
-                "metavar": "gemini-2.5-flash-lite",
-                "default": None,
-            },
-            {
-                "arg": "--ai-dm-models",
-                "nargs": None,
-                "help": "OPTIONAL explicit fallback chain for DMs (comma-separated). Overrides default cascade.",
-                "metavar": "model1,model2,model3",
+                "help": "Bearer token for the DM Space endpoint. If unset, falls back to ai-comments-space-key, then env IG_COMMENT_SPACE_KEY.",
+                "metavar": "sk_...",
                 "default": None,
             },
             {
@@ -386,7 +370,7 @@ class CoreArguments(Plugin):
             {
                 "arg": "--ai-dm-allow-emoji",
                 "nargs": None,
-                "help": "allow up to 1-2 light emojis in AI DMs (default: true). Set to 'false' to forbid emojis entirely.",
+                "help": "allow up to 1 light emoji in AI DMs (default: true). Set to 'false' to forbid emojis entirely.",
                 "metavar": "true|false",
                 "default": "true",
             },
