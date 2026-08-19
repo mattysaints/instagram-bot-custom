@@ -170,8 +170,9 @@ daily-unfollows-cap: 60
 daily-comments-cap: 40
 daily-pm-cap: 0
 
-## Stories OFF: il ring storie non si apre in modo affidabile su IG recenti
-## ("Failed to open the story container"). Rischio senza beneficio.
+## Watch-stories OFF: guardare le storie durante le interazioni non porta
+## nulla e allunga la sessione. NB: e' diverso dal job answer-story-stickers,
+## che apre le storie dei target apposta per rispondere ai box domande.
 stories-count: 0
 stories-percentage: 0
 
@@ -198,6 +199,31 @@ ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
 ai-comments-language: Italian
 ai-comments-prompt-hint: "L'autore del commento e' Roberto Buonomo, IFBB PRO e coach di Milano, fondatore dello studio FIT LAB (Corso di Porta Romana) e del team RB Coaching. E' campione italiano IFBB 2019 categoria -100kg e ha preso la pro card a 25 anni, quindi quando il tema e' allenamento o gara puo' permettersi un registro tecnico e concreto (esecuzione, volume, periodizzazione, condizionamento, posing, alimentazione). E' anche educatore alimentare, quindi sul cibo puo' dire qualcosa di sensato senza fare il maestrino. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption, non forzare il tema palestra. Se la caption parla di viaggio commenta il posto, se parla di cibo commenta il piatto, se parla di famiglia o di un momento personale commenta con empatia, se parla di lavoro commenta quello. Solo se la caption e' davvero su allenamento, gara o dieta usa il registro tecnico. Cita SEMPRE un dettaglio concreto preso dalla caption (una parola, un luogo, un numero, un esercizio, un ingrediente) cosi' si capisce che il post e' stato letto davvero. Italiano colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM: e' un commento sotto un post, non una pubblicita'. MAI emoji, hashtag o punti esclamativi. Una frase breve, come uno che scorre il feed e commenta di getto."
 ai-comments-fallback-to-file: true
+
+# ---------------------------------------------------------------------------
+# Risposte agli sticker delle storie altrui (box domande)
+#
+# Il bot apre le storie di questi account e, se trova un box domande, risponde
+# con una frase corta generata dallo Space ("cosa alleni oggi?" -> "petto").
+# Il nome finisce nella casella risposte dell'autore, dove arrivano poche
+# decine di messaggi invece delle migliaia di commenti sotto ai post.
+#
+# Due modalita', indipendenti:
+#  1) sticker-check-percentage -> durante il flusso normale, per ogni
+#     profilo candidato il bot apre anche le sue storie e, se trova un box
+#     domande, risponde. E' la modalita' principale: colpisce i follower
+#     dei blogger, cioe' il target vero.
+#  2) answer-story-stickers   -> job dedicato che va sulle storie degli
+#     account elencati qui sotto (i big). Serve a farsi notare da loro.
+# Ogni risposta e' molto visibile, quindi i volumi restano bassi.
+# ---------------------------------------------------------------------------
+answer-story-stickers: [mirco_fila, lelerico_ifbbpro, gianzcoach, fabrizio_liparoti, valentinotozzi, alex_ifbb_pro, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, giusepperomanocoach, goldsgymitaly, actionfit.italia]
+sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
+
+sticker-replies-limit: 3-5                 # risposte per sessione
+stories-per-source-limit: 6                # storie da controllare per account
+ai-sticker-enabled: true
+ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, IFBB PRO e coach a Milano. Risponde allo sticker come farebbe un collega che scorre le storie: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 
 # ---------------------------------------------------------------------------
 # Scheduling

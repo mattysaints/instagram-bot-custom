@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from argparse import Namespace
 from datetime import datetime
 from os import path
@@ -43,6 +44,12 @@ from GramAddict.core.views import (
 )
 
 logger = logging.getLogger(__name__)
+
+# "Question sticker. Cosa alleni oggi?. Double tap to reply."
+_STICKER_DESC_RE = re.compile(
+    r"^\s*Question sticker\.\s*(.*?)\.?\s*(?:Double tap to reply\.?)?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def load_config(config):
@@ -1101,6 +1108,89 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
     return False
 
 
+def _try_answer_sticker(
+    device: DeviceFacade,
+    args: Namespace,
+    session_state: SessionState,
+    author: str,
+) -> bool:
+    """Se la storia a schermo ha un box domande, genera e invia una risposta.
+
+    Ritorna True se ha risposto. Pensata per essere chiamata mentre si e' gia'
+    dentro il viewer delle storie: non naviga e non apre niente.
+
+    Resource-id verificati su IG 300.0.0.29.110 (19/08/2026). Nota: la
+    content-desc dice "Double tap to reply", ma quella e' la dicitura per
+    TalkBack: con uiautomator serve un CLICK SINGOLO, il doppio tap viene
+    letto come due tap e fa avanzare la storia.
+    """
+    from GramAddict.core import ai_sticker
+
+    if not ai_sticker.is_enabled(args):
+        return False
+
+    app_id = args.app_id
+    container = device.find(resourceId=f"{app_id}:id/question_sticker_container_view")
+    if not container.exists():
+        return False
+
+    view = device.find(resourceId=f"{app_id}:id/question_sticker_view")
+    desc = view.ui_info().get("contentDescription", "") if view.exists() else ""
+    m = _STICKER_DESC_RE.match(desc or "")
+    question = (m.group(1) if m else (desc or "")).strip().rstrip(".")
+    if not question:
+        logger.debug("[sticker] sticker presente ma domanda illeggibile, salto.")
+        return False
+
+    logger.info(f"[sticker] @{author} chiede: '{question}'")
+    result = ai_sticker.generate_sticker_reply(
+        args,
+        sticker_type=ai_sticker.STICKER_QUESTION,
+        prompt_text=question,
+        author_username=author,
+    )
+    reply = result.get("reply")
+    if not reply:
+        if result.get("refused"):
+            logger.info("[sticker] tema sensibile, non rispondo.")
+        return False
+
+    container.click()
+    random_sleep(1, 2, modulable=False)
+    field = device.find(resourceId=f"{app_id}:id/question_sticker_answer")
+    if not field.exists(Timeout.MEDIUM):
+        logger.info("[sticker] campo di risposta non comparso, annullo.")
+        cancel = device.find(resourceId=f"{app_id}:id/cancel_button")
+        if cancel.exists():
+            cancel.click()
+        else:
+            device.back()
+        return False
+
+    field.set_text(reply)
+    random_sleep(1, 2, modulable=False)
+
+    # il bottone Send compare SOLO a campo pieno: se manca, il testo non e'
+    # stato scritto davvero e inviare non ha senso
+    send = device.find(resourceId=f"{app_id}:id/question_sticker_send_button")
+    if not send.exists(Timeout.MEDIUM):
+        logger.info("[sticker] bottone Send assente, annullo senza inviare.")
+        cancel = device.find(resourceId=f"{app_id}:id/cancel_button")
+        if cancel.exists():
+            cancel.click()
+        else:
+            device.back()
+        return False
+
+    send.click()
+    random_sleep(2, 3, modulable=False)
+    logger.info(
+        f"[sticker] risposto a @{author}: '{reply}'",
+        extra={"color": f"{Style.BRIGHT}"},
+    )
+    return True
+
+
 def _watch_stories(
     device: DeviceFacade,
     profile_view: ProfileView,
@@ -1109,9 +1199,18 @@ def _watch_stories(
     args: Namespace,
     session_state: SessionState,
 ) -> int:
-    if not random_choice(stories_percentage):
+    from GramAddict.core import ai_sticker
+
+    want_watch = random_choice(stories_percentage)
+    sticker_pct = get_value(
+        getattr(args, "sticker_check_percentage", None) or "0", None, 0
+    )
+    want_sticker = ai_sticker.is_enabled(args) and random_choice(sticker_pct)
+    if not want_watch and not want_sticker:
         return 0
-    if not session_state.check_limit(
+    # Il limite WATCHES governa solo il "guardare": cercare un box domande non
+    # consuma quel budget, quindi non blocca l'apertura delle storie.
+    if want_sticker or not session_state.check_limit(
         limit_type=session_state.Limit.WATCHES, output=True
     ):
 
@@ -1151,6 +1250,10 @@ def _watch_stories(
             stories_to_watch: int = get_value(
                 args.stories_count, "Stories count: {}.", 1
             )
+            if want_sticker:
+                # con stories-count a 0 il ciclo non girerebbe e lo sticker
+                # non verrebbe mai cercato oltre la prima storia
+                stories_to_watch = max(stories_to_watch, 3)
             stories_counter = 0
             logger.debug("Open the story container.")
             stories_ring.click(sleep=SleepTime.DEFAULT)
@@ -1163,8 +1266,10 @@ def _watch_stories(
                 or story_username.strip().casefold() == username.casefold()
             ):
                 start = datetime.now()
+                if want_sticker:
+                    _try_answer_sticker(device, args, session_state, username)
                 try:
-                    if not watch_story():
+                    if want_watch and not watch_story():
                         return stories_counter
                 except Exception as e:
                     logger.debug(f"Exception: {e}")
@@ -1179,7 +1284,11 @@ def _watch_stories(
                             sleep=SleepTime.ZERO,
                             crash_report_if_fails=False,
                         )
-                        if not watch_story():
+                        if want_sticker:
+                            _try_answer_sticker(
+                                device, args, session_state, username
+                            )
+                        if want_watch and not watch_story():
                             break
                     except Exception as e:
                         logger.debug(f"Exception: {e}")

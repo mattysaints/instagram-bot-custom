@@ -143,7 +143,9 @@ daily-unfollows-cap: 50
 daily-comments-cap: 30
 daily-pm-cap: 0
 
-## Stories OFF: il ring storie altrui non si apre in modo affidabile.
+## Watch-stories OFF: guardare le storie durante le interazioni non porta
+## nulla e allunga la sessione. NB: e' diverso dal job answer-story-stickers,
+## che apre le storie dei target apposta per rispondere ai box domande.
 stories-count: 0
 stories-percentage: 0
 
@@ -169,6 +171,32 @@ ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
 ai-comments-language: auto
 ai-comments-prompt-hint: "Chi commenta e' Roberto Buonomo, atleta IFBB PRO italiano di classic physique: pro card a 25 anni, campione italiano IFBB 2019 categoria -100kg e titolo assoluto, secondo all'Arnold Classic Barcelona 2019. Commenta da ATLETA, non da coach in cerca di clienti: e' uno del giro che parla con i suoi pari. Quando il post riguarda allenamento, gara, prep o posing puo' entrare nel merito tecnico (esecuzione, volume, periodizzazione, condizionamento, simmetria, timing della peak week) perche' quelle cose le fa davvero. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption e non forzare il tema bodybuilding. Se parla di viaggio commenta il posto, se parla di cibo commenta il piatto, se e' un momento personale commenta con empatia. Cita SEMPRE un dettaglio concreto della caption (un numero, un esercizio, un luogo, un nome) cosi' si capisce che il post e' stato letto. Registro colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM. MAI emoji, hashtag o punti esclamativi. Una frase breve."
 ai-comments-fallback-to-file: true
+
+# ---------------------------------------------------------------------------
+# Risposte agli sticker delle storie altrui (box domande)
+#
+# Il bot apre le storie di questi account e, se trova un box domande, risponde
+# con una frase corta generata dallo Space ("cosa alleni oggi?" -> "petto").
+# Il nome finisce nella casella risposte dell'autore, dove arrivano poche
+# decine di messaggi invece delle migliaia di commenti sotto ai post.
+#
+# Due modalita', indipendenti:
+#  1) sticker-check-percentage -> durante il flusso normale, per ogni
+#     profilo candidato il bot apre anche le sue storie e, se trova un box
+#     domande, risponde. E' la modalita' principale: colpisce i follower
+#     dei blogger, cioe' il target vero.
+#  2) answer-story-stickers   -> job dedicato che va sulle storie degli
+#     account elencati qui sotto (i big). Serve a farsi notare da loro.
+# Ogni risposta e' molto visibile, quindi i volumi restano bassi.
+# ---------------------------------------------------------------------------
+answer-story-stickers: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.presti_ifbbpro, lelerico_ifbbpro, mirco_fila, alex_ifbb_pro, manuel_santalucia_ifbbpro, andrea_muzilla_ifbbpro]
+sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
+
+sticker-replies-limit: 3-5                 # risposte per sessione
+stories-per-source-limit: 6                # storie da controllare per account
+ai-sticker-enabled: true
+ai-sticker-language: auto
+ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 
 # ---------------------------------------------------------------------------
 # Scheduling - 4 sessioni/giorno (working-hours riscritta da run-dynamic.py)
