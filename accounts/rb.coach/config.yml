@@ -82,11 +82,33 @@ action-throttle-pm-min: 999999             # DM OFF su questa config
 # IMPORTANTE: ogni username DEVE esistere su IG. Verifica aprendo
 # instagram.com/USERNAME prima di aggiungerne di nuovi.
 #
-# Composizione: federazioni + atleti IFBB PRO + coach + community nazionali.
-# Non sono incluse sorgenti Torino/Piemonte (erano tarate su un altro account):
-# per il bacino locale usa gli hashtag Milano piu' sotto, e aggiungi qui le
-# palestre milanesi che verifichi a mano.
-blogger-followers: [fitlab_milano, afmi2_segrate, ifbbproitaly, npc_italy, wnbfitaly, wbpf_italy, bbfitalia, nbfi_italy, italia.bodybuilding, bodybuilding_italia_community, bodybuilding_italia_community_, malatidipalestraofficial, thenewclassic_s, fit.italia, oneforall.hub, ricette_ghisa, viveredipalestra, manuel_santalucia_ifbbpro, andrea.presti_ifbbpro, alex_ifbb_pro, dario_beloli_ifbbpro, gerard_ifbb_, punzetti_sara_ifbbpro, anna.ladurner.ifbbpro, ornella_angileri_ifbbpro, albertomilani_ifbbpro, giulioalbi_ifbbpro, ricky_ifbbpro, febo_gambacorta_ifbb_pro, anna.terzo_ifbb_pro, grumpy_grizzly_ifbbpro, legion_ifbbpro, paola_wpd_ifbb_pro, zagarella_ifbb_pro, lorenzo.coppola_ifbbpro, omarnonni_pnbapro, giusepperomanocoach, coach_giorgio.terragno, mariovalentini_coach, enzo.jossacoach, dario.pnbapro.coach, ivano.vitagliano.coach, kristianluino_trainer, marcodallabattista_pt, fabioflumeri_pt, alessandrofichicelli, thehungrylonewolf, matteoinno88, gorillone_, il.pump.quotidiano, edwin_underwood, pieronocerino1, vitastrong_ita, ludovico.lemme, alex__zuccaro, danielacamboni, giusi.cesarini]
+# STRATEGIA @rb.coach: bacino ITALIANO, con priorita' Lombardia. Il target
+# sono persone che si allenano e potrebbero diventare clienti, non altri pro.
+#
+# blogger-followers = pesca i FOLLOWER di questi account e ci interagisce
+# (like + follow + commento). NON tocca i post dell'account stesso: per quello
+# c'e' il job `blogger` piu' sotto.
+#
+# Ordine dei gruppi (il bot li pesa poi da solo con auto-fbr-refresh):
+#   1. Palestre Lombardia  -> follower locali, i piu' convertibili in clienti
+#   2. Competitor italiani -> pubblico gia' educato al coaching a pagamento
+#   3. Brand integratori   -> bacino ampio, italiano, meno mirato
+#   4. Federazioni/community
+#
+# Tutti gli handle sotto sono stati verificati il 19/08/2026. Se ne aggiungi,
+# controlla prima aprendo instagram.com/USERNAME: una sorgente inesistente
+# brucia ~30s a sessione finche' la quarantena automatica non la esclude.
+blogger-followers: [goldsgymitaly, actionfit.italia, actionfit.cologno, actionfit.cerromaggiore, actionfit.liguria, actionfit.fulviotesti, fitlab_milano, afmi2_segrate, mirco_fila, lelerico_ifbbpro, team_presti_coaching, andrea.presti_ifbbpro, fabrizio_liparoti, valentinotozzi, coach.valentinotozzi, gianzcoach, alex_ifbb_pro, giusepperomanocoach, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, andrea_mammoli, tsunaminutrition, yamamotonutritionitalia, prozisitalia, prozis.team.italia, lifeproitalia, vitastrong_ita, ifbbproitaly, npc_italy, wnbfitaly, wbpf_italy, bbfitalia, nbfi_italy, italia.bodybuilding, bodybuilding_italia_community, bodybuilding_italia_community_, culturismoitaliano, malatidipalestraofficial, thenewclassic_s, fit.italia, oneforall.hub, ricette_ghisa, viveredipalestra, manuel_santalucia_ifbbpro, albertomilani_ifbbpro, giulioalbi_ifbbpro, ricky_ifbbpro, febo_gambacorta_ifbb_pro, lorenzo.coppola_ifbbpro, omarnonni_pnbapro, coach_giorgio.terragno, mariovalentini_coach, enzo.jossacoach, marcodallabattista_pt, alessandrofichicelli, thehungrylonewolf, matteoinno88, il.pump.quotidiano, edwin_underwood, pieronocerino1]
+
+# blogger = commenta i post DI QUESTI ACCOUNT (non dei loro follower).
+# Serve a farsi vedere sotto ai post dei competitor e degli influencer, dove
+# c'e' gia' il pubblico giusto che legge i commenti.
+#
+# Volutamente corta: commentare sotto ai big e' molto esposto, un commento
+# fuori luogo lo vedono in migliaia. Solo italiani, come richiesto.
+# NB: il volume reale e' governato da total-comments-limit e dal throttle,
+# non dalla lunghezza di questa lista.
+blogger: [mirco_fila, lelerico_ifbbpro, andrea.presti_ifbbpro, andrea_mammoli, valentinotozzi, fabrizio_liparoti, gianzcoach, alex_ifbb_pro, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, giusepperomanocoach, culturismoitaliano, italia.bodybuilding, bodybuilding_italia_community]
 
 # Hashtag: pesca chi ha messo LIKE ai post recenti. Lead piu' caldi dei
 # semplici follower (interesse esplicito e recente).
