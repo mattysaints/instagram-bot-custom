@@ -110,6 +110,14 @@ blogger-followers: [goldsgymitaly, actionfit.italia, actionfit.cologno, actionfi
 # non dalla lunghezza di questa lista.
 blogger: [mirco_fila, lelerico_ifbbpro, andrea.presti_ifbbpro, andrea_mammoli, valentinotozzi, fabrizio_liparoti, gianzcoach, alex_ifbb_pro, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, giusepperomanocoach, culturismoitaliano, italia.bodybuilding, bodybuilding_italia_community]
 
+# Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
+# follow, niente storie. Like/follow/sticker restano sui profili piccoli
+# (i follower dei blogger), che sono il target che converte.
+# Questo flag sospende anche i limiti di dimensione di filters.yml per il
+# solo job `blogger`: con max_followers a 8000 un account da 300k verrebbe
+# scartato e non commenteremmo nulla.
+blogger-comment-only: true
+
 # Hashtag: pesca chi ha messo LIKE ai post recenti. Lead piu' caldi dei
 # semplici follower (interesse esplicito e recente).
 # Mix: bodybuilding agonistico nazionale + fitness Milano/Lombardia.
@@ -217,11 +225,13 @@ ai-comments-fallback-to-file: true
 #     account elencati qui sotto (i big). Serve a farsi notare da loro.
 # Ogni risposta e' molto visibile, quindi i volumi restano bassi.
 # ---------------------------------------------------------------------------
-answer-story-stickers: [mirco_fila, lelerico_ifbbpro, gianzcoach, fabrizio_liparoti, valentinotozzi, alex_ifbb_pro, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, giusepperomanocoach, goldsgymitaly, actionfit.italia]
+# answer-story-stickers: [...]   # DISATTIVATO: gli sticker si fanno solo sui
+#   profili piccoli, dentro il flusso normale (sticker-check-percentage).
+#   Riattivalo solo se vuoi rispondere anche ai box domande dei big.
 sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
 
-sticker-replies-limit: 3-5                 # risposte per sessione
-stories-per-source-limit: 6                # storie da controllare per account
+# sticker-replies-limit: 3-5                 # risposte per sessione
+# stories-per-source-limit: 6                # storie da controllare per account
 ai-sticker-enabled: true
 ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, IFBB PRO e coach a Milano. Risponde allo sticker come farebbe un collega che scorre le storie: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 

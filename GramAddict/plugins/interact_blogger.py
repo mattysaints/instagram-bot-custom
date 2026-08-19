@@ -1,4 +1,5 @@
 import logging
+from contextlib import contextmanager
 from functools import partial
 from random import seed
 
@@ -14,6 +15,53 @@ from GramAddict.core.plugin_loader import Plugin
 from GramAddict.core.utils import get_value, init_on_things, sample_sources
 
 logger = logging.getLogger(__name__)
+
+# I filtri di filters.yml sono GLOBALI: valgono per ogni job. Con
+# max_followers a 8000 il job `blogger` non commenterebbe mai i profili
+# grandi, perche' interact_with_user li scarta prima di fare qualsiasi cosa.
+# Qui i limiti di dimensione vengono sospesi per la durata del job e
+# ripristinati subito dopo.
+_SIZE_FIELDS = (
+    "min_followers",
+    "max_followers",
+    "min_followings",
+    "max_followings",
+    "min_posts",
+    "last_post_max_age_days",
+)
+# potency_ratio non usa None come "nessun limite" ma le sentinelle 0 e 999
+_POTENCY_NEUTRAL = {"min_potency_ratio": 0, "max_potency_ratio": 999}
+
+
+@contextmanager
+def _size_filters_suspended(profile_filter):
+    """Sospende i filtri di dimensione, poi li rimette esattamente com'erano."""
+    conditions = getattr(profile_filter, "conditions", None)
+    if not conditions:
+        yield
+        return
+
+    watched = list(_SIZE_FIELDS) + list(_POTENCY_NEUTRAL)
+    saved = {k: conditions[k] for k in watched if k in conditions}
+    try:
+        for k in _SIZE_FIELDS:
+            conditions.pop(k, None)
+        conditions.update(_POTENCY_NEUTRAL)
+        yield
+    finally:
+        for k in watched:
+            conditions.pop(k, None)
+        conditions.update(saved)
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
 
 # Script Initialization
 seed()
@@ -49,6 +97,17 @@ class InteractBloggerPostLikers(Plugin):
                 "metavar": ("filename1.txt", "filename2.txt"),
                 "default": None,
                 "operation": True,
+            },
+            {
+                "arg": "--blogger-comment-only",
+                "nargs": None,
+                "help": (
+                    "on the `blogger` job, only comment: no like, no follow, no story "
+                    "stickers, and profile size filters are suspended so big accounts "
+                    "are not skipped (default: true)"
+                ),
+                "metavar": "true|false",
+                "default": "true",
             },
         ]
 
@@ -165,6 +224,22 @@ class InteractBloggerPostLikers(Plugin):
         comment_percentage,
         pm_percentage,
     ):
+        # Sui profili grandi vogliamo solo il commento pubblico: like e follow
+        # non hanno senso (non ricambiano) e le storie degli account grandi non
+        # sono il posto dove farsi notare. Il resto del bot continua a fare
+        # like/follow/sticker sui profili piccoli, che sono il target vero.
+        comment_only = _as_bool(
+            getattr(self.args, "blogger_comment_only", None), default=True
+        )
+        if comment_only:
+            logger.info(
+                "Job blogger in modalita' solo-commento: niente like, follow o storie."
+            )
+            likes_percentage = 0
+            follow_percentage = 0
+            stories_percentage = 0
+            comment_percentage = 100
+
         interaction = partial(
             interact_with_user,
             my_username=self.session_state.my_username,
@@ -192,18 +267,35 @@ class InteractBloggerPostLikers(Plugin):
             source=username,
         )
 
-        handle_blogger(
-            self,
-            device,
-            self.session_state,
-            username,
-            current_job,
-            storage,
-            profile_filter,
-            on_interaction,
-            interaction,
-            is_follow_limit_reached,
-        )
+        if comment_only:
+            # senza questo, un account con piu' follower di max_followers
+            # verrebbe scartato da check_profile e non commenteremmo nulla
+            with _size_filters_suspended(profile_filter):
+                handle_blogger(
+                    self,
+                    device,
+                    self.session_state,
+                    username,
+                    current_job,
+                    storage,
+                    profile_filter,
+                    on_interaction,
+                    interaction,
+                    is_follow_limit_reached,
+                )
+        else:
+            handle_blogger(
+                self,
+                device,
+                self.session_state,
+                username,
+                current_job,
+                storage,
+                profile_filter,
+                on_interaction,
+                interaction,
+                is_follow_limit_reached,
+            )
 
     def handle_blogger_from_file(
         self,

@@ -88,6 +88,14 @@ blogger-followers: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.p
 # dove un IFBB PRO italiano si fa notare dai pari.
 blogger: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.presti_ifbbpro, lelerico_ifbbpro, mirco_fila, andrea_muzilla_ifbbpro, alex_ifbb_pro, manuel_santalucia_ifbbpro, marco_dambrosio_ifbbpro, culturismoitaliano, italia.bodybuilding]
 
+# Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
+# follow, niente storie. Like/follow/sticker restano sui profili piccoli
+# (i follower dei blogger), che sono il target che converte.
+# Questo flag sospende anche i limiti di dimensione di filters.yml per il
+# solo job `blogger`: con max_followers a 8000 un account da 300k verrebbe
+# scartato e non commenteremmo nulla.
+blogger-comment-only: true
+
 # Hashtag verticali sul bodybuilding agonistico, misti IT/EN.
 hashtag-likers-recent: [bodybuildingitalia, preparazioneagonistica, garebodybuilding, classicphysiqueitalia, menphysiqueitalia, ifbbitalia, ifbbpro, classicphysique, bodybuildingmotivation, prepcoach, offseasonbodybuilding, posingpractice, naturalbodybuildingitalia, massamuscolare, definizionemuscolare, ipertrofia]
 
@@ -189,11 +197,13 @@ ai-comments-fallback-to-file: true
 #     account elencati qui sotto (i big). Serve a farsi notare da loro.
 # Ogni risposta e' molto visibile, quindi i volumi restano bassi.
 # ---------------------------------------------------------------------------
-answer-story-stickers: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.presti_ifbbpro, lelerico_ifbbpro, mirco_fila, alex_ifbb_pro, manuel_santalucia_ifbbpro, andrea_muzilla_ifbbpro]
+# answer-story-stickers: [...]   # DISATTIVATO: gli sticker si fanno solo sui
+#   profili piccoli, dentro il flusso normale (sticker-check-percentage).
+#   Riattivalo solo se vuoi rispondere anche ai box domande dei big.
 sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
 
-sticker-replies-limit: 3-5                 # risposte per sessione
-stories-per-source-limit: 6                # storie da controllare per account
+# sticker-replies-limit: 3-5                 # risposte per sessione
+# stories-per-source-limit: 6                # storie da controllare per account
 ai-sticker-enabled: true
 ai-sticker-language: auto
 ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
