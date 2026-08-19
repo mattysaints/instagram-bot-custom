@@ -1108,13 +1108,13 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
     return False
 
 
-def _try_answer_sticker(
+def _try_answer_question_sticker(
     device: DeviceFacade,
     args: Namespace,
     session_state: SessionState,
     author: str,
 ) -> bool:
-    """Se la storia a schermo ha un box domande, genera e invia una risposta.
+    """Se la storia a schermo ha un BOX DOMANDE, genera e invia una risposta.
 
     Ritorna True se ha risposto. Pensata per essere chiamata mentre si e' gia'
     dentro il viewer delle storie: non naviga e non apre niente.
@@ -1189,6 +1189,135 @@ def _try_answer_sticker(
         extra={"color": f"{Style.BRIGHT}"},
     )
     return True
+
+
+def _try_answer_poll_sticker(
+    device: DeviceFacade,
+    args: Namespace,
+    session_state: SessionState,
+    author: str,
+) -> bool:
+    """Se la storia a schermo ha un SONDAGGIO, sceglie un'opzione e vota.
+
+    Resource-id verificati su IG 300.0.0.29.110 (19/08/2026):
+        poll_v2_sticker              contenitore
+        poll_v2_sticker_title        testo della domanda
+        poll_v2_sticker_answer_text  una per opzione, nell'ordine mostrato
+
+    Nota: nessuno di questi nodi ha clickable=true, quindi si vota toccando
+    l'area dell'opzione. uiautomator invia comunque il tap al centro dei
+    bounds, anche su una view non cliccabile.
+    """
+    from GramAddict.core import ai_sticker
+
+    if not ai_sticker.is_enabled(args):
+        return False
+
+    app_id = args.app_id
+    if not device.find(resourceId=f"{app_id}:id/poll_v2_sticker").exists():
+        return False
+
+    # Se il sondaggio mostra le percentuali significa che abbiamo gia' votato:
+    # Instagram le rivela solo dopo il voto (e marca l'opzione scelta con le
+    # varianti *_white). Senza questo controllo il bot ritenterebbe a ogni
+    # passaggio sulla stessa storia.
+    if device.find(
+        resourceId=f"{app_id}:id/poll_v2_sticker_result_percentage"
+    ).exists():
+        logger.debug("[sticker] sondaggio gia' votato, salto.")
+        return False
+
+    title_view = device.find(resourceId=f"{app_id}:id/poll_v2_sticker_title")
+    question = title_view.get_text(error=False) if title_view.exists() else ""
+    if not question:
+        logger.debug("[sticker] sondaggio senza titolo leggibile, salto.")
+        return False
+
+    # le opzioni sono piu' di una: serve l'oggetto u2 nativo per indicizzarle
+    opts_sel = device.deviceV2(
+        resourceId=f"{app_id}:id/poll_v2_sticker_answer_text"
+    )
+    try:
+        n_opts = opts_sel.count
+    except Exception as e:
+        logger.debug(f"[sticker] non riesco a contare le opzioni: {e}")
+        return False
+    if n_opts < 2:
+        logger.debug(f"[sticker] sondaggio con {n_opts} opzioni, salto.")
+        return False
+
+    # Testi E coordinate vanno letti ORA: la chiamata allo Space dura qualche
+    # centinaio di ms e la storia nel frattempo puo' avanzare. Se poi si
+    # ririsolvesse il selettore per indice si otterrebbe UiObjectNotFound, o
+    # peggio si cliccherebbe sull'opzione di un'altra storia.
+    options, centers = [], []
+    for i in range(n_opts):
+        try:
+            info = opts_sel[i].info
+            options.append((info.get("text") or "").strip())
+            b = info["bounds"]
+            centers.append(
+                ((b["left"] + b["right"]) // 2, (b["top"] + b["bottom"]) // 2)
+            )
+        except Exception:
+            options.append("")
+            centers.append(None)
+    if not all(options) or not all(centers):
+        logger.debug("[sticker] opzioni illeggibili, salto.")
+        return False
+
+    logger.info(f"[sticker] sondaggio di @{author}: '{question}' -> {options}")
+    result = ai_sticker.generate_sticker_reply(
+        args,
+        sticker_type=ai_sticker.STICKER_POLL,
+        prompt_text=question,
+        options=options,
+        author_username=author,
+    )
+    choice = result.get("choice")
+    if choice is None:
+        if result.get("refused"):
+            logger.info("[sticker] sondaggio su tema sensibile, non voto.")
+        return False
+    if not isinstance(choice, int) or not (0 <= choice < n_opts):
+        logger.info(f"[sticker] scelta {choice!r} fuori range, non voto.")
+        return False
+
+    # La storia potrebbe essere cambiata durante la chiamata: se il titolo non
+    # e' piu' lo stesso, il voto finirebbe sul sondaggio sbagliato.
+    title_now = device.find(resourceId=f"{app_id}:id/poll_v2_sticker_title")
+    if not title_now.exists() or title_now.get_text(error=False) != question:
+        logger.info("[sticker] la storia e' cambiata durante la generazione, non voto.")
+        return False
+
+    x, y = centers[choice]
+    try:
+        device.deviceV2.click(x, y)
+    except Exception as e:
+        logger.info(f"[sticker] click sull'opzione fallito: {e}")
+        return False
+    random_sleep(2, 3, modulable=False)
+    logger.info(
+        f"[sticker] votato '{options[choice]}' nel sondaggio di @{author}",
+        extra={"color": f"{Style.BRIGHT}"},
+    )
+    return True
+
+
+def _try_answer_sticker(
+    device: DeviceFacade,
+    args: Namespace,
+    session_state: SessionState,
+    author: str,
+) -> bool:
+    """Prova a rispondere allo sticker della storia a schermo, se ce n'e' uno.
+
+    Gestisce box domande e sondaggi. Quiz e slider non sono ancora mappati e
+    vengono ignorati senza errori.
+    """
+    if _try_answer_question_sticker(device, args, session_state, author):
+        return True
+    return _try_answer_poll_sticker(device, args, session_state, author)
 
 
 def _watch_stories(

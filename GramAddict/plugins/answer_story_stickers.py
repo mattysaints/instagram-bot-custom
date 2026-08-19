@@ -20,9 +20,9 @@ Due note imparate sul campo:
     accessibilita'. Compaiono solo guardando la storia di un altro, che poi e'
     l'unico caso che interessa qui.
 
-Sondaggi, quiz e slider non sono ancora implementati: servono i loro
-resource-id, e per averli serve una storia vera che li contenga. Quando lo
-sticker non e' un box domande, viene semplicemente saltato.
+Box domande e SONDAGGI sono entrambi supportati: la logica vera sta in
+GramAddict.core.interaction._try_answer_sticker, condivisa con il flusso
+normale. Quiz e slider non sono ancora mappati e vengono saltati.
 """
 import logging
 from random import seed, shuffle
@@ -190,6 +190,12 @@ class AnswerStoryStickers(Plugin):
         device.swipe(Direction.LEFT, scale=0.5)
         random_sleep(1, 2, modulable=False)
 
+    def _answer_any(self, device, author: str) -> bool:
+        """Delega al dispatcher condiviso (box domande + sondaggi)."""
+        from GramAddict.core.interaction import _try_answer_sticker
+
+        return _try_answer_sticker(device, self.args, self.session_state, author)
+
     def _answer(self, device, question: str, author: str) -> bool:
         """Apre il pannello, scrive la risposta e invia. True se inviata."""
         result = generate_sticker_reply(
@@ -299,12 +305,10 @@ class AnswerStoryStickers(Plugin):
                         break
                     if not self._in_story(device):
                         break
-                    question = self._read_question(device)
-                    if question:
-                        author = self._story_author(device)
-                        logger.info(f"Box domande di @{author}: '{question}'")
-                        if self._answer(device, question, author):
-                            sent += 1
+                    author = self._story_author(device)
+                    if self._answer_any(device, author):
+                        sent += 1
+                    if True:
                             # throttle: stessa cadenza dei commenti, queste
                             # risposte sono altrettanto visibili
                             random_sleep(
