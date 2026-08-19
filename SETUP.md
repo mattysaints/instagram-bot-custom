@@ -1,7 +1,12 @@
 # Setup del fork (clone → bot funzionante)
 
-Istruzioni specifiche di questo fork. Per la doc generale di GramAddict vedi
-[README.md](README.md) e https://docs.gramaddict.org.
+Branch `robertobuonomo`, dedicato all'account **@rb.coach** (Roberto Buonomo /
+RB Coaching, Milano). Per la doc generale di GramAddict vedi [README.md](README.md)
+e https://docs.gramaddict.org.
+
+Il contesto sul coach (palmares, servizi, tono di voce, fonti) sta in
+[accounts/rb.coach/KB.md](accounts/rb.coach/KB.md): serve a rigenerare i prompt
+AI se cambia qualcosa.
 
 ## 1. Dipendenze
 
@@ -24,71 +29,114 @@ Python 3.11-3.14. Le pin in `requirements.txt` sono necessarie: `setuptools<81`
 cp .env.example .env.local
 ```
 
-Poi apri `.env.local` e metti il valore vero di `IG_COMMENT_SPACE_KEY`
-(bearer token dello Space HF che genera i commenti AI — lo trovi nei Secrets
-di https://huggingface.co/spaces/mattysaints/instagram_bot).
+Metti in `.env.local` il valore vero di `IG_COMMENT_SPACE_KEY` (bearer token
+dello Space HF che genera i commenti — nei Secrets di
+https://huggingface.co/spaces/mattysaints/instagram_bot).
 
-Se lo lasci col placeholder il bot parte lo stesso: i commenti AI vengono
-saltati e si usa il fallback `comments_list.txt`.
+Col placeholder il bot parte lo stesso: i commenti AI vengono saltati e si usa
+il fallback `accounts/rb.coach/comments_list.txt`.
 
 ## 3. Device
-
-Il `device:` nei config punta a un serial ADB preciso. Verifica il tuo:
 
 ```bash
 adb devices -l
 ```
 
-e allinea il campo `device:` nei config di `accounts/<username>/`.
-
-Serial attualmente configurati:
-- branch `main` → `f2487e11` (OnePlus 9 Pro fisico)
-- branch `personalcoaching` → `f2487e11`
+Allinea il campo `device:` nei config di `accounts/rb.coach/` al serial reale.
+Ora è impostato su `f2487e11` (ereditato da main): **va cambiato** col device
+che userà Roberto.
 
 Sul telefono servono: **Debug USB** attivo, PC autorizzato, modalità USB
 "Trasferimento file", schermo sbloccato.
 
-## 4. Lancio
+## 4. Warm-up (importante, non saltarlo)
+
+Se l'account non ha mai usato automazione, partire ai cap pieni è il modo più
+veloce per prendere un action-block. Per le prime due settimane:
+
+| Periodo | follow/g | like/g | commenti/g |
+|---|---|---|---|
+| Giorni 1-4 | 15-20 | 40-50 | 0 |
+| Giorni 5-9 | 25-35 | 60-80 | 5-10 |
+| Giorni 10-14 | 40-50 | 90-110 | 15-25 |
+| Da giorno 15 | 50-60 | 100-130 | 25-40 |
+
+Si regola con `daily-follows-cap`, `daily-likes-cap`, `daily-comments-cap` in
+`accounts/rb.coach/config.yml`. I valori committati sono già quelli **a regime**:
+abbassali per la fase iniziale.
+
+In warm-up conviene usare `config-once.yml` (una sessione alla volta, lanciata
+a mano) invece del loop.
+
+## 5. Lancio
 
 ```bash
-# sessione singola manuale
-python run.py --config accounts/marramattia_fmgpro/config-once.yml
+# sessione singola manuale (consigliata in warm-up)
+python run.py --config accounts/rb.coach/config-once.yml
 
-# loop giornaliero con working-hours generate dinamicamente
-python run-dynamic.py --config accounts/marramattia_fmgpro/config.yml
+# loop giornaliero, 5 micro-sessioni con orari generati dinamicamente
+python run-dynamic.py --config accounts/rb.coach/config.yml
 
-# solo unfollow
-python run.py --config accounts/marramattia_fmgpro/config-unfollow.yml
-
-# sorgente culturismoitaliano con filtro follower 5k-10k temporaneo
-./run-culturismo-following.sh
+# solo unfollow di chi non ha ricambiato dopo 3 giorni
+python run.py --config accounts/rb.coach/config-unfollow.yml
 ```
 
-Da PyCharm ci sono già le run configuration pronte in `.idea/runConfigurations/`.
+Strategia consigliata: giorni dispari `config.yml` (follow + like + commenti),
+giorni pari `config-unfollow.yml`. Mescolare follow e unfollow nella stessa
+sessione è un pattern che IG riconosce facilmente.
 
-## 5. Commenti e DM AI
+## 6. Cosa fa il bot
 
-Generati da uno HuggingFace Space (`mattysaints/instagram_bot`) che gira su
-**Groq** (free tier: 14.400 req/giorno) con cascata
-`llama-3.3-70b-versatile` → `llama-3.1-8b-instant` → `gemma2-9b-it`.
-
-- Codice dello Space: repo separato, non incluso qui.
-- Endpoint: `POST /api/generate` (commenti), `POST /api/generate_dm` (DM,
-  usati solo dal branch `personalcoaching`).
-- Su qualunque errore (rete, 5xx, rate-limit, guardrail) il bot ricade sui
-  file `comments_list.txt` / `pm_list.txt`: nessun crash.
-
-Config rilevanti (in `accounts/<username>/config.yml`):
-
-```yaml
-ai-comments-enabled: true
-ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
-# la key NON va qui: sta in .env.local come IG_COMMENT_SPACE_KEY
-```
-
-## 6. Differenze tra i branch
-
-| Branch | Account principale | Feature extra |
+| Feature | Stato | Dove si configura |
 |---|---|---|
-| `main` | `marramattia_fmgpro` | commenti AI, no DM |
-| `personalcoaching` | `simonebestagno` | commenti AI **+ DM AI** (job `dm-followback`) |
+| Commenti AI contestuali | ✅ attivo | `ai-comments-*` in `config.yml` |
+| Follow | ✅ attivo | `follow-percentage`, `follow-limit`, `daily-follows-cap` |
+| Unfollow non-followers | ✅ attivo | `config-unfollow.yml` |
+| Like | ✅ attivo | `likes-count`, `likes-percentage` |
+| Risposte a sondaggi / box domande nelle storie | ❌ **non supportato** | — |
+| DM | ⛔ disattivato di proposito | `total-pm-limit: 0-0` |
+
+### Sui sondaggi e i box domande
+
+GramAddict non ha nessun job per interagire con gli sticker delle storie: le
+storie si possono solo *guardare*, e su questa versione di Instagram nemmeno
+quello funziona in modo affidabile (`Failed to open the story container`), per
+cui sono disattivate (`stories-count: 0`).
+
+Aggiungerla vorrebbe dire scrivere un plugin nuovo che apre le storie,
+riconosce il tipo di sticker (poll a 2 opzioni, quiz a 4, box domande con campo
+testo, slider con emoji) e interagisce di conseguenza. È fattibile con
+uiautomator2 ma è codice fragile — dipende dai resource-id interni di
+Instagram, che cambiano a ogni aggiornamento — e l'interazione ripetuta con le
+storie è molto tracciata lato anti-spam. Prima di provarci va risolto il
+problema a monte: le storie non si aprono.
+
+## 7. Sorgenti
+
+`blogger-followers` in `config.yml` contiene federazioni, atleti IFBB PRO,
+coach e community nazionali. Le sorgenti Torino/Piemonte che c'erano su `main`
+sono state tolte: erano tarate su un altro account.
+
+Per il bacino locale Milano il lavoro lo fanno gli hashtag
+(`palestramilano`, `personaltrainermilano`, `bodybuildingmilano`, …).
+
+Se aggiungi palestre o profili milanesi a `blogger-followers`, **verifica prima
+che l'username esista** aprendo `instagram.com/USERNAME`: una sorgente
+inesistente fa perdere ~30s a sessione finché la quarantena automatica non la
+esclude.
+
+Il bot ricalcola da solo il follow-back-rate per sorgente
+(`auto-fbr-refresh: true`) e pesca più spesso da quelle che convertono.
+
+## 8. Commenti AI
+
+Generati da uno HuggingFace Space (`mattysaints/instagram_bot`) su **Groq**
+(free tier: 14.400 richieste/giorno), cascata `llama-3.3-70b-versatile` →
+`llama-3.1-8b-instant` → `gemma2-9b-it`.
+
+Il prompt (`ai-comments-prompt-hint`) è tarato su Roberto: registro tecnico
+**solo quando la caption parla davvero di allenamento o gara**, altrimenti si
+adatta al contenuto reale (viaggio, cibo, famiglia). Mai vendita, mai menzione
+di FIT LAB o dei servizi, mai emoji/hashtag/punti esclamativi.
+
+Su qualunque errore si cade su `comments_list.txt`: nessun crash.

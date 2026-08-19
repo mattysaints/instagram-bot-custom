@@ -1,0 +1,186 @@
+##############################################################################
+# Config principale - @rb.coach (ROBERTO BUONOMO & COACHING TEAM)
+#
+# CHI E': Roberto Buonomo, IFBB PRO (card a 25 anni, 2019 - tra i piu' giovani
+# pro italiani in attivita'). Campione Italiano IFBB 2019 heavyweight -100kg +
+# titolo assoluto, 2o Arnold Classic Barcelona 2019, Campione Italiano WABBA
+# Junior 2017, BB Overall Ben Weider Classic 2020. Nato a Napoli il 14/10/1993,
+# opera a Milano. Master in Economia e Finanza.
+# Certificazioni: Personal Trainer, Educatore Alimentare, Functional Fitness.
+#
+# BUSINESS: CEO di FIT LAB Milano (Corso di Porta Romana 72) - studio privato
+# con PT Class (max 4-5 persone), one-to-one, analisi antropometrica.
+# Team RB Coaching: 18 IFBB PRO Card prodotte, 1 atleta qualificato Olympia.
+# Coaching online: scheda + dieta + integrazione + supporto WhatsApp + check
+# settimanali. Collabora con biologo nutrizionista.
+#
+# OBIETTIVO BOT: crescere bacino targetizzato nel bodybuilding agonistico e
+# nel fitness Milano/Lombardia. Solo follow + like + commenti AI. DM: 0.
+#
+# ATTENZIONE - WARM-UP: se l'account non ha mai usato automazione, per le
+# prime 2 settimane dimezza i cap (follow 25-30/g, like 50-60/g, commenti 0)
+# e alza gradualmente. Vedi SETUP.md.
+#
+# Target giornaliero a regime:
+#   follow: 50-60 | like: 100-130 | commenti: 25-40 (AI via HF Space) | DM: 0
+# Rate orario:
+#   follow: <= 8/h | like: <= 15/h | commenti: <= 8/h
+##############################################################################
+
+# ---------------------------------------------------------------------------
+# General Configuration
+# ---------------------------------------------------------------------------
+username: rb.coach
+device: f2487e11                           # ADB serial (adb devices -l). Cambia col device reale.
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: false                        # non spegnere lo schermo: evita il blocco PIN tra sessioni
+screen-record: false
+speed-multiplier: 0.9                      # 10% piu' lento del default -> piu' umano
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: true                    # se uiautomator si rompe a meta' sessione, ricrealo
+disable-block-detection: false             # IMPORTANTE: rileva action-block
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: false                        # ordine fisso: blogger-followers, poi hashtag
+truncate-sources: 8-10                     # sorgenti per sessione
+scroll-skip-start: 30-100
+resume-from-last-position: true            # riprende da dove si era fermato su ogni sorgente
+resume-anchor-search-limit: 12
+resume-cooldown-days: 5
+hot-zone-screens: 2                        # reagisci presto alle schermate senza utenti freschi
+hot-zone-jump-flings: 6
+hot-zone-max-jumps: 2
+
+# [follow-back] Ricalcolo automatico del follow-back-rate per sorgente:
+# le sorgenti che fanno ricambiare il follow vengono pescate piu' spesso.
+auto-fbr-refresh: true
+auto-fbr-interval-hours: 24
+auto-fbr-max-scan: 0                       # 0 = scansione completa
+
+# [follow-back] Warm follow: segui solo chi hai davvero ingaggiato prima.
+follow-only-if-engaged: true
+follow-min-engagement: 1
+
+# Action burst guard - niente raffiche visibili a IG
+action-throttle-enabled: true
+action-throttle-follow-min: 30-70          # ~50-120s tra 2 follow
+action-throttle-like-min: 10-22            # ~10-22s tra 2 like
+action-throttle-unfollow-min: 25-50
+action-throttle-comment-min: 300-420       # 5-7 min tra 2 commenti -> max ~8-12/h
+action-throttle-pm-min: 999999             # DM OFF su questa config
+
+# ---------------------------------------------------------------------------
+# Actions - sorgenti
+# ---------------------------------------------------------------------------
+# NB: formato inline [a, b, c]. La sintassi YAML "a lista" rompe il parser.
+# IMPORTANTE: ogni username DEVE esistere su IG. Verifica aprendo
+# instagram.com/USERNAME prima di aggiungerne di nuovi.
+#
+# Composizione: federazioni + atleti IFBB PRO + coach + community nazionali.
+# Non sono incluse sorgenti Torino/Piemonte (erano tarate su un altro account):
+# per il bacino locale usa gli hashtag Milano piu' sotto, e aggiungi qui le
+# palestre milanesi che verifichi a mano.
+blogger-followers: [fitlab_milano, afmi2_segrate, ifbbproitaly, npc_italy, wnbfitaly, wbpf_italy, bbfitalia, nbfi_italy, italia.bodybuilding, bodybuilding_italia_community, bodybuilding_italia_community_, malatidipalestraofficial, thenewclassic_s, fit.italia, oneforall.hub, ricette_ghisa, viveredipalestra, manuel_santalucia_ifbbpro, andrea.presti_ifbbpro, alex_ifbb_pro, dario_beloli_ifbbpro, gerard_ifbb_, punzetti_sara_ifbbpro, anna.ladurner.ifbbpro, ornella_angileri_ifbbpro, albertomilani_ifbbpro, giulioalbi_ifbbpro, ricky_ifbbpro, febo_gambacorta_ifbb_pro, anna.terzo_ifbb_pro, grumpy_grizzly_ifbbpro, legion_ifbbpro, paola_wpd_ifbb_pro, zagarella_ifbb_pro, lorenzo.coppola_ifbbpro, omarnonni_pnbapro, giusepperomanocoach, coach_giorgio.terragno, mariovalentini_coach, enzo.jossacoach, dario.pnbapro.coach, ivano.vitagliano.coach, kristianluino_trainer, marcodallabattista_pt, fabioflumeri_pt, alessandrofichicelli, thehungrylonewolf, matteoinno88, gorillone_, il.pump.quotidiano, edwin_underwood, pieronocerino1, vitastrong_ita, ludovico.lemme, alex__zuccaro, danielacamboni, giusi.cesarini]
+
+# Hashtag: pesca chi ha messo LIKE ai post recenti. Lead piu' caldi dei
+# semplici follower (interesse esplicito e recente).
+# Mix: bodybuilding agonistico nazionale + fitness Milano/Lombardia.
+hashtag-likers-recent: [bodybuildingitalia, preparazioneagonistica, garebodybuilding, classicphysiqueitalia, menphysiqueitalia, ifbbitalia, naturalbodybuildingitalia, palestramilano, personaltrainermilano, fitnessmilano, bodybuildingmilano, milanofitness, allenamentomilano, schedaallenamento, coachonline, preparatoreatletico, alimentazionesportiva, massamuscolare, definizionemuscolare, ipertrofia]
+
+hashtag-likers-top: [bodybuildingitalia, preparazioneagonistica, classicphysiqueitalia, ifbbitalia, palestramilano, personaltrainermilano, bodybuildingmilano, coachonline, ipertrofia, alimentazionesportiva]
+
+## Watching content (umanizza il comportamento)
+watch-video-time: 8-25
+watch-photo-time: 2-5
+delete-interacted-users: false
+sort-followers-newest-to-oldest: true
+unfollow-delay: 3                          # giorni prima di poter unfolloware (gestito da config-unfollow.yml)
+delete-removed-followers: false
+telegram-reports: false
+
+# ---------------------------------------------------------------------------
+# Source Limits (per singola sorgente, dentro la sessione)
+# ---------------------------------------------------------------------------
+interactions-count: 12-18
+likes-count: 2                             # 2 like per profilo
+likes-percentage: 85-95
+carousel-count: 1-2
+carousel-percentage: 50-70
+max-comments-pro-user: 1
+comment-percentage: 25-35                  # ~1 profilo su 3 riceve commento AI
+pm-percentage: 0
+interact-percentage: 70-85
+follow-percentage: 55-70
+follow-limit: 6-9                          # cap per sorgente: distribuisce invece di svuotarne una
+skipped-list-limit: 30-45
+skipped-posts-limit: 4
+fling-when-skipped: 0
+min-following: 50                          # non scendere sotto questo numero di seguiti
+
+# ---------------------------------------------------------------------------
+# Total Limits Per Session (5 micro-sessioni/giorno via run-dynamic.py)
+# follow:   5 x 10 = ~50/g
+# like:     5 x 22 = ~110/g
+# comment:  5 x  6 = ~30/g
+# ---------------------------------------------------------------------------
+total-likes-limit: 20-25
+total-follows-limit: 9-12
+total-unfollows-limit: 0-0                 # unfollow gestito da config-unfollow.yml
+total-watches-limit: 0-0
+total-successful-interactions-limit: 9-12
+total-interactions-limit: 999
+total-comments-limit: 5-7
+total-pm-limit: 0-0
+total-scraped-limit: 200-300               # NON 0: con 0 il bot esce subito
+
+# ---------------------------------------------------------------------------
+# Daily Budget (persistente su daily_budget.json, condiviso tra le config)
+# ---------------------------------------------------------------------------
+daily-follows-cap: 60
+daily-likes-cap: 130
+daily-unfollows-cap: 60
+daily-comments-cap: 40
+daily-pm-cap: 0
+
+## Stories OFF: il ring storie non si apre in modo affidabile su IG recenti
+## ("Failed to open the story container"). Rischio senza beneficio.
+stories-count: 0
+stories-percentage: 0
+
+# ---------------------------------------------------------------------------
+# Ending Session Conditions
+# ---------------------------------------------------------------------------
+end-if-likes-limit-reached: false
+end-if-follows-limit-reached: false         # non chiudere la sessione al cap follow: continua a likare
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# AI Comments (HF Space mattysaints/instagram_bot)
+# Il bot manda caption + metadata allo Space, che risponde con un commento
+# breve in italiano. Su qualunque errore (rete, 5xx, rate-limit, guardrail)
+# cade su comments_list.txt: nessun crash, nessun commento tipo-bot.
+#
+# La bearer key sta in .env.local come IG_COMMENT_SPACE_KEY (vedi SETUP.md).
+# ---------------------------------------------------------------------------
+ai-comments-enabled: true
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
+# ai-comments-space-key: "sk_..."          # NON metterla qui: usa .env.local
+ai-comments-language: Italian
+ai-comments-prompt-hint: "L'autore del commento e' Roberto Buonomo, IFBB PRO e coach di Milano, fondatore dello studio FIT LAB (Corso di Porta Romana) e del team RB Coaching. E' campione italiano IFBB 2019 categoria -100kg e ha preso la pro card a 25 anni, quindi quando il tema e' allenamento o gara puo' permettersi un registro tecnico e concreto (esecuzione, volume, periodizzazione, condizionamento, posing, alimentazione). E' anche educatore alimentare, quindi sul cibo puo' dire qualcosa di sensato senza fare il maestrino. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption, non forzare il tema palestra. Se la caption parla di viaggio commenta il posto, se parla di cibo commenta il piatto, se parla di famiglia o di un momento personale commenta con empatia, se parla di lavoro commenta quello. Solo se la caption e' davvero su allenamento, gara o dieta usa il registro tecnico. Cita SEMPRE un dettaglio concreto preso dalla caption (una parola, un luogo, un numero, un esercizio, un ingrediente) cosi' si capisce che il post e' stato letto davvero. Italiano colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM: e' un commento sotto un post, non una pubblicita'. MAI emoji, hashtag o punti esclamativi. Una frase breve, come uno che scorre il feed e commenta di getto."
+ai-comments-fallback-to-file: true
+
+# ---------------------------------------------------------------------------
+# Scheduling
+# ---------------------------------------------------------------------------
+# working-hours viene riscritta da run-dynamic.py a ogni lancio.
+working-hours: [09.30-11.00, 12.30-14.00, 16.00-17.30, 18.30-20.00, 21.00-22.30]
+time-delta: 0-15
+total-sessions: 5

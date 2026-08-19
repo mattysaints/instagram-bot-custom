@@ -1,0 +1,85 @@
+##############################################################################
+# Filtri - @rb.coach
+# Doc: https://docs.gramaddict.org/#/configuration?id=available-filters
+# NB: per disattivare un filtro commentalo con #, non cancellarlo.
+##############################################################################
+
+##############################################################################
+# Target: persone reali che si allenano e potrebbero diventare clienti di
+# coaching. Non i grossi profili (non comprano consulenze) e non gli account
+# vuoti/spam. La fascia utile e' il micro-utente attivo.
+##############################################################################
+
+## Filters on profile type
+skip_if_private: true                      # i privati non si possono valutare prima del follow: si scartano
+skip_if_public: false
+skip_business: false                       # i business piccoli sono spesso creator/PT: tienili
+skip_non_business: false
+skip_following: true                       # non rifare chi gia' segui
+skip_follower: true                        # chi ti segue gia' non va ri-ingaggiato: sprecheresti azioni
+skip_if_link_in_bio: false                 # link in bio = spesso professionista, va bene
+follow_private_or_empty: false             # coerente con skip_if_private
+
+## Pre-flight username filters (valutati SENZA aprire il profilo: 3-5s risparmiati per skip)
+skip_username_patterns:
+  - "_official$"
+  - "\\.shop$"
+  - "_shop$"
+  - "_store$"
+  - "^crypto"
+  - "^nft"
+  - "^promo"
+  - "^bot[_0-9]"
+skip_username_with_emoji: true             # username con emoji = quasi sempre spam
+skip_username_longer_than: 28
+skip_username_digit_ratio_above: 0.6       # >60% cifre (es. 'ig_user_4837291') = bot
+
+## Filters on profile stats
+min_followers: 100                         # sotto i 100 spesso account nuovi/inattivi
+max_followers: 8000                        # sopra gli 8k il ricambio crolla e non sono clienti tipo
+min_followings: 50                         # segue almeno 50 persone -> utente vivo
+max_followings: 4000
+min_potency_ratio: 0.4                     # utenti veri 200/500 hanno ratio 0.4: escluderli sarebbe troppo
+max_potency_ratio: 4                       # finestra 1:1 - 4:1, dove il follow-back e' piu' probabile
+min_posts: 9                               # almeno 9 post -> profilo vissuto, non vetrina vuota
+mutual_friends: -1                         # qualsiasi
+last_post_max_age_days: 45                 # attivo nell'ultimo mese e mezzo. Fail-open: se non legge la data non scarta
+
+## Filters on biography and name
+blacklist_words: [onlyfans, onlyf, escort, sex, "link in bio", telegram, vendita, sconto, codice sconto, spedizione, dropship, crypto, forex, casino, scommesse]
+# mandatory_words: [fitness, palestra, gym]      # opzionale: ultra-mirato, riduce molto il bacino
+# specific_alphabet: [LATIN]                     # disabilitato (costoso)
+# biography_language: [it]                       # disabilitato (costoso)
+
+##############################################################################
+# Filtri commenti
+# NB: per commentare servono DUE flag a true insieme:
+#   1) comment_<media-type>  (photos/videos/carousels)
+#   2) comment_<job-name>    (es. blogger_followers)
+# Se ne manca uno -> "Can't comment this MediaType.X because filters are: ..."
+##############################################################################
+comment_blogger_followers: true            # il job blogger-followers commenta
+comment_hashtag_likers_recent: true        # anche i likers recenti degli hashtag
+comment_hashtag_likers_top: false
+comment_hashtag_posts_top: false
+comment_hashtag_posts_recent: false
+comment_place_likers_top: false
+comment_place_likers_recent: false
+comment_place_posts_top: false
+comment_place_posts_recent: false
+comment_blogger_following: false
+comment_blogger_post_likers: false
+comment_blogger: false
+comment_interact_usernames: false
+comment_interact_from_file: false
+comment_feed: false
+comment_photos: true
+comment_videos: true
+comment_carousels: true
+
+## Filtri DM (non usati: DM disattivati su questa config)
+pm_to_private_or_empty: false
+
+## Filtri sul numero di likers del post (non usati per blogger-followers)
+min_likers: 1
+max_likers: 1000

@@ -1,0 +1,4 @@
+# Un username per riga: questi profili NON verranno mai unfolloati ne skippati.
+# Utile per clienti, partner, amici, account del team.
+roberto_buonomo_ifbbpro
+fitlab_milano

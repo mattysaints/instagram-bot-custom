@@ -1,0 +1,121 @@
+##############################################################################
+# Config ONE-SHOT - @rb.coach
+# Una sola sessione, parte SUBITO al lancio: niente working-hours, niente loop.
+# Serve per test manuali e per la fase di warm-up.
+#
+# Lancio:
+#   python run.py --config accounts/rb.coach/config-once.yml
+#
+# I cap giornalieri sono condivisi con config.yml (daily_budget.json).
+##############################################################################
+
+username: rb.coach
+device: f2487e11                           # ADB serial (adb devices -l)
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: true
+screen-record: false
+speed-multiplier: 0.9
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: false
+disable-block-detection: false
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: true
+truncate-sources: 4-6
+scroll-skip-start: 15-60
+resume-from-last-position: true
+resume-anchor-search-limit: 30
+resume-cooldown-days: 7
+hot-zone-screens: 3
+hot-zone-jump-flings: 4
+hot-zone-max-jumps: 2
+
+action-throttle-enabled: true
+action-throttle-follow-min: 30-70
+action-throttle-like-min: 10-22
+action-throttle-unfollow-min: 25-50
+action-throttle-comment-min: 300-420
+action-throttle-pm-min: 999999
+
+# ---------------------------------------------------------------------------
+# Actions - sottoinsieme ristretto per il test
+# ---------------------------------------------------------------------------
+blogger-followers: [fitlab_milano, ifbbproitaly, bodybuilding_italia_community, malatidipalestraofficial, giusepperomanocoach]
+
+watch-video-time: 8-25
+watch-photo-time: 2-5
+delete-interacted-users: false
+sort-followers-newest-to-oldest: true
+unfollow-delay: 3
+delete-removed-followers: false
+telegram-reports: false
+
+# ---------------------------------------------------------------------------
+# Source Limits
+# ---------------------------------------------------------------------------
+interactions-count: 8-12
+likes-count: 2
+likes-percentage: 85-95
+carousel-count: 1-2
+carousel-percentage: 50-70
+max-comments-pro-user: 1
+comment-percentage: 25-35
+pm-percentage: 0
+interact-percentage: 70-85
+follow-percentage: 55-70
+follow-limit: 5-8
+skipped-list-limit: 30-45
+skipped-posts-limit: 4
+fling-when-skipped: 0
+min-following: 50
+
+# ---------------------------------------------------------------------------
+# Total Limits - sessione singola contenuta
+# ---------------------------------------------------------------------------
+total-likes-limit: 16-22
+total-follows-limit: 8-10
+total-unfollows-limit: 0-0
+total-watches-limit: 0-0
+total-successful-interactions-limit: 8-10
+total-interactions-limit: 999
+total-comments-limit: 3-5
+total-pm-limit: 0-0
+total-scraped-limit: 200-300
+
+daily-follows-cap: 60
+daily-likes-cap: 130
+daily-unfollows-cap: 60
+daily-comments-cap: 40
+daily-pm-cap: 0
+
+stories-count: 0
+stories-percentage: 0
+
+end-if-likes-limit-reached: true
+end-if-follows-limit-reached: true
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# AI Comments
+# ---------------------------------------------------------------------------
+ai-comments-enabled: true
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
+ai-comments-language: Italian
+ai-comments-prompt-hint: "L'autore del commento e' Roberto Buonomo, IFBB PRO e coach di Milano, fondatore dello studio FIT LAB e del team RB Coaching. Quando il tema e' allenamento o gara puo' usare un registro tecnico e concreto (esecuzione, volume, periodizzazione, condizionamento, posing). E' anche educatore alimentare, quindi sul cibo puo' dire qualcosa di sensato senza fare il maestrino. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption, non forzare il tema palestra. Viaggio -> commenta il posto, cibo -> commenta il piatto, famiglia -> commenta con empatia. Cita SEMPRE un dettaglio concreto preso dalla caption. Italiano colloquiale e diretto, da pari a pari, mai da venditore. MAI nominare coaching, schede, consulenze, prezzi, link o DM. MAI emoji, hashtag o punti esclamativi. Una frase breve."
+ai-comments-fallback-to-file: true
+
+# ---------------------------------------------------------------------------
+# Scheduling - ONE-SHOT
+# ---------------------------------------------------------------------------
+# working-hours commentata -> il bot parte subito
+# repeat commentata        -> nessuna sessione successiva
+total-sessions: 1
+time-delta: 0-0
