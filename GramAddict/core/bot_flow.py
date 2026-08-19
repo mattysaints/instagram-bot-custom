@@ -8,7 +8,7 @@ from colorama import Fore, Style
 from GramAddict import __tested_ig_version__
 from GramAddict.core.config import Config
 from GramAddict.core.daily_budget import DailyBudget
-from GramAddict.core.action_throttler import init_throttler
+from GramAddict.core.action_throttler import init_throttler, set_throttler_session_state
 from GramAddict.core.device_facade import DeviceFacade, create_device, get_device_info
 from GramAddict.core.filter import Filter
 from GramAddict.core.filter import load_config as load_filter
@@ -45,6 +45,7 @@ from GramAddict.core.utils import (
     print_telegram_reports,
     restart_atx_agent,
     save_crash,
+    set_session_state,
     set_time_delta,
     show_ending_conditions,
     stop_bot,
@@ -163,6 +164,7 @@ def start_bot(**kwargs):
             restart_atx_agent(device)
         get_device_info(device)
         session_state = SessionState(configs)
+        set_session_state(session_state)  # Enable fatigue tracking for random_sleep()
         session_state.set_limits_session()
         sessions.append(session_state)
         check_screen_timeout()
@@ -347,6 +349,7 @@ def start_bot(**kwargs):
         # of the same type (follow/like/comment/pm/unfollow) so the bot can't
         # accidentally fire bursts that look automated.
         init_throttler(configs.args)
+        set_throttler_session_state(session_state)  # Enable fatigue tracking
         # snapshot of "before" so we can compute the delta of THIS session.
         budget_before = {
             "follows": daily_budget.used("follows"),

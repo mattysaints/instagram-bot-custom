@@ -34,6 +34,9 @@ from GramAddict.core.storage import ACCOUNTS
 http = urllib3.PoolManager()
 logger = logging.getLogger(__name__)
 
+# Global reference to current session state for fatigue tracking
+current_session_state = None
+
 
 def load_config(config: Config):
     global app_id
@@ -44,6 +47,12 @@ def load_config(config: Config):
     args = config.args
     configs = config
     ResourceID = resources(app_id)
+
+
+def set_session_state(session_state):
+    """Set the current session state for fatigue tracking in random_sleep()."""
+    global current_session_state
+    current_session_state = session_state
 
 
 def update_available():
@@ -541,9 +550,37 @@ def _restore_keyboard(device):
 
 
 def random_sleep(inf=0.5, sup=3.0, modulable=True, log=True):
-    MIN_INF = 0.3
+    MIN_INF = 0.8
     multiplier = float(args.speed_multiplier)
-    delay = uniform(inf, sup) / (multiplier if modulable else 1.0)
+    # Keep the speed multiplier effect softer to avoid unrealistically fast actions.
+    # Example: 2.0x configured speed becomes ~1.41x effective speed.
+    effective_multiplier = multiplier**0.5 if modulable else 1.0
+    
+    # Add daily fatigue pattern: humans are faster in morning, slower at night
+    # 7-10 AM: more alert (0.85x), 12-15 PM: slower (1.1x), 19-23: tiredness (1.25x)
+    hour = datetime.now().hour
+    if modulable:
+        if 7 <= hour < 10:
+            effective_multiplier *= 0.85
+        elif 12 <= hour < 15:
+            effective_multiplier *= 1.1
+        elif 19 <= hour < 23:
+            effective_multiplier *= 1.25
+    
+    # Apply session fatigue (progressive tiredness as session goes on)
+    if modulable and current_session_state is not None:
+        effective_multiplier *= current_session_state.session_fatigue_multiplier
+    
+    delay = uniform(inf, sup) / effective_multiplier
+    
+    # Add occasional extra thinking-like pauses (increased from 18% to 28% of actions)
+    if random.random() < 0.28:
+        delay += uniform(0.5, 2.0)
+    
+    # Occasional "distractions" (5% chance): longer pause as if user got distracted
+    if random.random() < 0.05:
+        delay += uniform(2.0, 4.5)
+    
     delay = max(delay, MIN_INF)
     if log:
         logger.debug(f"{str(delay)[:4]}s sleep")

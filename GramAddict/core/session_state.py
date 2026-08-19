@@ -96,6 +96,8 @@ class SessionState:
     totalCrashes = 0
     startTime = None
     finishTime = None
+    actions_count_in_session = 0  # Track fatigue: increases with each action
+    session_fatigue_multiplier = 1.0  # Multiplier for delays based on action count
 
     def __init__(self, configs):
         self.id = str(uuid.uuid4())
@@ -117,6 +119,8 @@ class SessionState:
         self.totalCrashes = 0
         self.startTime = datetime.now()
         self.finishTime = None
+        self.actions_count_in_session = 0
+        self.session_fatigue_multiplier = 1.0
 
     def add_interaction(self, source, succeed, followed, scraped):
         if self.totalInteractions.get(source) is None:
@@ -142,6 +146,30 @@ class SessionState:
             if scraped:
                 self.totalScraped[source] += 1
                 self.successfulInteractions[source] += 1
+
+    def track_action(self):
+        """Track an action to simulate progressive fatigue.
+
+        After ~50 actions, bot starts slowing down as if human is getting tired.
+        Uses soft curve: light slowdown until action 50, then gradually increases.
+        """
+        self.actions_count_in_session += 1
+
+        # Fatigue curve: after ~50 actions, humans slow down
+        # 1-50 actions: multiplier stays at 1.0
+        # 50-100: multiplier gradually increases to 1.15
+        # 100+: multiplier increases further to 1.3+
+        if self.actions_count_in_session > 50:
+            # Gentle curve: each action adds a small fatigue penalty
+            fatigue_factor = min(0.3, (self.actions_count_in_session - 50) / 250)
+            self.session_fatigue_multiplier = 1.0 + fatigue_factor
+        else:
+            self.session_fatigue_multiplier = 1.0
+
+    def reset_session_fatigue(self):
+        """Reset fatigue counters for a new session."""
+        self.actions_count_in_session = 0
+        self.session_fatigue_multiplier = 1.0
 
     def set_limits_session(
         self,

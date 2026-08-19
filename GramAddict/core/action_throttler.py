@@ -56,10 +56,15 @@ class ActionThrottler:
         self._intervals_raw = dict(intervals)
         self._last_ts: Dict[str, float] = {}
         self._enabled = enabled
+        self._session_state = None
 
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    def set_session_state(self, session_state):
+        """Set session state for fatigue tracking."""
+        self._session_state = session_state
 
     def _resolve_interval(self, action_type: str) -> float:
         """Resolve the raw interval spec ('25-60' or '30') to a concrete number."""
@@ -99,8 +104,13 @@ class ActionThrottler:
         return slept
 
     def mark(self, action_type: str) -> None:
-        """Record that an action of this type just happened (now)."""
+        """Record that an action of this type just happened (now).
+        Also track action for session fatigue simulation.
+        """
         self._last_ts[action_type] = monotonic()
+        # Track action for progressive fatigue simulation
+        if self._session_state is not None:
+            self._session_state.track_action()
 
 
 # --- Module-level singleton ---------------------------------------------------
@@ -151,4 +161,11 @@ def get_throttler() -> ActionThrottler:
     if _throttler is None:
         _throttler = ActionThrottler({}, enabled=False)
     return _throttler
+
+
+def set_throttler_session_state(session_state) -> None:
+    """Set the session state in the throttler singleton for fatigue tracking."""
+    throttler = get_throttler()
+    throttler.set_session_state(session_state)
+
 
