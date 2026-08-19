@@ -233,9 +233,18 @@ class InteractBloggerPostLikers(Plugin):
         )
         if comment_only:
             logger.info(
-                "Job blogger in modalita' solo-commento: niente like, follow o storie."
+                "Job blogger in modalita' commento: 1 like + 1 commento, "
+                "niente follow, niente storie."
             )
-            likes_percentage = 0
+            # ATTENZIONE, non mettere likes_percentage a 0. In interaction.py
+            # TUTTO il blocco che apre i post e commenta (righe ~206-350) sta
+            # dentro `if can_like(session_state, likes_percentage):`, e can_like
+            # con percentuale 0 e' sempre False: il commento non verrebbe mai
+            # raggiunto e il job non farebbe assolutamente nulla.
+            # Il like non e' evitabile senza toccare il core, ed e' comunque il
+            # comportamento piu' naturale: commentare un post senza metterci
+            # like e' un pattern da bot.
+            likes_percentage = 100
             follow_percentage = 0
             stories_percentage = 0
             comment_percentage = 100
@@ -243,7 +252,8 @@ class InteractBloggerPostLikers(Plugin):
         interaction = partial(
             interact_with_user,
             my_username=self.session_state.my_username,
-            likes_count=self.args.likes_count,
+            # sui big basta un like: serve solo ad aprire il post per commentare
+            likes_count="1" if comment_only else self.args.likes_count,
             likes_percentage=likes_percentage,
             stories_percentage=stories_percentage,
             follow_percentage=follow_percentage,

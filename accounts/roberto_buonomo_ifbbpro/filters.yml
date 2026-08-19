@@ -1,28 +1,36 @@
 ##############################################################################
-# Filtri - @rb.coach
+# Filtri - @roberto_buonomo_ifbbpro  (profilo personale, atleta IFBB PRO)
 # Doc: https://docs.gramaddict.org/#/configuration?id=available-filters
 # NB: per disattivare un filtro commentalo con #, non cancellarlo.
 ##############################################################################
 
 ##############################################################################
-# Target: persone reali che si allenano e potrebbero diventare clienti di
-# coaching. Non i grossi profili (non comprano consulenze) e non gli account
-# vuoti/spam. La fascia utile e' il micro-utente attivo.
+# OBIETTIVO DI QUESTO ACCOUNT: reputazione e autorevolezza dentro al
+# bodybuilding agonistico, anche fuori dall'Italia. NON vendere coaching:
+# per quello c'e' @rb.coach, con filtri suoi (../rb.coach/filters.yml).
+#
+# Qui il profilo che interessa e' l'opposto di quello di rb.coach: gente
+# gia' dentro al giro - atleti, agonisti, addetti ai lavori - che se ti nota
+# conta. Un profilo da 200 follower non porta reputazione; un preparatore da
+# 15k si'.
+#
+# LA DIFFERENZA PIU' IMPORTANTE E' max_potency_ratio (vedi sotto): con il
+# valore di rb.coach questo account scarterebbe esattamente le persone che
+# deve raggiungere.
 ##############################################################################
 
 ## Filters on profile type
-skip_if_private: true                      # i privati non si possono valutare prima del follow: si scartano
+skip_if_private: true                      # non valutabile prima del follow: si scarta
 skip_if_public: false
-skip_business: false                       # i business piccoli sono spesso creator/PT: tienili
+skip_business: false                       # qui i business/creator sono il target, non un problema
 skip_non_business: false
-skip_following: true                       # non rifare chi gia' segui
-skip_follower: true                        # chi ti segue gia' non va ri-ingaggiato: sprecheresti azioni
-skip_if_link_in_bio: false                 # link in bio = spesso professionista, va bene
-follow_private_or_empty: false             # coerente con skip_if_private
+skip_following: true
+skip_follower: true
+skip_if_link_in_bio: false                 # il link in bio e' la norma per atleti e coach
+follow_private_or_empty: false
 
-## Pre-flight username filters (valutati SENZA aprire il profilo: 3-5s risparmiati per skip)
+## Pre-flight username filters (valutati SENZA aprire il profilo)
 skip_username_patterns:
-  - "_official$"
   - "\\.shop$"
   - "_shop$"
   - "_store$"
@@ -30,36 +38,44 @@ skip_username_patterns:
   - "^nft"
   - "^promo"
   - "^bot[_0-9]"
-skip_username_with_emoji: true             # username con emoji = quasi sempre spam
-skip_username_longer_than: 28
-skip_username_digit_ratio_above: 0.6       # >60% cifre (es. 'ig_user_4837291') = bot
+# NB: "_official$" NON e' escluso qui, a differenza di rb.coach: nel
+# bodybuilding sono spesso federazioni, team e atleti veri.
+skip_username_with_emoji: true
+skip_username_longer_than: 30
+skip_username_digit_ratio_above: 0.6
 
-## Filters on profile stats
-min_followers: 100                         # sotto i 100 spesso account nuovi/inattivi
-max_followers: 8000                        # sopra gli 8k il ricambio crolla e non sono clienti tipo
-min_followings: 50                         # segue almeno 50 persone -> utente vivo
-max_followings: 4000
-min_potency_ratio: 0.4                     # utenti veri 200/500 hanno ratio 0.4: escluderli sarebbe troppo
-max_potency_ratio: 4                       # finestra 1:1 - 4:1, dove il follow-back e' piu' probabile
-min_posts: 9                               # almeno 9 post -> profilo vissuto, non vetrina vuota
-mutual_friends: -1                         # qualsiasi
-last_post_max_age_days: 45                 # attivo nell'ultimo mese e mezzo. Fail-open: se non legge la data non scarta
+## Filters on profile stats - tarati su chi conta nella NICCHIA
+min_followers: 800                         # sotto gli 800 l'interazione non porta visibilita' utile
+max_followers: 30000                       # oltre i 30k sono i "big": li gestisce il job `blogger` a parte, con i suoi filtri sospesi
+min_followings: 50
+max_followings: 5000                       # piu' largo di rb.coach: gli atleti seguono molti colleghi
+min_potency_ratio: 0.5
+
+# *** IL VALORE CHIAVE DI QUESTO FILE ***
+# potency_ratio = follower / seguiti (GramAddict/core/filter.py:424-430).
+# Un atleta affermato ha 20.000 follower e 600 seguiti: ratio 33. Con il 4 di
+# rb.coach verrebbe SCARTATO, e questo account passerebbe la vita a ingaggiare
+# solo profili senza voce - cioe' il contrario del suo scopo.
+max_potency_ratio: 40
+
+min_posts: 15                              # piu' alto di rb.coach: chi e' dentro alla nicchia produce contenuti
+mutual_friends: -1
+last_post_max_age_days: 30                 # piu' stretto: qui interessa chi e' attivo ORA, non chi posta ogni due mesi
 
 ## Filters on biography and name
+# Solo spam. A differenza di rb.coach NON si escludono coach e preparatori:
+# qui sono esattamente le persone da raggiungere.
 blacklist_words: [onlyfans, onlyf, escort, sex, "link in bio", telegram, vendita, sconto, codice sconto, spedizione, dropship, crypto, forex, casino, scommesse]
-# mandatory_words: [fitness, palestra, gym]      # opzionale: ultra-mirato, riduce molto il bacino
-# specific_alphabet: [LATIN]                     # disabilitato (costoso)
-# biography_language: [it]                       # disabilitato (costoso)
+# mandatory_words: [...]                        # non attivato: costa una lettura bio in piu' per ogni profilo
+# specific_alphabet: [LATIN]                    # disabilitato (costoso)
+# biography_language: [it]                      # NON attivare: qui il pubblico e' anche estero
 
 ##############################################################################
 # Filtri commenti
-# NB: per commentare servono DUE flag a true insieme:
-#   1) comment_<media-type>  (photos/videos/carousels)
-#   2) comment_<job-name>    (es. blogger_followers)
-# Se ne manca uno -> "Can't comment this MediaType.X because filters are: ..."
+# Servono DUE flag a true insieme: comment_<media-type> + comment_<job-name>.
 ##############################################################################
-comment_blogger_followers: true            # il job blogger-followers commenta
-comment_hashtag_likers_recent: true        # anche i likers recenti degli hashtag
+comment_blogger_followers: true
+comment_hashtag_likers_recent: true
 comment_hashtag_likers_top: false
 comment_hashtag_posts_top: false
 comment_hashtag_posts_recent: false
@@ -69,7 +85,7 @@ comment_place_posts_top: false
 comment_place_posts_recent: false
 comment_blogger_following: false
 comment_blogger_post_likers: false
-comment_blogger: true              # commenta i post dei competitor/influencer elencati in `blogger`
+comment_blogger: true                      # commenta i post dei big (job `blogger`)
 comment_interact_usernames: false
 comment_interact_from_file: false
 comment_feed: false
@@ -77,9 +93,9 @@ comment_photos: true
 comment_videos: true
 comment_carousels: true
 
-## Filtri DM (non usati: DM disattivati su questa config)
+## Filtri DM (non usati: DM disattivati su questo account)
 pm_to_private_or_empty: false
 
-## Filtri sul numero di likers del post (non usati per blogger-followers)
+## Filtri sul numero di likers del post (non usati dai job attivi)
 min_likers: 1
 max_likers: 1000

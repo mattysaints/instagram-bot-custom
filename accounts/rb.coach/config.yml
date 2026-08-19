@@ -118,6 +118,15 @@ blogger: [mirco_fila, lelerico_ifbbpro, andrea.presti_ifbbpro, andrea_mammoli, v
 # scartato e non commenteremmo nulla.
 blogger-comment-only: true
 
+# Ogni profilo toccato finisce in interacted_users.json e senza questo viene
+# saltato PER SEMPRE ("already interacted ... Skip."). Sul job blogger vorrebbe
+# dire commentare i competitor una volta sola e mai piu'. 168h = 7 giorni.
+# NB: e' un parametro GLOBALE, vale anche per blogger-followers e hashtag; li'
+# l'effetto e' pero' contenuto, perche' chi gia' segui viene escluso da
+# skip_following e chi hai unfolloato da was_unfollowed_before.
+can-reinteract-after: 168
+
+
 # Hashtag: pesca chi ha messo LIKE ai post recenti. Lead piu' caldi dei
 # semplici follower (interesse esplicito e recente).
 # Mix: bodybuilding agonistico nazionale + fitness Milano/Lombardia.
