@@ -160,18 +160,18 @@ total-scraped-limit: 100-150
 # daily-pm-cap: 0
 
 ##############################################################################
-# AI Comments (Google Gemini) - OFF by default.
-# When enabled, the bot tries to generate a context-aware comment with
-# Gemini (using the post caption extracted from the IG UI). On ANY error
-# (no key, network, rate-limit, safety block, banned chars in output) it
-# falls back to comments_list.txt -> never crashes.
-# Get a free API key at https://aistudio.google.com/app/apikey or set the
-# env var GEMINI_API_KEY (preferred: avoids hard-coding secrets).
+# AI Comments (HuggingFace Space) - OFF by default.
+# When enabled, the bot POSTs the post caption + metadata to a HuggingFace
+# Space that generates a context-aware comment. On ANY error (no key, network,
+# rate-limit, 5xx, banned chars in output) it falls back to comments_list.txt
+# -> never crashes.
+# The bearer token goes in .env.local as IG_COMMENT_SPACE_KEY (preferred:
+# avoids hard-coding secrets). See SETUP.md.
 ##############################################################################
 
 # ai-comments-enabled: true
-# ai-comments-api-key: "AIzaSy..."          # optional: fallback to env GEMINI_API_KEY / GOOGLE_AI_API_KEY
-# ai-comments-model: gemini-2.5-flash-lite  # cheap & fast; bump to gemini-2.5-flash for higher quality
+# ai-comments-space-url: https://mattysaints-instagram-bot.hf.space  # must expose POST /api/generate
+# ai-comments-space-key: "sk_..."           # optional: fallback to env IG_COMMENT_SPACE_KEY
 # ai-comments-language: English             # output language for generated comments
 # ai-comments-prompt-hint: "supportive but not cheesy, casual register"
 # ai-comments-fallback-to-file: true        # on AI failure, fall back to comments_list.txt

@@ -1,8 +1,11 @@
 ##############################################################################
-# Config STEALTH "Coach Fitness Fiorano" - allineato a tabelle anti-ban 2026.
-# Profilo: personal trainer / coach online + palestra Fiorano Modenese.
-# Obiettivo: crescere bacino targetizzato (fitness IT). DM disabilitati su
-# questo branch (main): solo follow + like + commenti AI.
+# Config STEALTH "Mattia - atleta classic physique" - tabelle anti-ban 2026.
+# Profilo reale (da IG Graph API, 13/07/2026): @marramattia_fmgpro, creator,
+# 3.873 follower / 912 following / 103 post. Atleta classic physique,
+# ambassador @vitastrong_ita, base Torino.
+# Obiettivo: crescere bacino targetizzato (bodybuilding agonistico + fitness IT,
+# focus Torino/Piemonte). DM disabilitati su questo branch (main): solo
+# follow + like + commenti AI.
 #
 # Target giornaliero:
 #   follow:   60-70    | like: 120-150 | commenti: 60-90 (AI via HF Space) | DM: 0
@@ -15,7 +18,7 @@
 # General Configuration
 # ---------------------------------------------------------------------------
 username: marramattia_fmgpro
-device: emulator-5554                 # ADB device serial (adb devices -l)
+device: emulator-5554                  # emulatore Android (era f2487e11 OnePlus 9 Pro fisico)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true
@@ -69,7 +72,31 @@ action-throttle-pm-min: 300-540            # 5-9 min tra 2 DM -> max ~7-8 DM/h (
 # Linee guida: 3-5 blogger del tuo settore con 5k-50k follower (non celebrita').
 # NB: usare SEMPRE il formato inline [a, b, c] -- la sintassi YAML "a lista" rompe il parser.
 #blogger-followers: [afmi2_segrate, manuel_santalucia_ifbbpro, malatidipalestraofficial, ifbbproitaly, npc_italy, pieronocerino1, excellentstyle.fitness, giulia_befierce, basicc99, gymitabody, bodyfitproathletes, vitastrong_ita, giusepperomanocoach, ludovico.lemme, giusi.cesarini, edwin_underwood, danielgoss_ifbbpro, alex__zuccaro, wabbaitalia]
-blogger-followers: [il.pump.quotidiano, lorenzo.coppola_ifbbpro, nutraff_team, marcodallabattista_pt, malatidipalestraofficial, ifbbproitaly, space.gym.official, wabbaitalia, emilio.dalessandro.92, anna.ladurner.ifbbpro, marco.casadei_, marcogrizz_photo, sara.evangelista, bodynutrition_tarquinia, greta.adamii_fit, omarnonni_pnbapro, danielacamboni, ornella_angileri_ifbbpro, eulyfitnesstudio, gretanicoletti_pt, kellysxv94, ross_sun_, paolozoncatrainer, _.paolalochi._, riccardo_cavallini, dario.pnbapro.coach, simonegenerali, francesco_arcidiacono90, simonearmaroli, nardin_nicole, ivano.vitagliano.coach, tieeco, leonardopratoo, lucacirillo_personaltrainer, fede_castell_, kristianluino_trainer, alex_ifbb_pro, dario_beloli_ifbbpro, agostomauro_pcaitaly, eloisostuni, ludovico.lemme, sayan.nickk, jack_fogli, japan_skin, wnbfitaly, npc_italy, davide.fanelli1, tm_nutrizione, vecchi_mattia, alex__zuccaro, giusi.cesarini, manu3lito_bb, alberto_gaz_gazzera, asteroidi_official, erica_fede94, train.with.vish, carawolder, gianxfit, pugliese.fitness, flavio.ercoli, rickytorrestrainer, magnammsemp, zahirkhudayarov, zagarella_ifbb_pro, cristian_ciampani92_, fabbian.lorenz, cbuzz93, afmi2_segrate, fit.italia, samuellfortuna, niccolo.balboni.coaching, massimo_personal_trainer, bodybuilding_italia_community_, federico_mariani_, ste_cossu96, annatfit.pt, thenewclassic_s, marcokoduzi, bodybuilding_italia_community, wbpf_italy, olgs_fitness, riccardo.oliver_, coach_ginnytyro, manuel_santalucia_ifbbpro, punzetti_sara_ifbbpro, vitastrong_ita, andrea.presti_ifbbpro, giusepperomanocoach, gerard_ifbb_, edwin_underwood, ricette_ghisa, pieronocerino1, oneforall.hub, fitactivetorino, fitactivetorinobotticelli, fitactivetorinofontanesi, fitactivetorinogbruno, anytimefitness_torinolancia, anytimefitness_torinobogino, anytimefitnesstorinogrosseto, anytimefitness_torinolingotto, daniele_gelmi, viveredipalestra, fabioflumeri_pt, riccardobacile_, ema.fitness, ililatorree, alessia__spahiu, marcello.burgener, robertaxcoppola, denny_caramia, dario_paolozzi_iffbpro, no_buffer_, ariannazadra]
+# [prune 13/07/2026] Rimosse 15 sorgenti provate-e-morte (FBR <= 12.5% con campione
+# verificato >= 8, dati source_stats.json): nutraff_team, sara.evangelista,
+# paolozoncatrainer, francesco_arcidiacono90, simonearmaroli, tieeco,
+# lucacirillo_personaltrainer, davide.fanelli1, erica_fede94, afmi2_segrate,
+# annatfit.pt, riccardo.oliver_, anytimefitness_torinobogino, alessia__spahiu,
+# denny_caramia. La quarantena automatica scatta solo sotto l'8%: la fascia
+# 8-12.5% continuava a bruciare budget follow a peso 0.3.
+blogger-followers: [il.pump.quotidiano, lorenzo.coppola_ifbbpro, marcodallabattista_pt, malatidipalestraofficial, ifbbproitaly, space.gym.official, wabbaitalia, emilio.dalessandro.92, anna.ladurner.ifbbpro, marco.casadei_, marcogrizz_photo, bodynutrition_tarquinia, greta.adamii_fit, omarnonni_pnbapro, danielacamboni, ornella_angileri_ifbbpro, eulyfitnesstudio, gretanicoletti_pt, kellysxv94, ross_sun_, _.paolalochi._, riccardo_cavallini, dario.pnbapro.coach, simonegenerali, nardin_nicole, ivano.vitagliano.coach, leonardopratoo, fede_castell_, kristianluino_trainer, alex_ifbb_pro, dario_beloli_ifbbpro, agostomauro_pcaitaly, eloisostuni, ludovico.lemme, sayan.nickk, jack_fogli, japan_skin, wnbfitaly, npc_italy, tm_nutrizione, vecchi_mattia, alex__zuccaro, giusi.cesarini, manu3lito_bb, alberto_gaz_gazzera, asteroidi_official, train.with.vish, carawolder, gianxfit, pugliese.fitness, flavio.ercoli, rickytorrestrainer, magnammsemp, zahirkhudayarov, zagarella_ifbb_pro, cristian_ciampani92_, fabbian.lorenz, cbuzz93, fit.italia, samuellfortuna, niccolo.balboni.coaching, massimo_personal_trainer, bodybuilding_italia_community_, federico_mariani_, ste_cossu96, thenewclassic_s, marcokoduzi, bodybuilding_italia_community, wbpf_italy, olgs_fitness, coach_ginnytyro, manuel_santalucia_ifbbpro, punzetti_sara_ifbbpro, vitastrong_ita, andrea.presti_ifbbpro, giusepperomanocoach, gerard_ifbb_, edwin_underwood, ricette_ghisa, pieronocerino1, oneforall.hub, fitactivetorino, fitactivetorinobotticelli, fitactivetorinofontanesi, fitactivetorinogbruno, anytimefitness_torinolancia, anytimefitnesstorinogrosseto, anytimefitness_torinolingotto, daniele_gelmi, viveredipalestra, fabioflumeri_pt, riccardobacile_, ema.fitness, ililatorree, marcello.burgener, robertaxcoppola, dario_paolozzi_iffbpro, no_buffer_, ariannazadra, crossfittorino, crossfittoret, eterisfitness, personal_trainer_torino, bbfitalia, nbfi_italy, italia.bodybuilding, angelicaarchesso, fabio_digiacomo, albertomilani_ifbbpro, legion_ifbbpro, giulioalbi_ifbbpro, alessandrofichicelli, paola_wpd_ifbb_pro, ricky_ifbbpro, matteoinno88, mariovalentini_coach, gorillone_, coach_giorgio.terragno, felixnorman5, simone.rocchetta, thehungrylonewolf, febo_gambacorta_ifbb_pro, anna.terzo_ifbb_pro, _alb_iaco_, grumpy_grizzly_ifbbpro, enzo.jossacoach, steffen_gerhard_bodybuilding, mikeyjamroz, yuribiffi_, _robertariccardi_, gessicateodoraani, carloscallejon3, alessiaamanninoo, capucci.alessandro, ericagranaroli, chiara.sport.nutrion, _stefaniadeluca_]
+# [add 13/07/2026 - NUOVE SORGENTI DA TESTARE] Scelte per ricalcare i tuoi 3
+# pattern piu' redditizi (vedi source_stats.json):
+#   TORINO LOCALE (come fitactive*/anytime* torino, FBR 30-39%):
+#     - crossfittorino (~5.4k), crossfittoret (~3.3k): box CrossFit torinesi,
+#       community locale ingaggiata. Affinita' col classic physique piu' bassa
+#       del bodybuilding puro, ma il vantaggio "locale" storicamente converte.
+#     - eterisfitness: team coaching NATURAL bodybuilding con base Torino
+#       (locale + nicchia allineata al classic physique). Buon match.
+#     - personal_trainer_torino: PT torinese generico (handle "vetrina": se
+#       inattivo la quarantena lo scarta dopo 3 nav fallite -> zero rischio).
+#   NICCHIA AGONISTICA IT (come ifbbproitaly/npc_italy, gia' in lista):
+#     - bbfitalia (~7.2k): org gare bodybuilding IT, pubblico agonista mirato.
+#     - nbfi_italy (~33k): federazione natural BB IT (INBA/PNBA). Grande ma le
+#       federazioni gia' rendono bene per te.
+#     - italia.bodybuilding (~17k): community news/interviste BB, audience calda.
+# NB: i follower reali non sono verificabili via API prima del test; la
+# selezione pesata + la quarantena FBR<8% terranno solo quelle che convertono.
 # Hashtag a tema fitness IT: pesca utenti che hanno MESSO LIKE ai post recenti
 # di questi hashtag. Lead piu' caldi dei semplici follower (interesse esplicito).
 # Tabella anti-ban 2026: hashtag-job e' meno rischioso del blogger-followers
@@ -77,7 +104,7 @@ blogger-followers: [il.pump.quotidiano, lorenzo.coppola_ifbbpro, nutraff_team, m
 # all'utente che apre un post da Esplora). Limite naturale dei post recenti:
 # se un hashtag ha 500 like, il bot ne pesca al max ~25-30 prima di dichiarare
 # esaurimento e passare al prossimo.
-# Hashtag generali fitness IT + nicchia locale Emilia + bodybuilding/coaching specifici
+# Hashtag generali fitness IT + bodybuilding agonistico (profilo: atleta classic physique FMG, Torino)
 hashtag-likers-recent: [garebodybuilding, bodybuildinggara, preparazioneagonistica, agonisticbodybuilding, classicphysiqueitalia, menphysiqueitalia, atletabodybuilding, preparatoreagonistico, coachbodybuilding, bodybuildingcoach, naturalbodybuildingitalia, palestraitalia, classicoitaliano, colosseumifbb, bbfitalia, nbfitalia, fifitalia, fitmodelitalia, dedizionebodybuilding, bodybuildinglife, fitnesslifestyleitalia, muscolazione, pesistica, determinatione, passionepalestra, workoutitalia, bodybuildingtraining, ipertrofia, massamuscolare, nopainnogain]
 hashtag-likers-top: [garebodybuilding, preparazioneagonistica, classicphysiqueitalia, coachbodybuilding, preparatoreagonistico, bodybuildingitalia, naturalbodybuildingitalia, colosseumifbb, bbfitalia]
 # [TORINO LOCAL] Lead locali per coaching in presenza. Pesca chi mette like / posta
@@ -178,7 +205,7 @@ ai-comments-enabled: true                                              # ATTIVO:
 ai-comments-space-url: https://mattysaints-instagram-bot.hf.space      # override se testi in locale (es. http://localhost:7860)
 # ai-comments-space-key: "sk_..."                                       # NON mettere qui: usa env IG_COMMENT_SPACE_KEY
 ai-comments-language: Italian              # lingua dei commenti generati
-ai-comments-prompt-hint: "Italian fitness/bodybuilding audience. Author is Mattia, competitive classic physique bodybuilding athlete based in Turin (Torino, Piemonte, Italy). He trains seriously, follows a structured prep, and is passionate about gym culture, hypertrophy, posing, and contest prep. Tone: technical when relevant (mention specific muscles, exercises, periodization, symmetry, conditioning), peer-to-peer between fellow athletes, casual Italian register, genuine and direct. NEVER salesy, NEVER mention coaching/services/DM/link. NEVER use emoji, hashtags or exclamation marks. Reference something specific from the caption or visible context (exercise, physique detail, competition, nutrition). 1 short sentence max, sound like a fellow competitive athlete."
+ai-comments-prompt-hint: "L'autore del commento e' Mattia, atleta classic physique agonistico di Torino, ambassador Vitastrong. E' un utente reale che scorre il feed e commenta come farebbe un amico o un collega. IMPORTANTE: adatta il commento al CONTENUTO SPECIFICO della caption/foto, NON forzare temi bodybuilding/palestra se la caption parla d'altro. Esempi: caption di viaggio/vacanza -> commenta la location o l'atmosfera; caption di cibo/ricetta -> commenta il piatto o l'ingrediente; caption di famiglia/persone care -> commenta empaticamente il momento; caption di gara/prep/allenamento -> allora si', tono tecnico peer-to-peer da atleta (posa, condizionamento, esercizio, periodizzazione). Cita SEMPRE un dettaglio concreto pescato dalla caption (una parola, un luogo, un numero, un nome). Registro italiano colloquiale naturale, mai formale ne' venditore. MAI menzionare coaching/servizi/DM/link/prezzi. MAI emoji, hashtag, punti esclamativi. 1 frase breve, come uno scorrendo il feed di getto."
 ai-comments-fallback-to-file: true         # on AI failure, fallback a comments_list.txt (consigliato)
 
 
@@ -202,7 +229,7 @@ end-if-pm-limit-reached: false
 # Mai sessioni notturne (00-08), pause minime di 90 min tra una sessione e l'altra,
 # attivita' concentrate nelle ore di reale uso umano di IG.
 # ---------------------------------------------------------------------------
-working-hours: [07.03-08.33, 10.01-11.31, 12.46-14.16, 15.40-17.10, 18.41-20.11]   # generata dinamicamente da run-dynamic.py
+working-hours: [21.52-22.53, 23.09-00.10, 00.17-01.18, 01.22-02.23]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-1                          # randomizza partenza di 5-25 min
 repeat: 1-5                                # [Opzione A] pausa minimale (1-5 min) tra fine sessione e ricalcolo working-hours: cosi' il vero gap tra le sessioni e' SEMPRE governato da working-hours (run-dynamic.py), non si somma a 60-120 min extra che facevano slittare le sessioni di ore.
 total-sessions: -1                         # loop infinito (rispetta working-hours)

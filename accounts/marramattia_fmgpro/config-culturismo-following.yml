@@ -1,20 +1,24 @@
 ##############################################################################
-# Config "ONE-SHOT" - una sola sessione, parte SUBITO al lancio.
-# Usa questo file (NON via run-dynamic.py) quando vuoi forzare una singola
-# sessione manuale, senza loop di repeat e senza working-hours.
+# Config "CULTURISMOITALIANO FOLLOWING" - ONE-SHOT manuale.
 #
-# Lancio:
-#   python run.py --config accounts/marramattia_fmgpro/config-once.yml
+# Scopo: pescare utenti dai following di @culturismoitaliano (1400+ profili
+# fitness IT verificati) e interagirci. Il filtro follower 5k-10k richiede
+# `filters.yml` temporaneamente modificato: lanciare via lo script wrapper
+#   ./run-culturismo-following.sh
+# che fa backup + patch + restore automatici. NON lanciare direttamente
+# con `python run.py --config ...` altrimenti userebbe il filter 80-7000.
 #
-# Tutto il resto e' identico al config.yml principale: stessi cap giornalieri
-# (daily_budget.json e' condiviso), stesse sorgenti, stessi filtri.
+# Lancio wrapper:
+#   ./run-culturismo-following.sh
+#
+# Cap sessione: 8-12 follow, 20-30 like, 0 commenti (basso volume, target).
 ##############################################################################
 
 # ---------------------------------------------------------------------------
 # General Configuration
 # ---------------------------------------------------------------------------
 username: marramattia_fmgpro
-device: f2487e11                       # OnePlus 9 Pro fisico (era emulator-5554)
+device: f2487e11                           # OnePlus 9 Pro fisico (era emulator-5554)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true
@@ -30,12 +34,12 @@ disable-filters: false
 dont-type: true
 total-crashes-limit: 3
 count-app-crashes: false
-shuffle-jobs: true
-truncate-sources: 5-7
+shuffle-jobs: false
+truncate-sources: 1-1                      # una sola sorgente, no truncate
 scroll-skip-start: 15-60
-resume-from-last-position: true
+resume-from-last-position: true            # riprende da dove si era fermato
 resume-anchor-search-limit: 50
-resume-cooldown-days: 14
+resume-cooldown-days: 3                    # riprova la stessa sorgente dopo 3gg
 hot-zone-screens: 3
 hot-zone-jump-flings: 4
 hot-zone-max-jumps: 2
@@ -49,9 +53,9 @@ action-throttle-comment-min: 60-180
 action-throttle-pm-min: 120-300
 
 # ---------------------------------------------------------------------------
-# Actions
+# Actions - blogger-following = pesca chi il target SEGUE (non i suoi followers)
 # ---------------------------------------------------------------------------
-blogger-followers: [marco.casadei_, il.pump.quotidiano, lorenzo.coppola_ifbbpro, nutraff_team, marcodallabattista_pt]
+blogger-following: [culturismoitaliano]
 
 watch-video-time: 8-25
 watch-photo-time: 2-5
@@ -73,7 +77,7 @@ max-comments-pro-user: 0
 interact-percentage: 70-85
 follow-percentage: 50-65
 follow-limit: 8-12
-skipped-list-limit: 30-45
+skipped-list-limit: 40-60                  # tolleranza alta: il filtro 5-10k scarta molto
 skipped-posts-limit: 4
 fling-when-skipped: 0
 min-following: 50
@@ -81,11 +85,11 @@ min-following: 50
 # ---------------------------------------------------------------------------
 # Total Limits Per Session
 # ---------------------------------------------------------------------------
-total-likes-limit: 24-30
-total-follows-limit: 11-15
+total-likes-limit: 20-30
+total-follows-limit: 8-12
 total-unfollows-limit: 0-0
 total-watches-limit: 0-0
-total-successful-interactions-limit: 11-15
+total-successful-interactions-limit: 8-12
 total-interactions-limit: 999
 total-comments-limit: 0-0
 total-pm-limit: 0-0
@@ -113,10 +117,12 @@ end-if-comments-limit-reached: false
 end-if-pm-limit-reached: false
 
 # ---------------------------------------------------------------------------
-# Scheduling - ONE-SHOT: parte subito, una sola sessione, nessun loop
+# Scheduling - ONE-SHOT
 # ---------------------------------------------------------------------------
-# working-hours: COMMENTATO -> il bot considera "sempre dentro working-hours" e parte subito
-# repeat: COMMENTATO        -> nessuna sessione successiva
-total-sessions: 1                          # esattamente 1 sessione poi esce
-time-delta: 0-0                            # niente jitter all'avvio
+total-sessions: 1
+time-delta: 0-0
 
+# ---------------------------------------------------------------------------
+# AI Comments (disabilitati: qui vogliamo solo follow+like, non commenti)
+# ---------------------------------------------------------------------------
+ai-comments-enabled: false
