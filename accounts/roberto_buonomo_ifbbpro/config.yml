@@ -92,7 +92,7 @@ blogger: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.presti_ifbb
 # follow, niente storie. Like/follow/sticker restano sui profili piccoli
 # (i follower dei blogger), che sono il target che converte.
 # Questo flag sospende anche i limiti di dimensione di filters.yml per il
-# solo job `blogger`: con max_followers a 8000 un account da 300k verrebbe
+# solo job `blogger`: con max_followers a 30000 un account da 300k verrebbe
 # scartato e non commenteremmo nulla.
 blogger-comment-only: true
 
@@ -106,9 +106,9 @@ can-reinteract-after: 168
 
 
 # Hashtag verticali sul bodybuilding agonistico, misti IT/EN.
-hashtag-likers-recent: [bodybuildingitalia, preparazioneagonistica, garebodybuilding, classicphysiqueitalia, menphysiqueitalia, ifbbitalia, ifbbpro, classicphysique, bodybuildingmotivation, prepcoach, offseasonbodybuilding, posingpractice, naturalbodybuildingitalia, massamuscolare, definizionemuscolare, ipertrofia]
+hashtag-likers-recent: [preparazionegara, peakweek, dietabodybuilding, offseason, bulkingseason, cuttingdiet, classicphysique, classicphysiqueitalia, posingpractice, garebodybuilding, bodybuildingitalia, ifbbitalia, ifbbpro, naturalbodybuildingitalia, allenamentopesante, schienaallenamento, periodizzazione, alimentazionesportiva, ipertrofia, massamuscolare]
 
-hashtag-likers-top: [classicphysique, ifbbpro, bodybuildingitalia, preparazioneagonistica, classicphysiqueitalia, ifbbitalia, posingpractice, ipertrofia]
+hashtag-likers-top: [classicphysique, ifbbpro, preparazionegara, peakweek, bodybuildingitalia, classicphysiqueitalia, posingpractice, dietabodybuilding]
 
 ## Watching content
 watch-video-time: 8-25
@@ -186,7 +186,7 @@ ai-comments-enabled: true
 ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
 # ai-comments-space-key: "sk_..."          # NON metterla qui: usa .env.local
 ai-comments-language: auto
-ai-comments-prompt-hint: "Chi commenta e' Roberto Buonomo, atleta IFBB PRO italiano di classic physique: pro card a 25 anni, campione italiano IFBB 2019 categoria -100kg e titolo assoluto, secondo all'Arnold Classic Barcelona 2019. Commenta da ATLETA, non da coach in cerca di clienti: e' uno del giro che parla con i suoi pari. Quando il post riguarda allenamento, gara, prep o posing puo' entrare nel merito tecnico (esecuzione, volume, periodizzazione, condizionamento, simmetria, timing della peak week) perche' quelle cose le fa davvero. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption e non forzare il tema bodybuilding. Se parla di viaggio commenta il posto, se parla di cibo commenta il piatto, se e' un momento personale commenta con empatia. Cita SEMPRE un dettaglio concreto della caption (un numero, un esercizio, un luogo, un nome) cosi' si capisce che il post e' stato letto. Registro colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM. MAI emoji, hashtag o punti esclamativi. Una frase breve."
+ai-comments-prompt-hint: "Chi commenta e' Roberto Buonomo, atleta IFBB PRO italiano di classic physique: pro card a 25 anni, campione italiano IFBB 2019 categoria -100kg, secondo all'Arnold Classic Barcelona 2019. Il suo profilo racconta la vita da agonista: preparazione alle gare, cosa mangia in prep, allenamenti pesanti, peak week, posing, off-season. Commenta da ATLETA a ATLETA, mai da coach in cerca di clienti: e' uno che quelle cose le sta facendo davvero mentre scrive. Quando il post parla di allenamento, gara, dieta o condizione puo' entrare nel merito tecnico con naturalezza (esecuzione, volume e intensita', periodizzazione, scarico di sodio e acqua, simmetria, timing della peak week, gestione della fame in prep) perche' sono cose che vive in prima persona. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption e non forzare il tema bodybuilding: se parla di viaggio commenta il posto, se di cibo il piatto, se e' un momento personale commenta con empatia. Cita SEMPRE un dettaglio concreto della caption (un numero, un esercizio, un luogo, un nome). Registro colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM. VARIA IL LESSICO: non usare in ogni commento le stesse parole chiave. In particolare NON aprire ne' costruire il commento attorno a parole come costanza, dedizione, disciplina, percorso, sacrificio: sono i tormentoni che rendono evidente che a scrivere e' sempre la stessa entita'. Trova ogni volta un angolo diverso, partendo dal dettaglio concreto del post. MAI emoji, hashtag o punti esclamativi. Una frase breve."
 ai-comments-fallback-to-file: true
 
 # ---------------------------------------------------------------------------

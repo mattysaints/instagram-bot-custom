@@ -114,7 +114,7 @@ blogger: [mirco_fila, lelerico_ifbbpro, andrea.presti_ifbbpro, andrea_mammoli, v
 # follow, niente storie. Like/follow/sticker restano sui profili piccoli
 # (i follower dei blogger), che sono il target che converte.
 # Questo flag sospende anche i limiti di dimensione di filters.yml per il
-# solo job `blogger`: con max_followers a 8000 un account da 300k verrebbe
+# solo job `blogger`: con max_followers a 4000 un account da 300k verrebbe
 # scartato e non commenteremmo nulla.
 blogger-comment-only: true
 
@@ -130,9 +130,20 @@ can-reinteract-after: 168
 # Hashtag: pesca chi ha messo LIKE ai post recenti. Lead piu' caldi dei
 # semplici follower (interesse esplicito e recente).
 # Mix: bodybuilding agonistico nazionale + fitness Milano/Lombardia.
-hashtag-likers-recent: [bodybuildingitalia, preparazioneagonistica, garebodybuilding, classicphysiqueitalia, menphysiqueitalia, ifbbitalia, naturalbodybuildingitalia, palestramilano, personaltrainermilano, fitnessmilano, bodybuildingmilano, milanofitness, allenamentomilano, schedaallenamento, coachonline, preparatoreatletico, alimentazionesportiva, massamuscolare, definizionemuscolare, ipertrofia]
+hashtag-likers-recent: [trasformazionefisica, primaedopo, percorsofitness, ricomposizionecorporea, dimagrimentosano, rimettersiinforma, motivazionefitness, lifestylesano, alimentazioneequilibrata, coachonline, schedapersonalizzata, personaltrainermilano, palestramilano, fitnessmilano, allenamentomilano, milanofitness, bodybuildingmilano, preparatoreatletico, ipertrofia, massamuscolare]
 
-hashtag-likers-top: [bodybuildingitalia, preparazioneagonistica, classicphysiqueitalia, ifbbitalia, palestramilano, personaltrainermilano, bodybuildingmilano, coachonline, ipertrofia, alimentazionesportiva]
+hashtag-likers-top: [trasformazionefisica, percorsofitness, ricomposizionecorporea, personaltrainermilano, palestramilano, fitnessmilano, coachonline, rimettersiinforma]
+
+# Luoghi: pesca chi ha messo like a post GEOLOCALIZZATI a Milano. E' l'unica
+# leva che garantisce davvero la prossimita' fisica: un hashtag come
+# #palestramilano lo usa anche chi vive a Bergamo, un post geotaggato a Milano
+# no. Per uno studio con sede in Corso di Porta Romana e' il bacino migliore.
+#
+# ATTENZIONE: i nomi devono combaciare con i luoghi REALI di Instagram, che ha
+# una sua anagrafica. "Milano, Italy" e' sicuro; per aggiungere palestre o
+# quartieri specifici cercali prima nella tab Luoghi dell'app e copia il nome
+# esatto, altrimenti il job spreca ~30s a tentativo.
+place-likers-recent: [Milano Italy]
 
 ## Watching content (umanizza il comportamento)
 watch-video-time: 8-25
@@ -214,7 +225,7 @@ ai-comments-enabled: true
 ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
 # ai-comments-space-key: "sk_..."          # NON metterla qui: usa .env.local
 ai-comments-language: Italian
-ai-comments-prompt-hint: "L'autore del commento e' Roberto Buonomo, IFBB PRO e coach di Milano, fondatore dello studio FIT LAB (Corso di Porta Romana) e del team RB Coaching. E' campione italiano IFBB 2019 categoria -100kg e ha preso la pro card a 25 anni, quindi quando il tema e' allenamento o gara puo' permettersi un registro tecnico e concreto (esecuzione, volume, periodizzazione, condizionamento, posing, alimentazione). E' anche educatore alimentare, quindi sul cibo puo' dire qualcosa di sensato senza fare il maestrino. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption, non forzare il tema palestra. Se la caption parla di viaggio commenta il posto, se parla di cibo commenta il piatto, se parla di famiglia o di un momento personale commenta con empatia, se parla di lavoro commenta quello. Solo se la caption e' davvero su allenamento, gara o dieta usa il registro tecnico. Cita SEMPRE un dettaglio concreto preso dalla caption (una parola, un luogo, un numero, un esercizio, un ingrediente) cosi' si capisce che il post e' stato letto davvero. Italiano colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM: e' un commento sotto un post, non una pubblicita'. MAI emoji, hashtag o punti esclamativi. Una frase breve, come uno che scorre il feed e commenta di getto."
+ai-comments-prompt-hint: "L'autore del commento e' Roberto Buonomo, IFBB PRO e coach a Milano, fondatore dello studio FIT LAB e del team RB Coaching. Il suo mondo e' seguire persone normali che vogliono cambiare fisico: progressi dei clienti, abitudini sostenibili, allenamento e alimentazione cuciti sulla vita di chi li segue. Chi legge il commento e' una persona che si allena, non un professionista: quindi niente gergo da addetto ai lavori, ma parole che userebbe un allenatore esperto quando parla con chi si allena da solo. Se il post mostra progressi o un confronto nel tempo, il commento riconosce il lavoro fatto nel tempo, non solo il risultato finale. Se parla di allenamento, entra nel merito con misura (esecuzione, gestione dei carichi, recupero). Se parla di cibo, ragiona da educatore alimentare senza fare la predica. Se parla di stanchezza, motivazione o fatica, risponde da umano prima che da coach. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption e non forzare il tema palestra: se il post e' un viaggio commenta il posto, se e' un momento personale commenta con empatia. Cita SEMPRE un dettaglio concreto della caption (una parola, un numero, un esercizio, un luogo) cosi' si capisce che il post e' stato letto. Italiano colloquiale e diretto. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM: e' un commento sotto un post, non una pubblicita'. VARIA IL LESSICO: non usare in ogni commento le stesse parole chiave. In particolare NON aprire ne' costruire il commento attorno a parole come costanza, dedizione, disciplina, percorso, sacrificio: sono i tormentoni che rendono evidente che a scrivere e' sempre la stessa entita'. Trova ogni volta un angolo diverso, partendo dal dettaglio concreto del post. MAI emoji, hashtag o punti esclamativi. Una frase breve."
 ai-comments-fallback-to-file: true
 
 # ---------------------------------------------------------------------------

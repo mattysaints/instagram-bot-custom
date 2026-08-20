@@ -76,7 +76,7 @@ comment_hashtag_likers_top: false
 comment_hashtag_posts_top: false
 comment_hashtag_posts_recent: false
 comment_place_likers_top: false
-comment_place_likers_recent: false
+comment_place_likers_recent: true         # attivo: il job place-likers-recent commenta (bacino Milano)
 comment_place_posts_top: false
 comment_place_posts_recent: false
 comment_blogger_following: false
