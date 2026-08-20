@@ -31,7 +31,14 @@ param(
     [Parameter(Mandatory = $true)][string]$Account,
     [Parameter(Mandatory = $true)][string]$Avd,
     [Parameter(Mandatory = $true)][string]$Serial,
-    [int]$BootTimeoutSec = 300
+    [int]$BootTimeoutSec = 300,
+    # Emulatore senza finestra: risparmia CPU e memoria, ed e' quello che
+    # serve su una macchina che gira h24 senza nessuno davanti. Il bot non
+    # perde niente, perche' lavora via ADB e non guarda lo schermo; anche gli
+    # screenshot di /shot continuano a funzionare (adb exec-out screencap).
+    # Il default e' spento cosi' un test a mano mostra la finestra: in
+    # produzione lo passa il watchdog.
+    [switch]$NoWindow
 )
 
 $ErrorActionPreference = 'Stop'
@@ -99,6 +106,7 @@ else {
         '-no-audio',
         '-gpu', 'swiftshader_indirect'
     )
+    if ($NoWindow) { $args += '-no-window' }
     Write-Log "avvio emulatore: $Emulator $($args -join ' ')"
     Start-Process -FilePath $Emulator -ArgumentList $args -WindowStyle Minimized | Out-Null
 }

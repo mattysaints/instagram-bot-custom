@@ -147,7 +147,7 @@ elseif ($hvPresent) {
 }
 else {
     Write-Esito 'SLAT (nested paging)' 'no' 'avviso' `
-        'Richiesto da WHPX. Se manca davvero, resta AEHD.'
+        'Richiesto da WHPX, che e l unico acceleratore con un futuro (AEHD viene dismesso a fine 2026, HAXM e gia morto).'
 }
 
 # --------------------------------------------------------------------------
@@ -160,11 +160,15 @@ Write-Esito 'Architettura' $os.OSArchitecture 'info'
 
 # WHPX e' una funzionalita' opzionale; su alcune edizioni non e' presente.
 try {
+    # WHPX e' la strada da prendere: HAXM e' fuori dall'emulatore da ottobre
+    # 2025 e AEHD viene dismesso il 31/12/2026. Se questa feature e' spenta,
+    # va accesa.
     $whpx = Get-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -ErrorAction Stop
     Write-Esito 'Windows Hypervisor Platform' $whpx.State $(
-        if ($whpx.State -eq 'Enabled') { 'ok' } else { 'info' }
+        if ($whpx.State -eq 'Enabled') { 'ok' } else { 'avviso' }
     ) $(
-        if ($whpx.State -eq 'Enabled') { '' } else { 'Serve solo se usi WHPX. Su AMD, AEHD e in genere piu veloce e non richiede questa feature.' }
+        if ($whpx.State -eq 'Enabled') { '' }
+        else { 'Da abilitare: DISM /Online /Enable-Feature /FeatureName:HypervisorPlatform /All e riavvio. E l acceleratore raccomandato da Google.' }
     )
 }
 catch {
@@ -186,6 +190,36 @@ Write-Esito 'RAM totale' ("{0} GB" -f $ramGB) $(
     else { 'Troppo poca per due emulatori. Uno solo alla volta.' }
 )
 Write-Esito 'RAM libera ora' ("{0} GB" -f $ramLibereGB) 'info'
+
+# Numero di moduli: con UN solo banco la macchina lavora in single channel e
+# dimezza la banda verso la grafica integrata. Per un emulatore, che usa la
+# RAM di sistema come memoria video, e' proprio il collo di bottiglia.
+$moduli = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)
+if ($moduli.Count -gt 0) {
+    $slotTot = $null
+    try { $slotTot = (@(Get-CimInstance Win32_PhysicalMemoryArray))[0].MemoryDevices } catch {}
+    $desc = "$($moduli.Count) modulo/i"
+    if ($slotTot) { $desc += " su $slotTot slot" }
+    Write-Esito 'Banchi di memoria' $desc $(
+        if ($moduli.Count -ge 2) { 'ok' } else { 'avviso' }
+    ) $(
+        if ($moduli.Count -ge 2) { 'Dual channel: la banda verso la grafica integrata e piena.' }
+        else { 'SINGLE CHANNEL: banda dimezzata verso la iGPU, che e proprio cio che usa l emulatore. Se c e uno slot libero, aggiungere un secondo modulo uguale e la modifica col miglior rapporto costo/beneficio.' }
+    )
+    $velocita = ($moduli | ForEach-Object { $_.ConfiguredClockSpeed } | Where-Object { $_ } | Select-Object -First 1)
+    if ($velocita) { Write-Esito 'Velocita memoria' ("{0} MT/s" -f $velocita) 'info' }
+}
+
+# L'emulatore chiede il commit dell'intera RAM del guest all'AVVIO: se il
+# commit limit (RAM + file di paging) non basta, non parte proprio.
+$commitLimitGB = [math]::Round($os.TotalVirtualMemorySize / 1MB, 1)
+Write-Esito 'Commit limit (RAM + paging)' ("{0} GB" -f $commitLimitGB) $(
+    if ($commitLimitGB -ge ($ramGB + 8)) { 'ok' }
+    else { 'avviso' }
+) $(
+    if ($commitLimitGB -ge ($ramGB + 8)) { '' }
+    else { 'Con due emulatori conviene un file di paging generoso: l emulatore committa tutta la RAM del guest all avvio e senza margine non parte.' }
+)
 
 $disco = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $liberiGB = [math]::Round($disco.FreeSpace / 1GB, 1)

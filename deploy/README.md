@@ -60,12 +60,24 @@ di comando. Su un mini PC con 4 core e 16 GB conviene tenerli leggeri:
 
 | Impostazione | Valore | Perché |
 |---|---|---|
+| **Livello API** | **36 o inferiore** | vedi l'avvertenza qui sotto: è la scelta più importante |
 | RAM per AVD | **2048 MB** | 2 × 2 GB lascia respiro a Windows e ai due Python |
 | CPU cores | **2** | sono 4 in tutto: due a testa e nulla per il resto è troppo |
 | Risoluzione | **720 × 1280** | meno pixel da comporre; il bot legge la UI, non guarda il video |
 | Density | 320 dpi | coerente con 720p |
 | Graphics | Software (`swiftshader_indirect`) | senza GPU dedicata è l'unica affidabile |
 | Snapshot | disattivato | si riparte sempre da uno stato noto |
+| Immagine | **senza Google Play** | i Play Services consumano RAM e CPU anche da fermi |
+
+> **Non usare immagini API 37 o superiori.** Da quel livello l'emulatore impone
+> un minimo di **4 GB di RAM per AVD** e **riscrive la tua configurazione senza
+> dirtelo**: i 2048 MB che hai messo diventano 4096, e due emulatori non ci
+> stanno più in 16 GB. È il tipo di problema che si manifesta come lentezza
+> inspiegabile, non come errore.
+
+Metti in conto anche il disco: una cartella AVD in esercizio arriva
+tranquillamente a **~30 GB**, quindi due sono ~60 GB. E l'emulatore si rifiuta
+di partire con meno di 5 GB liberi.
 
 I nomi degli AVD attesi da `watchdog.ps1` sono `bot_rb` e `bot_pers`. Se ne usi
 altri, cambiali nell'elenco `$Accounts` in cima al file.
@@ -227,11 +239,29 @@ Stop-ScheduledTask -TaskName IGBot-Watchdog
 
 ## Sul dimensionamento
 
-Il mini PC monta un **Ryzen 5 3500U** (4 core / 8 thread, 2019) con 16 GB.
+Il mini PC di riferimento (Huidun H80, ASIN Amazon `B0DTHW462L`) dichiara 16 GB
+e una CPU che l'inserzione italiana **non nomina**: "H80" è il nome del mini PC,
+non un modello AMD. Dai listing gemelli americani risulta un **Ryzen 5 3500U**
+(4 core / 8 thread, gennaio 2019), ma è una deduzione, non un dato letto sulla
+pagina d'acquisto — quindi va verificata sulla macchina con CPU-Z, controllando
+che la cache L3 sia di **4 MB**, che è il valore della 3500U.
+
 Con i parametri qui sopra due emulatori ci stanno, ma **è il limite della
 macchina**, non una configurazione comoda: sono 2 core per emulatore e quasi
 niente per Windows, i due processi Python e ADB. Aspettati sessioni più lente
 di quelle su un telefono vero, e qualche timeout in più sulla lettura della UI.
+
+Numeri utili per capire quanto è stretto: Google indica **~4 GB per ogni AVD in
+più** in esecuzione e consiglia **32 GB** per più emulatori simultanei. Il
+conto realistico su 16 GB è 2 × ~4,4 GB di commit + i due Python + 3-5 GB di
+Windows = **12,5-14,5 GB**. Non è il caso peggiore: è lo scenario normale.
+
+C'è poi un rischio da verificare subito, perché deciderebbe se tenere la
+macchina: se i 16 GB sono su **un solo modulo**, il sistema lavora in *single
+channel* e dimezza la banda verso la grafica integrata — che è esattamente
+quello che l'emulatore usa. `check-machine.ps1` te lo dice ("Banchi di
+memoria"). Con uno slot libero, aggiungere un secondo modulo uguale è la
+modifica col miglior rapporto costo/beneficio di tutte.
 
 **Gli account sono già sfalsati.** In `watchdog.ps1` il secondo parte 90 minuti
 dopo il primo (`OffsetMin`). Le sessioni durano 90 minuti e distano 3 ore, cioè

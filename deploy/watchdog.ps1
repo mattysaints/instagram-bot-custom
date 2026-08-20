@@ -87,9 +87,13 @@ function Test-Paused {
 function Start-AccountProcess {
     param($Acct)
     $script = Join-Path $PSScriptRoot 'start-account.ps1'
+    # -NoWindow: in produzione l'emulatore gira senza finestra. Nessuno guarda
+    # lo schermo del mini PC, e comporre l'immagine costa CPU che su 4 core
+    # serve altrove. Per vedere cosa sta facendo c'e' /shot su Telegram.
     $args = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script,
-        '-Account', $Acct.Name, '-Avd', $Acct.Avd, '-Serial', $Acct.Serial
+        '-Account', $Acct.Name, '-Avd', $Acct.Avd, '-Serial', $Acct.Serial,
+        '-NoWindow'
     )
     $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $args `
         -WindowStyle Minimized -PassThru
