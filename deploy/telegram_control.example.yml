@@ -9,3 +9,11 @@
 
 telegram-api-token: "your-api-token-here"
 telegram-chat-id: "your-chat-id-here"
+
+# /cmd esegue comandi sul mini PC da Telegram. Comodo, ma e' a tutti gli
+# effetti una porta di esecuzione remota: chi entra nel tuo account Telegram
+# si prende la macchina. Va acceso solo con un "true" esplicito.
+#
+# Per un terminale vero (interattivo, senza passare da Telegram) usa invece
+# SSH: deploy\install-remote-shell.ps1
+allow-shell: false

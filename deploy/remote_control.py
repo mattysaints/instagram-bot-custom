@@ -10,6 +10,7 @@ COMANDI
     /start <account>     toglie la pausa
     /log <account> [n]   ultime n righe di log (default 25)
     /shot <account>      screenshot dell'emulatore, per vedere dove sta il bot
+    /cmd <comando>       esegue un comando sul mini PC (DISATTIVATO di default)
     /help
 
 Lo stop non uccide il watchdog: crea un file <account>.stop che il watchdog
@@ -22,10 +23,27 @@ CONFIGURAZIONE
 
         telegram-api-token: "123456:ABC..."     da @BotFather
         telegram-chat-id: "12345678"            da @myidbot
+        allow-shell: false                      /cmd acceso o spento
 
     Solo quel chat-id puo' dare comandi: qualunque altro viene ignorato e
     loggato. Senza questo controllo, chiunque conoscesse il nome del bot
     potrebbe fermare l'automazione.
+
+/cmd E I SUOI RISCHI
+    /cmd esegue QUALUNQUE comando sul mini PC, con i privilegi dell'utente che
+    fa girare questo script. E' comodo (un aggiornamento, un riavvio di ADB,
+    uno spazio disco senza aprire il PC) ma e' a tutti gli effetti una porta
+    di esecuzione remota, quindi:
+
+      - resta spento finche' non metti allow-shell: true
+      - obbedisce solo al chat-id proprietario
+      - ogni comando finisce nel log, con l'esito
+      - c'e' un tetto di tempo: un comando che non torna viene ucciso
+
+    Chi entra nel tuo account Telegram si prende il mini PC. Se la cosa non ti
+    convince, lascialo spento e usa SSH: vedi deploy/install-remote-shell.ps1,
+    che oltre a essere un terminale vero e' anche piu' sicuro (chiavi, non un
+    token che gira nei messaggi).
 
 AVVIO
     python deploy/remote_control.py
@@ -95,8 +113,8 @@ log = logging.getLogger("remote")
 # --------------------------------------------------------------------------- #
 # config
 # --------------------------------------------------------------------------- #
-def load_config() -> tuple[str, str]:
-    """Legge token e chat-id. Parser minimale: niente PyYAML come dipendenza."""
+def load_config() -> dict:
+    """Legge token, chat-id e opzioni. Parser minimale: niente PyYAML."""
     if not CONFIG_FILE.exists():
         sys.exit(
             f"Manca {CONFIG_FILE}.\n"
@@ -104,19 +122,27 @@ def load_config() -> tuple[str, str]:
             "telegram_control.yml e mettici token e chat-id."
         )
     token = chat_id = ""
+    allow_shell = False
     for raw in CONFIG_FILE.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or ":" not in line:
             continue
         k, v = line.split(":", 1)
+        k = k.strip()
         v = v.strip().strip('"').strip("'")
-        if k.strip() == "telegram-api-token":
+        if k == "telegram-api-token":
             token = v
-        elif k.strip() == "telegram-chat-id":
+        elif k == "telegram-chat-id":
             chat_id = v
+        elif k == "allow-shell":
+            # solo un "true" esplicito accende /cmd: qualsiasi altro valore,
+            # refuso compreso, lascia la shell spenta. Su un interruttore che
+            # apre l'esecuzione remota, il default sbagliato deve essere il
+            # piu' prudente.
+            allow_shell = v.strip().lower() in ("true", "yes", "si", "sì", "1", "on")
     if not token or not chat_id or token.startswith("your-"):
         sys.exit(f"token o chat-id non configurati in {CONFIG_FILE}")
-    return token, chat_id
+    return {"token": token, "chat_id": chat_id, "allow_shell": allow_shell}
 
 
 # --------------------------------------------------------------------------- #
@@ -302,7 +328,74 @@ def cmd_shot(bot: Bot, account: str) -> Optional[str]:
     return "Screenshot catturato ma invio fallito."
 
 
-HELP = """<b>Comandi</b>
+# --------------------------------------------------------------------------- #
+# shell remota (/cmd)
+# --------------------------------------------------------------------------- #
+SHELL_TIMEOUT_S = 120
+# Telegram taglia i messaggi a 4096 caratteri: stiamo sotto, tenendo spazio
+# per l'intestazione e per i tag <pre>.
+SHELL_MAX_OUTPUT = 3200
+
+
+def cmd_shell(command: str, allow_shell: bool) -> str:
+    """Esegue un comando sul mini PC e ne restituisce l'output.
+
+    Gira attraverso PowerShell perche' la macchina e' Windows: per un comando
+    in stile bash basta passarci dentro `bash -c "..."` se Git Bash e'
+    installato.
+    """
+    if not allow_shell:
+        return ("🔒 <b>/cmd e' disattivato.</b>\n\n"
+                "Per accenderlo, in <code>deploy/telegram_control.yml</code>:\n"
+                "<code>allow-shell: true</code>\n"
+                "poi riavvia il controllo remoto.\n\n"
+                "Tieni presente che da quel momento chiunque entri in questo "
+                "account Telegram puo' eseguire comandi sul mini PC. "
+                "L'alternativa piu' solida e' SSH: vedi "
+                "<code>deploy/install-remote-shell.ps1</code>.")
+
+    command = command.strip()
+    if not command:
+        return "Manca il comando. Es: <code>/cmd Get-Process emulator</code>"
+
+    # Il log serve a ricostruire cosa e' stato fatto sulla macchina: e' l'unica
+    # traccia di un'esecuzione remota.
+    log.warning("SHELL: %s", command[:500])
+
+    try:
+        p = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive",
+             "-ExecutionPolicy", "Bypass", "-Command", command],
+            capture_output=True, timeout=SHELL_TIMEOUT_S, cwd=str(REPO),
+        )
+    except subprocess.TimeoutExpired:
+        log.warning("SHELL: timeout dopo %ss", SHELL_TIMEOUT_S)
+        return (f"⏱ Nessuna risposta dopo {SHELL_TIMEOUT_S}s: comando ucciso.\n"
+                "Per cose lunghe conviene SSH, oppure avvia in background e "
+                "poi guarda il log.")
+    except FileNotFoundError:
+        return "powershell.exe non trovato."
+    except Exception as e:                                  # noqa: BLE001
+        log.exception("SHELL: errore")
+        return f"Esecuzione fallita: {_escape(str(e))}"
+
+    out = (p.stdout or b"").decode("utf-8", "replace")
+    err = (p.stderr or b"").decode("utf-8", "replace")
+    testo = (out + ("\n" + err if err.strip() else "")).strip()
+    log.info("SHELL: exit=%s, %d caratteri di output", p.returncode, len(testo))
+
+    if not testo:
+        testo = "(nessun output)"
+    if len(testo) > SHELL_MAX_OUTPUT:
+        tagliati = len(testo) - SHELL_MAX_OUTPUT
+        testo = testo[:SHELL_MAX_OUTPUT] + f"\n... [altri {tagliati} caratteri omessi]"
+
+    esito = "✅" if p.returncode == 0 else f"❌ exit {p.returncode}"
+    return (f"{esito} <code>{_escape(command[:120])}</code>\n"
+            f"<pre>{_escape(testo)}</pre>")
+
+
+HELP_BASE = """<b>Comandi</b>
 /status - stato dei due account
 /stop &lt;account&gt; - mette in pausa
 /start &lt;account&gt; - riattiva
@@ -311,8 +404,18 @@ HELP = """<b>Comandi</b>
 
 Account: <code>rb</code> (rb.coach), <code>pers</code> (roberto_buonomo_ifbbpro)"""
 
+HELP_SHELL_ON = """
 
-def handle(bot: Bot, text: str) -> Optional[str]:
+/cmd &lt;comando&gt; - esegue un comando sul mini PC (PowerShell)
+Es: <code>/cmd Get-Process emulator</code>
+Es: <code>/cmd adb devices</code>"""
+
+HELP_SHELL_OFF = """
+
+/cmd - disattivato (allow-shell: false)"""
+
+
+def handle(bot: Bot, text: str, allow_shell: bool = False) -> Optional[str]:
     parts = text.strip().split()
     if not parts:
         return None
@@ -320,9 +423,13 @@ def handle(bot: Bot, text: str) -> Optional[str]:
     arg = parts[1] if len(parts) > 1 else ""
 
     if cmd in ("help", "start_help"):
-        return HELP
+        return HELP_BASE + (HELP_SHELL_ON if allow_shell else HELP_SHELL_OFF)
     if cmd == "status":
         return cmd_status()
+    if cmd == "cmd":
+        # tutto quello che segue /cmd e' il comando, spazi compresi: qui non si
+        # puo' usare parts[1], si perderebbe il resto della riga
+        return cmd_shell(text.strip()[len(parts[0]):], allow_shell)
 
     if cmd in ("stop", "start", "log", "shot"):
         if not arg:
@@ -347,10 +454,15 @@ def handle(bot: Bot, text: str) -> Optional[str]:
 
 
 def main() -> int:
-    token, owner = load_config()
-    bot = Bot(token, owner)
-    log.info("controllo remoto avviato (owner chat_id=%s)", owner)
-    bot.send("\U0001f7e2 Controllo remoto attivo. /help per i comandi.")
+    cfg = load_config()
+    owner = cfg["chat_id"]
+    allow_shell = cfg["allow_shell"]
+    bot = Bot(cfg["token"], owner)
+    log.info("controllo remoto avviato (owner chat_id=%s, shell=%s)",
+             owner, "ATTIVA" if allow_shell else "disattivata")
+    bot.send("\U0001f7e2 Controllo remoto attivo. /help per i comandi."
+             + ("\n⚠️ /cmd e' ATTIVO: da qui si eseguono comandi sul mini PC."
+                if allow_shell else ""))
 
     offset = 0
     while True:
@@ -369,7 +481,7 @@ def main() -> int:
                                 sender, text[:60])
                     continue
                 log.info("comando: %s", text[:80])
-                reply = handle(bot, text)
+                reply = handle(bot, text, allow_shell)
                 if reply:
                     bot.send(reply)
         except KeyboardInterrupt:

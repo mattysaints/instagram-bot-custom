@@ -5,10 +5,12 @@ ripartenza automatica dopo un blackout e controllo da telefono.
 
 | File | A cosa serve |
 |---|---|
+| `check-machine.ps1` | **da lanciare per primo**: dice se la macchina ce la fa |
 | `start-account.ps1` | avvia un emulatore, aspetta il boot vero, lancia il bot |
 | `watchdog.ps1` | tiene vivi i due account e li rilancia quando escono |
-| `remote_control.py` | bot Telegram: stato, stop/start, log, screenshot |
+| `remote_control.py` | bot Telegram: stato, stop/start, log, screenshot, `/cmd` |
 | `install-autostart.ps1` | registra i due task pianificati |
+| `install-remote-shell.ps1` | SSH + Tailscale: terminale vero da remoto |
 | `common.ps1` | funzioni condivise (ricerca del virtualenv) |
 
 ## Il vincolo da cui dipende tutto
@@ -20,6 +22,23 @@ che non ha desktop: l'emulatore non parte e non dà nemmeno un errore chiaro.
 Per questo i task partono **al logon**, e serve che Windows faccia il login da
 solo dopo un riavvio. Senza autologon, dopo un blackout il PC resta alla
 schermata di accesso e il bot non riparte.
+
+## Prima di tutto: la macchina ce la fa?
+
+Appena hai il mini PC in mano, prima di installare qualsiasi cosa:
+
+```powershell
+.\deploy\check-machine.ps1
+```
+
+Legge e basta, non modifica niente. Controlla CPU, RAM, disco, **virtualizzazione
+abilitata nel BIOS**, edizione di Windows, impostazioni di sospensione e
+strumenti Android, e alla fine ti dà un elenco di cosa risolvere.
+
+Il controllo che conta più di tutti è la virtualizzazione: se è spenta nel
+BIOS/UEFI (voce **SVM Mode** su AMD, **Intel VT-x** su Intel), l'emulatore
+ripiega sull'emulazione software ed è di fatto inutilizzabile. È una cosa che
+dalla scheda del venditore non si può sapere.
 
 ## Installazione
 
@@ -112,6 +131,70 @@ popup o se sta semplicemente scorrendo una lista.
 Lo stop **non** uccide il watchdog: scrive un file `<account>.stop` che il
 watchdog controlla a ogni giro. Sopravvive quindi anche a un riavvio: l'account
 resta in pausa finché non mandi `/start`.
+
+## Lanciare comandi sul mini PC da remoto
+
+Due strade, che servono a cose diverse.
+
+### `/cmd` da Telegram — per il comando al volo
+
+Comodo dal telefono, zero installazione. **Spento di default**: si accende in
+`deploy/telegram_control.yml` con `allow-shell: true`.
+
+```
+/cmd adb devices
+/cmd Get-Process emulator
+/cmd git -C C:\...\instagram-bot pull
+```
+
+Gira attraverso PowerShell, con la directory del repo come cartella corrente.
+Tetto di 2 minuti, output tagliato prima del limite di Telegram, ogni comando
+scritto nel log.
+
+**Cosa stai accendendo**: è esecuzione di comandi arbitrari sulla macchina.
+Solo il tuo chat-id è autorizzato, ma chi entra nel tuo account Telegram si
+prende il mini PC. Se la cosa non ti convince, lascialo spento e usa SSH.
+
+### SSH — per il terminale vero
+
+`/cmd` non è un terminale: niente comandi interattivi, niente output in tempo
+reale, niente copia di file. Per quello:
+
+```powershell
+.\deploy\install-remote-shell.ps1 -InstallTailscale
+```
+
+Installa il server **OpenSSH già incluso in Windows 11** (non scarica niente da
+terzi), lo mette in avvio automatico, apre la porta 22 **solo sul firewall
+locale**, e installa **Tailscale**.
+
+Tailscale è il pezzo che risolve il problema vero: crea una rete privata tra i
+tuoi dispositivi, così il mini PC è raggiungibile da fuori casa **senza aprire
+porte sul router** e senza IP pubblico. Fai il login con lo stesso account su
+mini PC e telefono, e poi:
+
+```
+ssh utente@nome-del-minipc
+```
+
+Da telefono va bene Termius o JuiceSSH.
+
+**Non aprire la porta 22 sul router.** SSH esposto su internet raccoglie
+tentativi di accesso automatici in continuazione.
+
+Meglio ancora, con le chiavi invece della password:
+
+```powershell
+.\deploy\install-remote-shell.ps1 -PublicKey "ssh-ed25519 AAAA... tuo@portatile"
+```
+
+Lo script mette la chiave nel posto giusto — per gli utenti amministratori
+Windows **non** usa `~/.ssh/authorized_keys` ma
+`%ProgramData%\ssh\administrators_authorized_keys`, con permessi ristretti;
+sbagliare posto o permessi fa fallire l'accesso **in silenzio**, ed è l'errore
+più comune. Solo **dopo** aver verificato che entri senza password, aggiungi
+`-DisablePasswordAuth` (senza una chiave autorizzata lo script si rifiuta di
+farlo, per non chiuderti fuori).
 
 ## Come si comporta quando qualcosa va storto
 
