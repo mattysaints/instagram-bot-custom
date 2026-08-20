@@ -44,6 +44,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'common.ps1')
 $User = "$env:USERDOMAIN\$env:USERNAME"
 
 $TaskWatchdog = 'IGBot-Watchdog'
@@ -71,9 +72,12 @@ if ($Remove) {
 }
 
 # --- controlli preliminari, meglio fallire adesso che al prossimo blackout ---
-$venvPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path $venvPython)) {
-    Write-Warning "Non trovo $venvPython. Crea prima il virtualenv (vedi SETUP.md)."
+try {
+    $venvPython = Get-BotPython -RepoRoot $RepoRoot
+    Write-Output "python del bot: $venvPython"
+}
+catch {
+    Write-Warning $_.Exception.Message
     exit 1
 }
 $controlCfg = Join-Path $RepoRoot 'deploy\telegram_control.yml'

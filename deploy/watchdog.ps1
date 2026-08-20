@@ -37,9 +37,17 @@ $StatusFile = Join-Path $LogDir 'status.json'
 
 # Un account per emulatore. I serial devono combaciare con il campo `device:`
 # nei rispettivi config.yml, altrimenti il bot parla al device sbagliato.
+#
+# OffsetMin sfalsa la PRIMA partenza del secondo account. Serve perche' su un
+# mini PC a 4 core i due emulatori che lavorano insieme si contendono la CPU.
+# run-dynamic.py costruisce le finestre a partire dall'ORA DI LANCIO (sessioni
+# da 90 min ogni 3 h, quindi ciascun account lavora meta' del tempo): lanciando
+# il secondo 90 minuti dopo, i due si alternano invece di sovrapporsi.
+# Non ha senso invece sfalsare working-hours nei config.yml: quella riga viene
+# riscritta da run-dynamic.py a ogni lancio.
 $Accounts = @(
-    @{ Name = 'rb.coach';                Avd = 'bot_rb';   Serial = 'emulator-5554' },
-    @{ Name = 'roberto_buonomo_ifbbpro'; Avd = 'bot_pers'; Serial = 'emulator-5556' }
+    @{ Name = 'rb.coach';                Avd = 'bot_rb';   Serial = 'emulator-5554'; OffsetMin = 0 },
+    @{ Name = 'roberto_buonomo_ifbbpro'; Avd = 'bot_pers'; Serial = 'emulator-5556'; OffsetMin = 90 }
 )
 
 function Write-Log {
@@ -95,7 +103,13 @@ function Start-AccountProcess {
 Write-Log '=== watchdog avviato ==='
 $procs = @{}
 $nextStart = @{}
-foreach ($a in $Accounts) { $nextStart[$a.Name] = Get-Date }
+foreach ($a in $Accounts) {
+    $off = [int]$a.OffsetMin
+    $nextStart[$a.Name] = (Get-Date).AddMinutes($off)
+    if ($off -gt 0) {
+        Write-Log "[$($a.Name)] prima partenza sfalsata di $off min (per non far lavorare i due emulatori insieme)"
+    }
+}
 Save-Status
 
 while ($true) {

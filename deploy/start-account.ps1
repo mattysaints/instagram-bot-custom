@@ -37,6 +37,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 $LogDir = Join-Path $RepoRoot 'logs\deploy'
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -125,8 +126,13 @@ Write-Log "$Serial pronto (boot completato)."
 & $Adb -s $Serial shell input keyevent 82 2>$null | Out-Null
 
 # --- 3. avvio del bot -----------------------------------------------------
-$venvPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-$python = if (Test-Path $venvPython) { $venvPython } else { 'python' }
+# run-dynamic.py stampa emoji e caratteri di box-drawing. Qui sotto lo stdout
+# finisce in una pipe, non in una console: senza questo Python su Windows usa
+# cp1252 e muore con UnicodeEncodeError prima ancora di lanciare il bot.
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+
+$python = Get-BotPython
 $config = "accounts/$Account/config.yml"
 
 if (-not (Test-Path (Join-Path $RepoRoot $config))) {
@@ -134,8 +140,20 @@ if (-not (Test-Path (Join-Path $RepoRoot $config))) {
     exit 1
 }
 
-Write-Log "lancio: $python run-dynamic.py --config $config"
-& $python 'run-dynamic.py' '--config' $config 2>&1 | ForEach-Object {
+# run-dynamic.py genera di default 5 finestre, ma GramAddict si ferma dopo
+# `total-sessions`. Se i due numeri non coincidono la giornata viene spalmata
+# su piu' ore del necessario: passiamo il valore vero letto dal config.
+$runArgs = @('run-dynamic.py', '--config', $config)
+$totalSessions = Select-String -Path (Join-Path $RepoRoot $config) `
+    -Pattern '^\s*total-sessions\s*:\s*(\d+)' | Select-Object -First 1
+if ($totalSessions) {
+    $n = $totalSessions.Matches[0].Groups[1].Value
+    $runArgs += @('--sessions', $n)
+    Write-Log "total-sessions dal config: $n"
+}
+
+Write-Log ("lancio: $python " + ($runArgs -join ' '))
+& $python @runArgs 2>&1 | ForEach-Object {
     Add-Content -Path $LogFile -Value $_ -Encoding utf8
     Write-Output $_
 }

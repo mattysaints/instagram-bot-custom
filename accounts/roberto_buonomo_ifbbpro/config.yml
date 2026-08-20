@@ -23,7 +23,7 @@
 # General Configuration
 # ---------------------------------------------------------------------------
 username: roberto_buonomo_ifbbpro
-device: f2487e11                           # ADB serial (adb devices -l). Cambia col device reale.
+device: emulator-5556                      # deve combaciare con -Serial in deploy/watchdog.ps1 (avd bot_pers)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true

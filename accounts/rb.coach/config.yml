@@ -31,7 +31,7 @@
 # General Configuration
 # ---------------------------------------------------------------------------
 username: rb.coach
-device: f2487e11                           # ADB serial (adb devices -l). Cambia col device reale.
+device: emulator-5554                      # deve combaciare con -Serial in deploy/watchdog.ps1 (avd bot_rb)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true

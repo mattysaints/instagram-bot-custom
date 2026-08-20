@@ -72,6 +72,15 @@ POLL_TIMEOUT = 50
 # logs/deploy/ non esiste ancora -> FileNotFoundError prima ancora di partire.
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# Sotto Task Scheduler lo stdout e' rediretto, quindi su Windows Python usa
+# cp1252: un solo carattere non ASCII in un log (i messaggi arrivano da
+# Telegram e dai log del bot, pieni di emoji) farebbe morire il processo con
+# UnicodeEncodeError. Il FileHandler ha gia' encoding esplicito, questo mette
+# in sicurezza lo StreamHandler.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",

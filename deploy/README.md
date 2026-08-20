@@ -9,6 +9,7 @@ ripartenza automatica dopo un blackout e controllo da telefono.
 | `watchdog.ps1` | tiene vivi i due account e li rilancia quando escono |
 | `remote_control.py` | bot Telegram: stato, stop/start, log, screenshot |
 | `install-autostart.ps1` | registra i due task pianificati |
+| `common.ps1` | funzioni condivise (ricerca del virtualenv) |
 
 ## Il vincolo da cui dipende tutto
 
@@ -22,7 +23,18 @@ schermata di accesso e il bot non riparte.
 
 ## Installazione
 
-**1. Virtualenv e dipendenze** — vedi [SETUP.md](../SETUP.md).
+**1. Virtualenv e dipendenze** — vedi [SETUP.md](../SETUP.md). Gli script si
+aspettano `.venv\` (o `venv\`) nella radice del repo. Se stai lavorando in un
+**git worktree**, che non ha un venv proprio, indica quello del clone
+principale:
+
+```powershell
+setx IGBOT_PYTHON "C:\...\instagram-bot-custom\.venv\Scripts\python.exe"
+```
+
+Non c'è fallback sul Python di sistema: girerebbe senza `uiautomator2` e
+fallirebbe a metà sessione invece che subito, che su una macchina in un'altra
+stanza è molto peggio da capire.
 
 **2. Due AVD, uno per account.** Da Android Studio (Device Manager) o da riga
 di comando. Su un mini PC con 4 core e 16 GB conviene tenerli leggeri:
@@ -138,10 +150,18 @@ macchina**, non una configurazione comoda: sono 2 core per emulatore e quasi
 niente per Windows, i due processi Python e ADB. Aspettati sessioni più lente
 di quelle su un telefono vero, e qualche timeout in più sulla lettura della UI.
 
-Se l'uso h24 dà problemi, in ordine di efficacia:
+**Gli account sono già sfalsati.** In `watchdog.ps1` il secondo parte 90 minuti
+dopo il primo (`OffsetMin`). Le sessioni durano 90 minuti e distano 3 ore, cioè
+ogni account lavora metà del tempo: con quello scarto si alternano invece di
+pestarsi i piedi.
 
-1. **sfalsare gli orari** dei due account in `working-hours`, così raramente
-   lavorano insieme — è gratis e toglie il grosso della contesa
+Non serve invece toccare `working-hours` nei config: quella riga viene
+**riscritta da `run-dynamic.py` a ogni lancio**, calcolata sull'ora di
+partenza. Conta quando il watchdog lancia, non cosa c'è scritto nel file.
+
+Se l'uso h24 desse comunque problemi, in ordine di efficacia:
+
+1. alzare `OffsetMin` del secondo account se vedi che si accavallano
 2. scendere a **1 core per AVD**, più lento ma più stabile
 3. passare a due telefoni Android fisici collegati in USB: il mini PC
    diventerebbe solo il controller e il carico crollerebbe
