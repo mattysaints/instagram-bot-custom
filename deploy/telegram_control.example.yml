@@ -1,0 +1,11 @@
+# Controllo remoto del bot via Telegram.
+# Copia questo file in telegram_control.yml (che e' gitignored) e compilalo.
+#
+# telegram-api-token -> https://t.me/botfather  (comando /newbot)
+# telegram-chat-id   -> https://t.me/myidbot    (comando /getid)
+#
+# Solo il chat-id indicato qui puo' dare comandi al bot: chiunque altro
+# viene ignorato e registrato nel log.
+
+telegram-api-token: "your-api-token-here"
+telegram-chat-id: "your-chat-id-here"

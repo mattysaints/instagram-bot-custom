@@ -29,3 +29,8 @@ Pipfile.lock
 accounts
 apk/
 crashes
+
+# Deploy: il file con il token Telegram e i log operativi non
+# devono finire nel repo
+deploy/telegram_control.yml
+logs/deploy/
