@@ -6,6 +6,7 @@ ripartenza automatica dopo un blackout e controllo da telefono.
 | File | A cosa serve |
 |---|---|
 | `check-machine.ps1` | **da lanciare per primo**: dice se la macchina ce la fa |
+| `install-instagram.ps1` | installa sugli emulatori la versione di Instagram su cui il bot è tarato |
 | `start-account.ps1` | avvia un emulatore, aspetta il boot vero, lancia il bot |
 | `watchdog.ps1` | tiene vivi i due account e li rilancia quando escono |
 | `remote_control.py` | bot Telegram: stato, stop/start, log, screenshot, `/cmd` |
@@ -91,8 +92,40 @@ accounts/rb.coach/config.yml                 device: emulator-5554
 accounts/roberto_buonomo_ifbbpro/config.yml  device: emulator-5556
 ```
 
-**4. Instagram su ogni emulatore**, con l'account giusto già loggato, e la
-tastiera FastInputIME impostata come predefinita (il bot la usa per scrivere).
+**4. Instagram su ogni emulatore** — e dev'essere **la versione giusta**, non
+l'ultima.
+
+Il bot legge la UI di Instagram tramite i resource-id interni dell'app, che
+cambiano a ogni aggiornamento. I resource-id di questo fork sono verificati su
+**300.0.0.29.110** (`__tested_ig_version__` in `GramAddict/__init__.py`). Con la
+428.0.0.0.4 il bot non riusciva nemmeno a leggere un profilo — è la prima riga
+di `COMMIT_CHANGELOG.txt`.
+
+L'APK va scaricato a mano da [APKMirror](https://www.apkmirror.com/apk/instagram/instagram-instagram/),
+scegliendo la variante **nodpi** con l'**architettura dell'emulatore**
+(`adb shell getprop ro.product.cpu.abilist`; su un'immagine x86 a 32 bit non
+c'è nessun ponte ARM, quindi un APK arm non gira). Lo script non scarica nulla
+di proposito: Instagram riceve le credenziali del cliente, e un APK preso da
+una fonte qualsiasi è il modo più diretto per farsi rubare l'account.
+
+Poi, con gli emulatori accesi:
+
+```powershell
+.\deploy\install-instagram.ps1 -Apk C:\percorso\instagram-300-x86.apk -BloccaAggiornamenti
+```
+
+Lo script controlla package, versione, architettura e livello API prima di
+provare a installare, stampa l'impronta SHA-256 della firma (da confrontare con
+quella che APKMirror mostra sulla pagina di download) e verifica la versione sul
+device a installazione fatta. Senza `-Apk` cerca in `deploy\apk\` e in Download.
+
+`-BloccaAggiornamenti` disattiva il Play Store sul device. Serve solo sulle
+immagini `google_apis_playstore`, dove altrimenti Instagram si aggiorna da solo
+e il giorno dopo il bot non trova più i resource-id: un guasto che si presenta
+come «ha smesso di funzionare da solo», senza nessun errore che punti alla causa.
+
+Restano da fare a mano, su ogni emulatore: il **login** con l'account giusto e
+la tastiera **FastInputIME** come predefinita (il bot la usa per scrivere).
 
 **5. Controllo remoto Telegram:**
 
