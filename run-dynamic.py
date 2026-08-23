@@ -17,14 +17,22 @@ Esempio: lancio alle 22:00 -> 5 sessioni:
   22.00-23.30, ~01.10-02.40, ~04.20-05.50  ...  -> bloccate da hard limit
   In quel caso il loop si ferma prima delle 03:00 e il giorno dopo si rilancia.
 
+Modalita' FINESTRE FISSE (quella usata h24 sul mini PC): se il config ha
+  total-sessions: -1 (o si passa --fixed-hours) le working-hours NON vengono
+  riscritte: valgono quelle del file (es. 5 finestre tra le 08 e le 22),
+  GramAddict fa una sessione per finestra, di notte dorme e riparte da solo
+  la mattina dopo. Questo script fa solo pre-flight ADB (+ avvio AVD) e lancio.
+
 Uso:
   python run-dynamic.py [--config <path>] [--sessions N] [--duration-min M] [--gap-h H]
+  python run-dynamic.py --config accounts/rb.coach/config.yml --fixed-hours --avd rbcoach
 """
 import argparse
 import datetime as dt
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -32,6 +40,16 @@ from pathlib import Path
 from typing import Optional
 
 import GramAddict  # noqa: F401  # bootstrap runtime env for IDE launches
+
+# Lo script stampa emoji e box-drawing: su una console Windows in cp1252 (Git
+# Bash, cmd senza PYTHONIOENCODING) la print esploderebbe con
+# UnicodeEncodeError prima ancora di lanciare il bot.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 DEFAULT_CONFIG = "accounts/rb.coach/config.yml"
 
@@ -42,6 +60,78 @@ DEFAULT_CONFIG = "accounts/rb.coach/config.yml"
 # "Connected devices via adb: 0. Cannot proceed".
 ADB_WAIT_TIMEOUT_S = 180
 ADB_POLL_INTERVAL_S = 2
+
+
+def _adb_exe() -> str:
+    """Percorso dell'eseguibile adb: prima il PATH, poi l'SDK.
+
+    Serve perche' l'SDK installato da Android Studio su Windows NON finisce nel
+    PATH. Chiamando `adb` e basta, il pre-flight qui sotto trova sempre
+    'missing', il lancio esce con codice 2 e il bot non parte mai: sotto il
+    watchdog il sintomo e' un riavvio dopo l'altro con backoff crescente, senza
+    che niente dica che il problema e' un eseguibile non trovato.
+    """
+    trovato = shutil.which("adb")
+    if trovato:
+        return trovato
+
+    nome = "adb.exe" if os.name == "nt" else "adb"
+    radici = [
+        os.environ.get("ANDROID_HOME"),
+        os.environ.get("ANDROID_SDK_ROOT"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Android", "Sdk"),
+        os.path.expanduser("~/Android/Sdk"),
+        os.path.expanduser("~/Library/Android/sdk"),
+    ]
+    for radice in radici:
+        if not radice:
+            continue
+        candidato = os.path.join(radice, "platform-tools", nome)
+        if os.path.isfile(candidato):
+            return candidato
+
+    # Nessun fallback silenzioso: restituiamo il nome nudo cosi' l'errore che
+    # arriva parla di adb, invece di un generico device 'missing'.
+    return "adb"
+
+
+def _emulator_exe() -> Optional[str]:
+    """L'eseguibile dell'emulatore, cercato accanto ad adb (stesso SDK)."""
+    adb = _adb_exe()
+    if not os.path.isabs(adb):
+        return None
+    nome = "emulator.exe" if os.name == "nt" else "emulator"
+    candidato = os.path.join(os.path.dirname(os.path.dirname(adb)), "emulator", nome)
+    return candidato if os.path.isfile(candidato) else None
+
+
+def _start_emulator(avd: str, serial: str) -> None:
+    """Avvia l'AVD legandolo al serial del config, se non e' gia' online.
+
+    Serve al lancio da PyCharm: senza, bisognava ricordarsi di accendere
+    l'emulatore giusto a mano prima di premere Run. Core, risoluzione e
+    densita' NON si passano qui: stanno nel config.ini dell'AVD (2 core,
+    720x1280), cosi' sono gli stessi da qualunque punto lo si avvii.
+
+    -port lega il serial a QUESTO emulatore: senza, il serial lo decide
+    l'ordine di avvio, e il bot di un account finirebbe a lavorare
+    sull'Instagram dell'altro.
+    """
+    emu = _emulator_exe()
+    if not emu:
+        print("⚠️  Non trovo emulator.exe nell'SDK: avvia l'emulatore a mano.")
+        return
+    porta = serial.replace("emulator-", "")
+    cmd = [emu, "-avd", avd, "-port", porta,
+           "-no-snapshot-load", "-no-boot-anim", "-no-audio",
+           "-gpu", "swiftshader_indirect"]
+    print(f"🟢 {serial} non e' online: avvio l'AVD '{avd}' ({' '.join(cmd[1:])})")
+    flags = {}
+    if os.name == "nt":
+        # processo indipendente: deve sopravvivere alla chiusura di questo script
+        flags["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **flags)
 
 # Inizio "umano" anti-ban (mai sessioni notturne 03-07)
 EARLIEST_START = dt.time(7, 0)
@@ -179,7 +269,7 @@ def _adb_device_state(serial: Optional[str]) -> str:
     """
     try:
         out = subprocess.run(
-            ["adb", "devices"], capture_output=True, text=True, timeout=10
+            [_adb_exe(), "devices"], capture_output=True, text=True, timeout=10
         ).stdout
     except Exception:
         return "missing"
@@ -202,7 +292,7 @@ def _adb_boot_completed(serial: str) -> bool:
     non e' ancora pronta -> uiautomator2 fallisce."""
     try:
         out = subprocess.run(
-            ["adb", "-s", serial, "shell", "getprop", "sys.boot_completed"],
+            [_adb_exe(), "-s", serial, "shell", "getprop", "sys.boot_completed"],
             capture_output=True, text=True, timeout=10,
         ).stdout.strip()
         return out == "1"
@@ -246,7 +336,7 @@ def wait_for_adb_device(serial: Optional[str], timeout_s: int = ADB_WAIT_TIMEOUT
 def _first_ready_serial() -> Optional[str]:
     try:
         out = subprocess.run(
-            ["adb", "devices"], capture_output=True, text=True, timeout=10
+            [_adb_exe(), "devices"], capture_output=True, text=True, timeout=10
         ).stdout
     except Exception:
         return None
@@ -257,37 +347,10 @@ def _first_ready_serial() -> Optional[str]:
     return None
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default=DEFAULT_CONFIG, help="Path al config.yml")
-    ap.add_argument("--sessions", type=int, default=5, help="Numero massimo di sessioni nella giornata")
-    ap.add_argument("--duration-min", type=int, default=90, help="Durata di ogni sessione (minuti)")
-    ap.add_argument("--gap-h", type=float, default=3.0, help="Distanza inizio-inizio tra sessioni (ore)")
-    ap.add_argument("--dry-run", action="store_true", help="Calcola e stampa senza lanciare il bot")
-    ap.add_argument(
-        "--min-duration-min",
-        type=int,
-        default=30,
-        help="Durata minima accettabile per una sessione quando si fa auto-shrink (default 30 min).",
-    )
-    ap.add_argument(
-        "--skip-adb-check",
-        action="store_true",
-        help="Salta il wait-for-device pre-lancio (utile in CI o con device gia' garantito pronto).",
-    )
-    ap.add_argument(
-        "--adb-wait-timeout",
-        type=int,
-        default=ADB_WAIT_TIMEOUT_S,
-        help=f"Timeout (s) per l'attesa del device ADB pronto (default {ADB_WAIT_TIMEOUT_S}s).",
-    )
-    args = ap.parse_args()
-
-    config_path = Path(args.config)
-    if not config_path.exists():
-        print(f"❌ Config non trovata: {config_path}", file=sys.stderr)
-        sys.exit(1)
-
+def generate_and_patch_windows(args, config_path: Path) -> list[str]:
+    """Finestre DINAMICHE a partire dall'ora di lancio (modalita' storica:
+    N sessioni da adesso, poi il processo termina e qualcuno lo rilancia).
+    Riscrive la riga working-hours del config e restituisce le finestre."""
     now = dt.datetime.now()
 
     # Vincolo: prima di EARLIEST_START -> sposta a EARLIEST_START di oggi (con jitter umano)
@@ -387,6 +450,99 @@ def main():
 
     patch_working_hours(config_path, windows)
     print(f"✅ Config aggiornata: {config_path}")
+    return windows
+
+
+def _read_working_hours(config_path: Path) -> list[str]:
+    """Legge la riga 'working-hours: [a.b-c.d, ...]' del config (parsing
+    minimale come _read_device_from_config). Lista vuota se assente."""
+    try:
+        # errors="replace": un commento con una lettera accentata salvata in
+        # cp1252 non deve far perdere la riga (e far scattare di nascosto la
+        # modalita' dinamica, che riscriverebbe le finestre fisse)
+        text = config_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return []
+    m = re.search(r"^\s*working-hours\s*:\s*\[([^\]]*)\]", text, re.MULTILINE)
+    if not m:
+        return []
+    finestre = [w.strip() for w in m.group(1).split(",") if w.strip()]
+    return [w for w in finestre if re.fullmatch(r"\d{1,2}\.\d{2}-\d{1,2}\.\d{2}", w)]
+
+
+def _total_sessions_from_config(config_path: Path) -> Optional[int]:
+    """Valore di 'total-sessions' nel config, None se assente o non numerico."""
+    try:
+        text = config_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    m = re.search(r"^\s*total-sessions\s*:\s*(-?\d+)", text, re.MULTILINE)
+    return int(m.group(1)) if m else None
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=DEFAULT_CONFIG, help="Path al config.yml")
+    ap.add_argument("--sessions", type=int, default=5, help="Numero massimo di sessioni nella giornata")
+    ap.add_argument("--duration-min", type=int, default=90, help="Durata di ogni sessione (minuti)")
+    ap.add_argument("--gap-h", type=float, default=3.0, help="Distanza inizio-inizio tra sessioni (ore)")
+    ap.add_argument("--dry-run", action="store_true", help="Calcola e stampa senza lanciare il bot")
+    ap.add_argument(
+        "--fixed-hours",
+        action="store_true",
+        help="Non generare finestre: usa le working-hours gia' scritte nel config "
+             "(loop giornaliero con total-sessions: -1). Attivo da solo se il config ha total-sessions: -1.",
+    )
+    ap.add_argument(
+        "--min-duration-min",
+        type=int,
+        default=30,
+        help="Durata minima accettabile per una sessione quando si fa auto-shrink (default 30 min).",
+    )
+    ap.add_argument(
+        "--skip-adb-check",
+        action="store_true",
+        help="Salta il wait-for-device pre-lancio (utile in CI o con device gia' garantito pronto).",
+    )
+    ap.add_argument(
+        "--adb-wait-timeout",
+        type=int,
+        default=ADB_WAIT_TIMEOUT_S,
+        help=f"Timeout (s) per l'attesa del device ADB pronto (default {ADB_WAIT_TIMEOUT_S}s).",
+    )
+    ap.add_argument(
+        "--avd",
+        default=None,
+        help="Nome dell'AVD da avviare se il device del config non e' online "
+             "(es. rbcoach). Senza, il device deve essere gia' acceso.",
+    )
+    args = ap.parse_args()
+
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(f"❌ Config non trovata: {config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.fixed_hours or _total_sessions_from_config(config_path) == -1:
+        # Finestre FISSE: il config ha le sue working-hours giornaliere (es.
+        # 08-22) e total-sessions: -1, e GramAddict cicla da solo giorno dopo
+        # giorno (di notte dorme fino alla prima finestra del mattino). Qui
+        # non si riscrive niente: solo pre-flight ADB e lancio. E' la
+        # modalita' per girare h24 senza rilanci a mano.
+        windows = _read_working_hours(config_path)
+        if not windows:
+            print(f"❌ Finestre fisse richieste ma in {config_path} non c'e' una riga "
+                  "'working-hours: [...]' valida.", file=sys.stderr)
+            sys.exit(1)
+        if not args.fixed_hours:
+            print("ℹ️  total-sessions: -1 nel config -> finestre fisse (working-hours NON riscritte).")
+        print("┌─────────────────────────────────────────────────")
+        print(f"│ Working-hours fisse dal config ({len(windows)} sessioni al giorno, in loop):")
+        for k, w in enumerate(windows, 1):
+            print(f"│   {k}. {w}")
+        print("└─────────────────────────────────────────────────")
+    else:
+        windows = generate_and_patch_windows(args, config_path)
 
     if args.dry_run:
         print("\n(--dry-run: bot non lanciato)")
@@ -398,6 +554,8 @@ def main():
     # "Connected devices via adb: 0. Cannot proceed".
     if not args.skip_adb_check:
         device_serial = _read_device_from_config(config_path)
+        if args.avd and device_serial and _adb_device_state(device_serial) == "missing":
+            _start_emulator(args.avd, device_serial)
         if device_serial:
             print(f"🔌 Verifico che ADB device '{device_serial}' sia pronto...")
         else:
@@ -429,7 +587,20 @@ def main():
         if env.get("IG_COMMENT_SPACE_KEY"):
             print("🔑 IG_COMMENT_SPACE_KEY caricata da .env.local")
 
-    subprocess.run(cmd, check=False, env=env)
+    # GramAddict chiama `adb` per nome in decine di punti (utils.py,
+    # device_facade.py, views.py): se platform-tools non e' nel PATH, il
+    # pre-flight qui sopra passa (usa _adb_exe) ma run.py muore subito dopo
+    # con "Connected devices via adb: 0. Cannot proceed." Mettere la cartella
+    # in testa al PATH del figlio risolve per tutti, senza toccare il core.
+    adb_dir = os.path.dirname(_adb_exe())
+    if adb_dir:
+        env["PATH"] = adb_dir + os.pathsep + env.get("PATH", "")
+
+    risultato = subprocess.run(cmd, check=False, env=env)
+    # L'exit code del bot va propagato: il watchdog distingue l'uscita pulita
+    # (riparte dopo 15 min) dal crash (backoff). Ignorarlo faceva passare
+    # "Cannot proceed" per una giornata finita regolarmente.
+    sys.exit(risultato.returncode)
 
 
 if __name__ == "__main__":
