@@ -274,6 +274,14 @@ class DeviceFacade:
         )
         return n["desc"] if n else ""
 
+    def text_from_dump(self, resource_id_regex: str, nodi: Optional[list] = None) -> str:
+        """text del primo elemento con quel resource-id nell'albero completo,
+        oppure stringa vuota."""
+        n = self.node_in_dump(
+            nodi if nodi is not None else self.nodes_from_dump(), resource_id_regex
+        )
+        return n["text"] if n else ""
+
     def box_from_dump(self, resource_id_regex: str, nodi=None):
         """Come bounds_from_dump, ma restituisce un oggetto con click() e
         double_click() (DumpBox) utilizzabile al posto di una View quando il
@@ -1076,6 +1084,10 @@ class DeviceFacade:
 
     class JsonRpcError(Exception):
         pass
+
+    class LoginRequired(Exception):
+        """Instagram chiede la password: solo l'utente puo' sbloccare la
+        situazione, dal device. Non e' un crash e non va trattato come tale."""
 
     class AppHasCrashed(Exception):
         pass

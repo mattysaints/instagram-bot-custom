@@ -9,7 +9,7 @@ from GramAddict import __tested_ig_version__
 from GramAddict.core.config import Config
 from GramAddict.core.daily_budget import DailyBudget
 from GramAddict.core.action_throttler import init_throttler
-from GramAddict.core.device_facade import create_device, get_device_info
+from GramAddict.core.device_facade import DeviceFacade, create_device, get_device_info
 from GramAddict.core.fbr_refresh import maybe_refresh_fbr
 from GramAddict.core.filter import Filter
 from GramAddict.core.filter import load_config as load_filter
@@ -84,6 +84,39 @@ def _ensure_ig_foreground(device, configs, max_attempts: int = 4) -> bool:
         return device.deviceV2.app_current().get("package") == app_id
     except Exception:
         return False
+
+
+def _percorso_segnale_login(username: str):
+    from pathlib import Path as _Path
+
+    return _Path("logs") / "deploy" / f"login-richiesto_{username}.flag"
+
+
+def segna_login_richiesto(username: str) -> None:
+    """Scrive il segnale "questo account ha bisogno di un login a mano".
+    Lo legge deploy/status.ps1: senza, l'unico modo per accorgersene e'
+    aprire il log e leggerlo riga per riga."""
+    try:
+        p = _percorso_segnale_login(username)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(
+            f"{datetime.now():%Y-%m-%d %H:%M:%S} login manuale richiesto su Instagram" + chr(10),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logging.getLogger(__name__).debug(
+            f"Non riesco a scrivere il segnale di login: {e}"
+        )
+
+
+def pulisci_segnale_login(username: str) -> None:
+    """Toglie il segnale quando la sessione riesce a partire."""
+    try:
+        _percorso_segnale_login(username).unlink(missing_ok=True)
+    except Exception as e:
+        logging.getLogger(__name__).debug(
+            f"Non riesco a togliere il segnale di login: {e}"
+        )
 
 
 def _max_time_delta_sec(time_delta) -> int:
@@ -262,6 +295,21 @@ def start_bot(**kwargs):
                 session_state.my_followers_count,
                 session_state.my_following_count,
             ) = profile_view.getProfileInfo()
+        except DeviceFacade.LoginRequired:
+            # Non e' un crash: nessuno zip da salvare, nessun contatore da
+            # incrementare. Serve una persona davanti al device, quindi si
+            # lascia un segnale che status.ps1 sa leggere e si riprova piu'
+            # tardi: appena il login c'e', la sessione riparte da sola.
+            logger.error(
+                "Instagram is asking for the password on this device: the bot "
+                "never types credentials. Log in on the emulator "
+                f"({configs.device_id}) and it will resume by itself."
+            )
+            segna_login_richiesto(configs.args.username or "account")
+            from time import sleep as _sleep
+
+            _sleep(300)
+            continue
         except Exception as e:
             logger.error(f"Exception: {e}")
             try:
@@ -299,6 +347,7 @@ def start_bot(**kwargs):
                 logger.error(
                     f"Failed to update log file name. Will continue anyway. {e}"
                 )
+        pulisci_segnale_login(session_state.my_username)
         report_string = f"Hello, @{session_state.my_username}! You have {session_state.my_followers_count} followers and {session_state.my_following_count} followings so far."
         logger.info(report_string, extra={"color": f"{Style.BRIGHT}{Fore.GREEN}"})
         if configs.args.repeat:

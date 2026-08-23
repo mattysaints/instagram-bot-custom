@@ -124,6 +124,21 @@ function Show-Stato {
     }
 
     # --- account ------------------------------------------------------------
+    # --- login manuale richiesto --------------------------------------------
+    # Il bot non digita mai credenziali: quando Instagram chiede la password
+    # lascia questo file e aspetta che entri una persona. Senza questa riga
+    # l'unico modo per accorgersene e' leggere il log dell'account.
+    $flag = @(Get-ChildItem (Join-Path $LogDir 'login-richiesto_*.flag') -ErrorAction SilentlyContinue)
+    if ($flag.Count -gt 0) {
+        Write-Titolo 'Login richiesto'
+        foreach ($f in $flag) {
+            $acct = $f.BaseName -replace '^login-richiesto_', ''
+            Write-Warning ("$acct : Instagram chiede la password (segnalato " +
+                (Get-Trascorso $f.LastWriteTime.ToString('o')) + "). Apri lo schermo con " +
+                "deploy\view-emulator.ps1 -Account $acct e fai il login a mano.")
+        }
+    }
+
     Write-Titolo 'Account'
     if (-not (Test-Path $StatusFile)) {
         Write-Warning "Manca $StatusFile : il watchdog non e' mai partito su questa macchina."

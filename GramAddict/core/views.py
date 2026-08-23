@@ -32,6 +32,11 @@ from GramAddict.core.utils import (
 
 logger = logging.getLogger(__name__)
 
+# Quanto il bot aspetta, sulla schermata di login, che sia l'utente a entrare
+# dal device. Tenuto alto perche' l'alternativa e' buttare via la finestra: se
+# il login arriva mentre aspetta, la sessione parte comunque.
+MINUTI_ATTESA_LOGIN = 20
+
 
 def load_config(config):
     global args
@@ -2173,6 +2178,10 @@ class ProfileView(ActionBarView):
         # i back in serie ESCONO da Instagram e il bot registra "App has
         # crashed" senza che nel log ci sia scritto cosa c'era sullo schermo.
         continue_tapped = False
+        attese_login = 0
+        # La schermata di login non consuma tentativi: si aspetta a parte
+        # (vedi sotto), perche' il bot da solo non puo' fare niente per
+        # risolverla e uscire dal ciclo servirebbe solo a perdere la finestra.
         for tentativo in range(6):
             if self._new_ui_profile_button():
                 return
@@ -2212,11 +2221,30 @@ class ProfileView(ActionBarView):
                     self.device.tap_node(continua, "on the account chooser")
                     random_sleep(8, 12, modulable=False)
                     continue
-                logger.warning(
-                    "Instagram is asking for the password: the session is logged "
-                    "out. Log in manually on the emulator (the bot never types "
-                    "credentials). Waiting 60s before checking again."
-                )
+                # Aspettare qui conviene: se l'utente fa il login mentre il
+                # bot aspetta, la sessione riparte da sola. Un giro di
+                # tentativi "normali" (6 x 60 s) sarebbe troppo poco per
+                # accorgersene e rientrare, quindi sulla schermata di login
+                # si e' pazienti: fino a MINUTI_ATTESA_LOGIN, controllando
+                # ogni minuto, senza mai premere indietro.
+                if attese_login == 0:
+                    logger.warning(
+                        "Instagram is asking for the password: the session is "
+                        "logged out. Log in manually on the emulator (the bot "
+                        "never types credentials); it will resume by itself as "
+                        f"soon as you are in. Waiting up to "
+                        f"{MINUTI_ATTESA_LOGIN} minutes."
+                    )
+                attese_login += 1
+                if attese_login > MINUTI_ATTESA_LOGIN:
+                    raise DeviceFacade.LoginRequired(
+                        "Instagram is asking for the password"
+                    )
+                if attese_login % 5 == 0:
+                    logger.warning(
+                        f"Still on the login screen after {attese_login} minutes: "
+                        "waiting for the manual login."
+                    )
                 random_sleep(55, 65, modulable=False)
                 continue
             if self.device.app_id not in pacchetti:
@@ -2326,16 +2354,40 @@ class ProfileView(ActionBarView):
         followers_text_view.wait(Timeout.MEDIUM)
         return followers_text_view
 
+    def _counter_from_dump(self, resource_id: str, nome: str) -> Optional[int]:
+        """Numero letto dall'albero completo. Serve quando il selettore nega
+        (o perde a meta' strada) un contatore che sullo schermo c'e': col mini
+        PC sotto carico e' successo sul contatore dei follower del proprio
+        profilo, e l'eccezione arrivava fino a bot_flow, che salvava un crash e
+        rifaceva tutto il setup."""
+        testo = self.device.text_from_dump(case_insensitive_re(resource_id))
+        if not testo:
+            return None
+        valore = self._parseCounter(testo)
+        if valore is not None:
+            logger.debug(
+                f"{nome} count not readable through the selector but present "
+                f"in the dump: {testo}."
+            )
+        return valore
+
     def getFollowersCount(self) -> Optional[int]:
         followers = None
-        followers_text_view = self._getFollowersTextView()
-        if followers_text_view.exists():
-            followers_text = followers_text_view.get_text()
-            if followers_text:
-                followers = self._parseCounter(followers_text)
-            else:
-                logger.error("Cannot get followers count text.")
-        else:
+        try:
+            followers_text_view = self._getFollowersTextView()
+            if followers_text_view.exists():
+                followers_text = followers_text_view.get_text()
+                if followers_text:
+                    followers = self._parseCounter(followers_text)
+                else:
+                    logger.error("Cannot get followers count text.")
+        except DeviceFacade.JsonRpcError as e:
+            logger.debug(f"Followers count selector failed: {e}")
+        if followers is None:
+            followers = self._counter_from_dump(
+                ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_FOLLOWERS_COUNT, "Followers"
+            )
+        if followers is None:
             logger.error("Cannot find followers count view.")
 
         return followers
@@ -2352,28 +2404,43 @@ class ProfileView(ActionBarView):
 
     def getFollowingCount(self) -> Optional[int]:
         following = None
-        following_text_view = self._getFollowingTextView()
-        if following_text_view.exists(Timeout.MEDIUM):
-            following_text = following_text_view.get_text()
-            if following_text:
-                following = self._parseCounter(following_text)
-            else:
-                logger.error("Cannot get following count text.")
-        else:
+        try:
+            following_text_view = self._getFollowingTextView()
+            if following_text_view.exists(Timeout.MEDIUM):
+                following_text = following_text_view.get_text()
+                if following_text:
+                    following = self._parseCounter(following_text)
+                else:
+                    logger.error("Cannot get following count text.")
+        except DeviceFacade.JsonRpcError as e:
+            logger.debug(f"Following count selector failed: {e}")
+        if following is None:
+            following = self._counter_from_dump(
+                ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_FOLLOWING_COUNT, "Following"
+            )
+        if following is None:
             logger.error("Cannot find following count view.")
 
         return following
 
     def getPostsCount(self) -> int:
-        post_count_view = self.device.find(
-            resourceIdMatches=case_insensitive_re(
-                ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_COUNT
+        try:
+            post_count_view = self.device.find(
+                resourceIdMatches=case_insensitive_re(
+                    ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_COUNT
+                )
             )
+            if post_count_view.exists(Timeout.MEDIUM):
+                count = post_count_view.get_text()
+                if count is not None:
+                    return self._parseCounter(count)
+        except DeviceFacade.JsonRpcError as e:
+            logger.debug(f"Posts count selector failed: {e}")
+        dal_dump = self._counter_from_dump(
+            ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_POST_COUNT, "Posts"
         )
-        if post_count_view.exists(Timeout.MEDIUM):
-            count = post_count_view.get_text()
-            if count is not None:
-                return self._parseCounter(count)
+        if dal_dump is not None:
+            return dal_dump
         logger.error("Cannot get posts count text.")
         return 0
 
