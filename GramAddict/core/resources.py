@@ -59,6 +59,11 @@ class ResourceID:
         self.IMAGE_BUTTON = f"{APP_ID}:id/image_button"
         self.INDICATOR = f"{APP_ID}:id/indicator"
         self.LANGUAGE_LIST_LOCALE = f"{APP_ID}:id/language_locale_list"
+        # contenitore della schermata commenti: quando c'e', la tab bar non
+        # c'e' (visto sul dump del personale, 23/08)
+        self.LAYOUT_COMMENT_THREAD_PARENT = (
+            f"{APP_ID}:id/layout_comment_thread_parent"
+        )
         self.LAYOUT_COMMENT_THREAD_EDITTEXT = (
             f"{APP_ID}:id/layout_comment_thread_edittext"
         )

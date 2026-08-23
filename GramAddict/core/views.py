@@ -272,7 +272,58 @@ class TabBarView:
                 button.click(sleep=SleepTime.SHORT)
             return True
 
+        # Niente tab bar: molto spesso non e' sparita, e' che siamo dentro
+        # una schermata che la copre. Il 23/08 il personale e' rimasto otto
+        # minuti dentro la schermata commenti con un commento selezionato
+        # ("1 selected"): la tab bar li' non c'e', e premere Home o Cerca non
+        # poteva funzionare. Si esce a ritroso e si riprova.
+        if self._esci_verso_la_tab_bar() and button is not None:
+            if button.exists(Timeout.MEDIUM):
+                button.click(sleep=SleepTime.SHORT)
+                if tab is not TabBarTabs.PROFILE:
+                    button.click(sleep=SleepTime.SHORT)
+                return True
+
         logger.error(f"Didn't find tab {tab_name} in the tab bar...")
+        return False
+
+    def _esci_verso_la_tab_bar(self, tentativi: int = 4) -> bool:
+        """Esce dalle schermate interne (commenti, selezione, dettaglio post)
+        finche' la tab bar non torna visibile. True se ci riesce.
+
+        Il back si preme solo se Instagram e' in primo piano E la tab bar non
+        c'e': dalla schermata principale il back uscirebbe dall'app, ed e'
+        cosi' che in passato si sono generati i finti "App has crashed".
+        """
+        for tentativo in range(tentativi):
+            nodi = self.device.nodes_from_dump()
+            if not nodi:
+                return False
+            if DeviceFacade.node_in_dump(nodi, ResourceID.TAB_BAR) is not None:
+                if tentativo:
+                    logger.info("[recover] Tab bar di nuovo a schermo.")
+                return True
+            pacchetti = {n["package"] for n in nodi if n["package"]}
+            if self.device.app_id not in pacchetti:
+                logger.warning(
+                    "[recover] Instagram non e' in primo piano: la riapro invece di premere indietro."
+                )
+                try:
+                    self.device.deviceV2.app_start(self.device.app_id, use_monkey=True)
+                except Exception as e:
+                    logger.debug(f"app_start fallito: {e}")
+                random_sleep(6, 8, modulable=False)
+                continue
+            dove = "schermata commenti" if DeviceFacade.node_in_dump(
+                nodi, ResourceID.LAYOUT_COMMENT_THREAD_PARENT
+            ) is not None else "schermata interna"
+            logger.info(
+                f"[recover] Tab bar coperta dalla {dove} "
+                f"({tentativo + 1}/{tentativi}): premo indietro. "
+                f"[{self.device.screen_summary(nodi, max_testi=6, max_ids=10)}]"
+            )
+            self.device.back()
+            random_sleep(2, 3, modulable=False)
         return False
 
 
