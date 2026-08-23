@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from functools import partial
 from os import path
 
@@ -504,6 +505,50 @@ def do_unfollow_from_list(device, username, on_following_list):
         return FollowingView(device).do_unfollow_from_list(username)
 
 
+# I post "Top" di un hashtag possono avere anni: i loro likers sono gente che
+# ha messo un cuore nel 2019 e oggi magari non usa piu' Instagram. Per poterli
+# saltare serve sapere DOVE Instagram scrive la data del post: il resource-id
+# cambia da versione a versione e non si inventa. Questa diagnostica lo cerca
+# UNA volta per avvio, sul primo post di un hashtag che il bot apre davvero,
+# e lo scrive nel log; da li' si implementa il filtro con l'id giusto.
+_diagnostica_data_fatta = False
+_TESTO_DATA_RE = re.compile(
+    r"(?i)^\s*("
+    r"\d+\s*(m|h|d|w|min|ore|giorni|settimane|sett)(?![\w])|"   # 3d, 12 ore, 2 settimane
+    r".*(?<![\d])(19|20)\d{2}(?![\d]).*|"                        # 14 May 2019
+    r".*(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|"
+    r"settembre|ottobre|novembre|dicembre|january|february|march|april|"
+    r"may|june|july|august|september|october|november|december).*"
+    r")\s*$"
+)
+
+
+def _diagnostica_eta_post(device, current_job: str) -> None:
+    """Una riga di log con i nodi che sembrano una data, la prima volta che
+    si apre un post di un hashtag. Non tocca lo schermo: legge e basta."""
+    global _diagnostica_data_fatta
+    if _diagnostica_data_fatta or not str(current_job).startswith("hashtag"):
+        return
+    _diagnostica_data_fatta = True
+    try:
+        nodi = device.nodes_from_dump()
+    except Exception as e:
+        logger.debug(f"[diagnostica-data] dump non riuscito: {e}")
+        return
+    candidati = [
+        (n["resource_id"].split(":id/")[-1], n["text"][:40])
+        for n in nodi
+        if n.get("text") and _TESTO_DATA_RE.match(n["text"].strip())
+    ]
+    if candidati:
+        logger.info(f"[diagnostica-data] nodi con testo da data sul post: {candidati[:8]}")
+    else:
+        logger.info(
+            "[diagnostica-data] nessun testo da data sul post. "
+            f"[{device.screen_summary(nodi, max_testi=10, max_ids=25)}]"
+        )
+
+
 def handle_likers(
     self,
     device,
@@ -575,6 +620,8 @@ def handle_likers(
                 break
         else:
             nr_same_post = 0
+
+        _diagnostica_eta_post(device, current_job)
 
         if (
             has_likers
