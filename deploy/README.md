@@ -514,10 +514,17 @@ I due file sono copie di `config.yml` con le sole working-hours cambiate: se
 tocchi il config di produzione, riporta la modifica con
 `python tools/make-alternato-config.py`.
 
-**Un solo bot per emulatore.** Due istanze sullo stesso device si pestano i
-piedi e sono il modo più rapido per farsi bloccare l'account: se i bot girano
-già (watchdog o `start-account.ps1`), non lanciare anche le configurazioni di
-PyCharm. Per sapere cosa sta girando: `deploy/status.ps1`.
+**Un solo bot per emulatore**, e adesso è il codice a garantirlo. Prima di
+lanciare, `run-dynamic.py` prende un lucchetto sul device
+(`logs/deploy/device_<serial>.lock`): se un altro bot lo sta già usando, il
+secondo si ferma con un messaggio invece di partire e contendersi Instagram —
+il modo più rapido per farsi bloccare l'account. Il lucchetto contiene un
+battito aggiornato ogni 30 s, quindi se un processo muore male il device
+torna libero da solo dopo un minuto e mezzo: non c'è niente da cancellare a
+mano. Con `--forza-device` si insiste comunque, se si è certi che il
+lucchetto sia orfano.
+
+Per sapere cosa sta girando: `deploy/status.ps1`.
 
 Ogni finestra vale una sessione sola: se finisce prima
 per i limiti, il bot aspetta la finestra dopo; la sera dorme e riparte la

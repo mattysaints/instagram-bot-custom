@@ -28,13 +28,16 @@ Uso:
   python run-dynamic.py --config accounts/rb.coach/config.yml --fixed-hours --avd rbcoach
 """
 import argparse
+import atexit
 import datetime as dt
+import json
 import os
 import random
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -347,6 +350,103 @@ def _first_ready_serial() -> Optional[str]:
     return None
 
 
+# --- un solo bot per device ------------------------------------------------
+# Due istanze sullo stesso emulatore si contendono uiautomator e Instagram, e
+# sono il modo piu' rapido per farsi bloccare l'account. E' successo tre volte
+# il 23/08, sempre nello stesso modo: i bot gia' attivi (watchdog o
+# start-account) piu' un lancio dalle configurazioni di PyCharm. Il lucchetto
+# qui sotto lo rende impossibile: chi arriva secondo si ferma e lo dice.
+#
+# E' un file con dentro il PID e un battito aggiornato ogni 30 s. Se il
+# processo muore male il battito invecchia e dopo LOCK_SCADENZA_S il device
+# torna libero: nessun lucchetto da togliere a mano.
+LOCK_BATTITO_S = 30
+LOCK_SCADENZA_S = 90
+
+
+def _percorso_lock(serial: str) -> Path:
+    return Path("logs") / "deploy" / f"device_{serial}.lock"
+
+
+def _lock_attivo(serial: str):
+    """Dati del lucchetto se un altro bot sta usando questo device, None se
+    e' libero (file assente, battito vecchio, o lucchetto nostro)."""
+    percorso = _percorso_lock(serial)
+    try:
+        dati = json.loads(percorso.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if dati.get("pid") == os.getpid():
+        return None
+    try:
+        eta = time.time() - float(dati.get("battito", 0))
+    except (TypeError, ValueError):
+        return None
+    return dati if eta < LOCK_SCADENZA_S else None
+
+
+def _scrivi_lock(serial: str, config_path: Path) -> None:
+    percorso = _percorso_lock(serial)
+    percorso.parent.mkdir(parents=True, exist_ok=True)
+    percorso.write_text(
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "config": str(config_path),
+                "battito": time.time(),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _avvia_battito(serial: str, config_path: Path) -> None:
+    """Tiene fresco il lucchetto finche' questo processo e' vivo."""
+
+    def battere():
+        while True:
+            time.sleep(LOCK_BATTITO_S)
+            try:
+                _scrivi_lock(serial, config_path)
+            except Exception:
+                pass
+
+    t = threading.Thread(target=battere, daemon=True)
+    t.start()
+
+
+def prendi_device(serial: Optional[str], config_path: Path, forza: bool = False) -> None:
+    """Prende il device per questo processo, o si ferma se e' gia' occupato."""
+    if not serial:
+        return
+    altro = _lock_attivo(serial)
+    if altro is not None and not forza:
+        messaggio = [
+            f"❌ Su {serial} sta gia' girando un bot "
+            f"(pid {altro.get('pid')}, config {altro.get('config')}).",
+            "   Due istanze sullo stesso emulatore si pestano i piedi: questa non parte.",
+            "   Ferma l'altra (oppure aspetta che finisca) e rilancia;",
+            "   con --forza-device si insiste comunque, a tuo rischio.",
+        ]
+        print("\n".join(messaggio), file=sys.stderr)
+        sys.exit(3)
+    if altro is not None:
+        print(f"⚠️  --forza-device: parto anche se {serial} risulta occupato dal pid {altro.get('pid')}.")
+    _scrivi_lock(serial, config_path)
+    _avvia_battito(serial, config_path)
+    atexit.register(_libera_device, serial)
+
+
+def _libera_device(serial: str) -> None:
+    try:
+        percorso = _percorso_lock(serial)
+        dati = json.loads(percorso.read_text(encoding="utf-8"))
+        if dati.get("pid") == os.getpid():
+            percorso.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 def generate_and_patch_windows(args, config_path: Path) -> list[str]:
     """Finestre DINAMICHE a partire dall'ora di lancio (modalita' storica:
     N sessioni da adesso, poi il processo termina e qualcuno lo rilancia).
@@ -488,6 +588,12 @@ def main():
     ap.add_argument("--gap-h", type=float, default=3.0, help="Distanza inizio-inizio tra sessioni (ore)")
     ap.add_argument("--dry-run", action="store_true", help="Calcola e stampa senza lanciare il bot")
     ap.add_argument(
+        "--forza-device",
+        action="store_true",
+        help="Parte anche se sul device risulta gia' attivo un altro bot. "
+             "Da usare solo se sai che il lucchetto e' rimasto orfano.",
+    )
+    ap.add_argument(
         "--fixed-hours",
         action="store_true",
         help="Non generare finestre: usa le working-hours gia' scritte nel config "
@@ -552,8 +658,10 @@ def main():
     # 'device' e abbia finito il boot. Risolve la race condition per cui il
     # bot partiva mentre l'emulatore era ancora 'offline' e crashava con
     # "Connected devices via adb: 0. Cannot proceed".
+    device_serial = _read_device_from_config(config_path)
+    prendi_device(device_serial, config_path, forza=args.forza_device)
+
     if not args.skip_adb_check:
-        device_serial = _read_device_from_config(config_path)
         if args.avd and device_serial and _adb_device_state(device_serial) == "missing":
             _start_emulator(args.avd, device_serial)
         if device_serial:
