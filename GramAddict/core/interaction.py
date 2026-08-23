@@ -704,6 +704,18 @@ def _clean_caption(testo: str) -> str:
     return t
 
 
+def _bounds_o_dump(device: DeviceFacade, resource_id: str):
+    """Bounds di un elemento, senza far esplodere niente se non c'e':
+    prima il selettore, poi l'albero completo, infine None."""
+    try:
+        vista = device.find(resourceIdMatches=resource_id)
+        if vista.exists():
+            return vista.get_bounds()
+    except DeviceFacade.JsonRpcError as e:
+        logger.debug(f"_bounds_o_dump({resource_id}): selettore fallito: {e}")
+    return device.bounds_from_dump(resource_id)
+
+
 def _comment(
     device: DeviceFacade,
     my_username: str,
@@ -723,13 +735,18 @@ def _comment(
         universal_actions._swipe_points(
             direction=Direction.DOWN, delta_y=randint(150, 250)
         )
-        tab_bar = device.find(
-            resourceId=ResourceID.TAB_BAR,
-        )
-        media = device.find(
-            resourceIdMatches=ResourceID.MEDIA_CONTAINER,
-        )
-        if int(tab_bar.get_bounds()["top"]) - int(media.get_bounds()["bottom"]) < 150:
+        # get_bounds() su un elemento che il selettore non trova ALZA
+        # un'eccezione: qui arrivava fino a bot_flow, che salvava un crash e
+        # ricominciava la sorgente (personale, 23/08 11:23). Serve solo a
+        # decidere se fare uno swipe in piu': se le misure non si leggono,
+        # si tira dritto.
+        tab_bar_b = _bounds_o_dump(device, ResourceID.TAB_BAR)
+        media_b = _bounds_o_dump(device, ResourceID.MEDIA_CONTAINER)
+        if (
+            tab_bar_b is not None
+            and media_b is not None
+            and int(tab_bar_b["top"]) - int(media_b["bottom"]) < 150
+        ):
             universal_actions._swipe_points(
                 direction=Direction.DOWN, delta_y=randint(150, 250)
             )

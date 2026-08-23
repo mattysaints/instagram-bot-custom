@@ -1650,12 +1650,36 @@ class OpenedPostView:
             resourceIdMatches=case_insensitive_re(ResourceID.MEDIA_CONTAINER)
         )
         liked = False
-        if not post_media_view.exists():
-            logger.warning(
-                "❌ like_post: MEDIA_CONTAINER non trovato — post non caricato "
-                "(rete lenta) o layout cambiato. Nessun tentativo di like fatto."
-            )
-            return False
+        # Il post e' appena stato guardato (watch_media), quindi c'e': se il
+        # selettore lo nega e' il solito caso in cui la query mente mentre
+        # l'albero completo lo riporta, o l'emulatore sotto carico non ha
+        # ancora ridisegnato. Prima si aspetta, poi si guarda il dump, e solo
+        # se manca davvero si prova comunque il cuoricino: un like fatto dal
+        # bottone vale quanto uno fatto col doppio tap.
+        if not post_media_view.exists(Timeout.MEDIUM):
+            box = self.device.box_from_dump(ResourceID.MEDIA_CONTAINER)
+            if box is not None:
+                logger.info(
+                    "like_post: MEDIA_CONTAINER negato dal selettore ma presente "
+                    "nel dump: proseguo da li'."
+                )
+                post_media_view = box
+            else:
+                like_button = self._get_post_like_button()
+                if like_button is not None:
+                    logger.warning(
+                        "like_post: MEDIA_CONTAINER non trovato, ma il cuoricino "
+                        "si': like dal bottone."
+                    )
+                    like_button.click()
+                    liked, _ = self._is_post_liked()
+                    return bool(liked)
+                logger.warning(
+                    "❌ like_post: MEDIA_CONTAINER non trovato — post non caricato "
+                    "(rete lenta) o layout cambiato. Nessun tentativo di like fatto. "
+                    f"[{self.device.screen_summary(self.device.nodes_from_dump())}]"
+                )
+                return False
 
         logger.info("Liking post.")
         # Determina se usare single-click (sicuro ma richiede di trovare il
