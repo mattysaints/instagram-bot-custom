@@ -712,6 +712,28 @@ def _clean_caption(testo: str) -> str:
     return t
 
 
+def _caption_utilizzabile(testo: str) -> bool:
+    """False quando la didascalia e' scritta in un alfabeto diverso dal
+    nostro (arabo, cirillico, cinese...).
+
+    Perche': su una didascalia araba il modello ha scritto un commento in
+    italiano che citava testualmente una parola in arabo -- "La determinazione
+    dietro a 'qawiyyan' traspare in ogni scatto" (23/08). Un commento cosi'
+    non lo scriverebbe nessuno. Meglio il commento di riserva, che e' scritto
+    da una persona e va bene su qualunque post.
+    """
+    lettere = [c for c in (testo or "") if c.isalpha()]
+    if not lettere:
+        # solo emoji, hashtag o numeri: nessun alfabeto da giudicare
+        return True
+    latine = sum(
+        1
+        for c in lettere
+        if ("a" <= c.lower() <= "z") or ("À" <= c <= "ɏ")
+    )
+    return latine / len(lettere) >= 0.5
+
+
 def _ripulisci_commento(testo: str) -> str:
     """Ultimo controllo sul commento prima di scriverlo. Se contiene la
     menzione di un altro account lo si scarta e basta: toglierla lascerebbe
@@ -849,7 +871,13 @@ def _comment(
                     #    l'utente abbia esplicitamente disabilitato il
                     #    fallback, nel qual caso saltiamo il commento).
                     comment = None
-                    if ai_comment.is_enabled(args):
+                    caption_ok = _caption_utilizzabile(post_caption)
+                    if post_caption and not caption_ok:
+                        logger.info(
+                            "[ai-comment] didascalia in un altro alfabeto "
+                            f"({post_caption[:30]}...): uso il commento di riserva."
+                        )
+                    if ai_comment.is_enabled(args) and caption_ok:
                         comment = ai_comment.generate_comment(
                             args=args,
                             caption=post_caption,
