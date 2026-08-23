@@ -232,13 +232,14 @@ ai-sticker-language: auto
 ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 
 # ---------------------------------------------------------------------------
-# Scheduling - 4 sessioni/giorno in finestre FISSE tra le 09 e le 20, negli
-# intervalli lasciati liberi da rb.coach (cosi' i due emulatori non lavorano
-# insieme). Con total-sessions: -1 il bot fa UNA sessione per finestra, poi
-# aspetta la successiva; di notte dorme e riparte da solo la mattina dopo:
-# nessun rilancio a mano. run-dynamic.py, vedendo -1, NON riscrive la riga.
+# Scheduling - 4 sessioni/giorno da 75 min in finestre FISSE dentro la fascia
+# consentita 08:00-23:00, negli intervalli lasciati liberi da rb.coach (cosi'
+# i due emulatori non lavorano mai insieme). Con total-sessions: -1 il bot fa
+# UNA sessione per finestra, poi aspetta la successiva; di notte dorme e
+# riparte da solo la mattina dopo: nessun rilancio a mano. run-dynamic.py,
+# vedendo -1, NON riscrive la riga.
 # ---------------------------------------------------------------------------
-working-hours: [09.30-11.00, 12.30-14.00, 15.30-17.00, 18.30-20.00]
-time-delta: 0-15                            # ogni finestra slitta a caso di +/- 0-15 min, cosi' gli orari non sono identici ogni giorno
+working-hours: [09.50-11.05, 13.10-14.25, 16.30-17.45, 19.50-21.05]
+time-delta: 0-10                            # slittamento casuale di +/- 0-10 min: gli orari non sono identici ogni giorno, e resta sotto i 25 min di distanza dalle finestre dell'altro account (mai sovrapposti)
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
 total-sessions: -1                          # loop senza fine (rispetta le working-hours)

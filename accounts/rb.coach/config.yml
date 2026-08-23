@@ -267,13 +267,14 @@ ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, IFBB PRO e coach a Mil
 # ---------------------------------------------------------------------------
 # Scheduling
 # ---------------------------------------------------------------------------
-# Finestre FISSE giornaliere: 5 sessioni tra le 08 e le 22, sfalsate rispetto
-# a roberto_buonomo_ifbbpro (l'altro emulatore lavora negli intervalli).
+# Finestre FISSE giornaliere: 5 sessioni da 75 min dentro la fascia consentita
+# 08:00-23:00, sfalsate con roberto_buonomo_ifbbpro (l'altro emulatore lavora
+# negli intervalli: sul mini PC a 4 core non devono mai girare insieme).
 # Con total-sessions: -1 il bot fa UNA sessione per finestra, poi aspetta la
 # finestra successiva; di notte dorme e riparte da solo la mattina dopo:
 # nessun rilancio a mano. run-dynamic.py, vedendo -1, NON riscrive questa
 # riga (modalita' finestre fisse).
-working-hours: [08.00-09.30, 11.00-12.30, 14.00-15.30, 17.00-18.30, 20.00-21.30]
-time-delta: 0-15                            # ogni finestra slitta a caso di +/- 0-15 min, cosi' gli orari non sono identici ogni giorno
+working-hours: [08.10-09.25, 11.30-12.45, 14.50-16.05, 18.10-19.25, 21.30-22.45]
+time-delta: 0-10                            # slittamento casuale di +/- 0-10 min: gli orari non sono identici ogni giorno, e resta sotto i 25 min di distanza dalle finestre dell'altro account (mai sovrapposti)
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
 total-sessions: -1                          # loop senza fine (rispetta le working-hours)

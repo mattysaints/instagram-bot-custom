@@ -470,12 +470,23 @@ modifica col miglior rapporto costo/beneficio di tutte.
 > che valga la spesa su questa macchina.
 
 **Gli account sono già sfalsati, nei config.** I due `config.yml` hanno
-`total-sessions: -1` e **finestre fisse** alternate: `rb.coach` lavora
-08-09:30, 11-12:30, 14-15:30, 17-18:30, 20-21:30; `roberto_buonomo_ifbbpro`
-9:30-11, 12:30-14, 15:30-17, 18:30-20 (più uno slittamento casuale di
-±0-15 min, `time-delta`). Ogni finestra vale una sessione sola: se finisce
-prima per i limiti, il bot aspetta la finestra dopo; la sera dorme e riparte
-la mattina senza che nessuno lo rilanci. Con `-1` nel config `run-dynamic.py`
+`total-sessions: -1` e **finestre fisse** alternate dentro la fascia
+consentita **08:00-23:00**, nove sessioni da 75 minuti in tutto:
+
+| | rb.coach | roberto_buonomo_ifbbpro |
+|---|---|---|
+| 1 | 08:10-09:25 | 09:50-11:05 |
+| 2 | 11:30-12:45 | 13:10-14:25 |
+| 3 | 14:50-16:05 | 16:30-17:45 |
+| 4 | 18:10-19:25 | 19:50-21:05 |
+| 5 | 21:30-22:45 | — |
+
+Fra una finestra e la successiva ci sono 25 minuti; `time-delta: 0-10` sposta
+gli orari di ±10 minuti al giorno, quindi nemmeno nel caso peggiore i due
+emulatori si sovrappongono, la giornata non inizia prima delle 08:00 e non
+finisce dopo le 23:00. Ogni finestra vale una sessione sola: se finisce prima
+per i limiti, il bot aspetta la finestra dopo; la sera dorme e riparte la
+mattina senza che nessuno lo rilanci. Con `-1` nel config `run-dynamic.py`
 **non riscrive** `working-hours` (modalità `--fixed-hours`): per cambiare gli
 orari si modifica il file e si riavvia il bot.
 
