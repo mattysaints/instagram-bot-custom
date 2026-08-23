@@ -59,7 +59,7 @@ hot-zone-max-jumps: 2
 
 # [follow-back] Ricalcolo automatico del follow-back-rate per sorgente:
 # le sorgenti che fanno ricambiare il follow vengono pescate piu' spesso.
-auto-fbr-refresh: true
+auto-fbr-refresh: false                    # OFF su richiesta: la scansione dei follower a inizio sessione non serve su questi profili
 auto-fbr-interval-hours: 24
 auto-fbr-max-scan: 0                       # 0 = scansione completa
 
@@ -79,8 +79,8 @@ action-throttle-pm-min: 999999             # DM OFF su questa config
 # Actions - sorgenti
 # ---------------------------------------------------------------------------
 # NB: formato inline [a, b, c]. La sintassi YAML "a lista" rompe il parser.
-# IMPORTANTE: ogni username DEVE esistere su IG. Verifica aprendo
-# instagram.com/USERNAME prima di aggiungerne di nuovi.
+# IMPORTANTE: ogni username DEVE esistere su IG. Si verifica sull'emulatore
+# con tools/verify-ig-handles.py (vedi nota piu' sotto), NON su instagram.com.
 #
 # STRATEGIA @rb.coach: bacino ITALIANO, con priorita' Lombardia. Il target
 # sono persone che si allenano e potrebbero diventare clienti, non altri pro.
@@ -95,10 +95,12 @@ action-throttle-pm-min: 999999             # DM OFF su questa config
 #   3. Brand integratori   -> bacino ampio, italiano, meno mirato
 #   4. Federazioni/community
 #
-# Tutti gli handle sotto sono stati verificati il 19/08/2026. Se ne aggiungi,
-# controlla prima aprendo instagram.com/USERNAME: una sorgente inesistente
-# brucia ~30s a sessione finche' la quarantena automatica non la esclude.
-blogger-followers: [goldsgymitaly, actionfit.italia, actionfit.cologno, actionfit.cerromaggiore, actionfit.liguria, actionfit.fulviotesti, fitlab_milano, afmi2_segrate, mirco_fila, lelerico_ifbbpro, team_presti_coaching, andrea.presti_ifbbpro, fabrizio_liparoti, valentinotozzi, coach.valentinotozzi, gianzcoach, alex_ifbb_pro, giusepperomanocoach, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, andrea_mammoli, tsunaminutrition, yamamotonutritionitalia, prozisitalia, prozis.team.italia, lifeproitalia, vitastrong_ita, ifbbproitaly, npc_italy, wnbfitaly, wbpf_italy, bbfitalia, nbfi_italy, italia.bodybuilding, bodybuilding_italia_community, bodybuilding_italia_community_, culturismoitaliano, malatidipalestraofficial, thenewclassic_s, fit.italia, oneforall.hub, ricette_ghisa, viveredipalestra, manuel_santalucia_ifbbpro, albertomilani_ifbbpro, giulioalbi_ifbbpro, ricky_ifbbpro, febo_gambacorta_ifbb_pro, lorenzo.coppola_ifbbpro, omarnonni_pnbapro, coach_giorgio.terragno, mariovalentini_coach, enzo.jossacoach, marcodallabattista_pt, alessandrofichicelli, thehungrylonewolf, matteoinno88, il.pump.quotidiano, edwin_underwood, pieronocerino1]
+# Tutti gli handle sotto sono stati verificati il 22/08/2026 APRENDOLI SULL'EMULATORE
+# con tools/verify-ig-handles.py. Non usare instagram.com/USERNAME per controllare:
+# risponde con la pagina di login sia per i profili veri sia per quelli
+# inesistenti, e cosi' erano entrate 11 sorgenti morte su 72. Una sorgente
+# inesistente brucia ~30s a sessione finche' la quarantena non la esclude.
+blogger-followers: [20hourspalestre, actionfit.carate, actionfit.cerromaggiore, actionfit.cologno, actionfit.fulviotesti, actionfit.italia, actionfit.liguria, afmi2_segrate, alessio_mirin, allenamentofunzionalemilano, animacorpofitness23, anytimefitness_milanorubattino, anytimefitnessitalia, areafitnessurbanclub, aspria_harbourclub, ceresio7gymspa, cerva16_milano, club2d, coach.valentinotozzi, corework_milano, crossfit_darsena, crossfit_portanuova, crossfitbicocca, crossfitcorsico, crossfitmissaglia, edwin_underwood, emanuelemauti3, energypaderno, esport_palestre_cinisello, femstudio_milano, fit.italia, fitactive.rho, fitactive_bustoarsizio, fitactive_cologno_monzese, fitactive_il_fitness_x_tutti, fitactive_legnano, fitactive_milanoripamonti, fitactive_saronno, fitactivecinisellobalsamo, fitactivemonzastucchi, fitactivesegrate, fitclass_tailoredworkout, fitexpress_brand, fitexpress_pioltello, fithouse_monza, fitlab_milano, fitlevel_palestreacerbi, fitmifitnessclub, fitup_bernareggio, gclub_torribianche, getfitlifestylemilano, giampaolo_fusco_thecoach, giulioramazio, goldsgymitaly, greta_francesconi_ptrainer, iltempiodellosport.asd, informaconfede, ironfitmonza, ironmanager, jofitpersonaltrainer___, kickandpunch, leviatano89, malatidipalestraofficial, marcodallabattista_pt, matteoinno88, maurofitnesscoach, maxifit.bollate, maxifit.rho, mcfit_it, melissa.ranni, milanotrainingclub, ms8trainingspace, officinepurestrength, oneforall.hub, palestra_magic_power, palestreopenclub, palextra_monza, paolozottatrainer, pieronocerino1, projectstrength_alessioferlito, ptstudiomilano, reverbia_pt, ricette_ghisa, roberto.personaltrainer, selenegenisella, spaziofitnessclub, sportingclubleonardo, sportingmilano3, sportplus_ssd, sportvillagemonza, t2_truetraining, tonic_milano, tonicitalia, ttcage_studio, upgradetraining.center, uptown.milano, valentinotozzi, virginactiveit, viveredipalestra]
 
 # blogger = commenta i post DI QUESTI ACCOUNT (non dei loro follower).
 # Serve a farsi vedere sotto ai post dei competitor e degli influencer, dove
@@ -108,7 +110,7 @@ blogger-followers: [goldsgymitaly, actionfit.italia, actionfit.cologno, actionfi
 # fuori luogo lo vedono in migliaia. Solo italiani, come richiesto.
 # NB: il volume reale e' governato da total-comments-limit e dal throttle,
 # non dalla lunghezza di questa lista.
-blogger: [mirco_fila, lelerico_ifbbpro, andrea.presti_ifbbpro, andrea_mammoli, valentinotozzi, fabrizio_liparoti, gianzcoach, alex_ifbb_pro, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, giusepperomanocoach, culturismoitaliano, italia.bodybuilding, bodybuilding_italia_community]
+blogger: [malatidipalestraofficial, ricette_ghisa, valentinotozzi, fit.italia, pieronocerino1, giampaolo_fusco_thecoach, maurofitnesscoach, emanuelemauti3, paolozottatrainer, ironmanager, informaconfede, virginactiveit]
 
 # Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
 # follow, niente storie. Like/follow/sticker restano sui profili piccoli
@@ -129,10 +131,17 @@ can-reinteract-after: 168
 
 # Hashtag: pesca chi ha messo LIKE ai post recenti. Lead piu' caldi dei
 # semplici follower (interesse esplicito e recente).
-# Mix: bodybuilding agonistico nazionale + fitness Milano/Lombardia.
-hashtag-likers-recent: [trasformazionefisica, primaedopo, percorsofitness, ricomposizionecorporea, dimagrimentosano, rimettersiinforma, motivazionefitness, lifestylesano, alimentazioneequilibrata, coachonline, schedapersonalizzata, personaltrainermilano, palestramilano, fitnessmilano, allenamentomilano, milanofitness, bodybuildingmilano, preparatoreatletico, ipertrofia, massamuscolare]
+# Solo fitness generalista italiano e locale Milano: niente bodybuilding, che
+# e' il bacino del profilo personale. Tutti verificati sull'emulatore il
+# 22/08/2026 (tools/verify-ig-handles.py --hashtag).
+# Tolti di proposito, con la prova nel primo contenuto della griglia:
+#   primaedopo (estetica/chirurgia), coachonline (business coaching),
+#   motivazionefitness (gruppi di scambio like), preparatoreatletico (altri
+#   sport), bodybuildingmilano (bacino del personale), palestraitalia (e' il
+#   vecchio nome del Palmeiras: tifosi brasiliani).
+hashtag-likers-recent: [trasformazionefisica, ricomposizionecorporea, personaltrainermilano, palestramilano, fitnessmilano, milanofitness, gymmilano, salapesi, ghisa, muscoli, allenamentofemminile, fitnessfemminile, dietaflessibile, nutrizionesportiva, allenamentofunzionale, fitnessitalia]
 
-hashtag-likers-top: [trasformazionefisica, percorsofitness, ricomposizionecorporea, personaltrainermilano, palestramilano, fitnessmilano, coachonline, rimettersiinforma]
+hashtag-likers-top: [trasformazionefisica, ricomposizionecorporea, personaltrainermilano, fitnessitalia, dietaflessibile]
 
 # Luoghi: pesca chi ha messo like a post GEOLOCALIZZATI a Milano. E' l'unica
 # leva che garantisce davvero la prossimita' fisica: un hashtag come
@@ -258,7 +267,13 @@ ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, IFBB PRO e coach a Mil
 # ---------------------------------------------------------------------------
 # Scheduling
 # ---------------------------------------------------------------------------
-# working-hours viene riscritta da run-dynamic.py a ogni lancio.
-working-hours: [09.30-11.00, 12.30-14.00, 16.00-17.30, 18.30-20.00, 21.00-22.30]
-time-delta: 0-15
-total-sessions: 5
+# Finestre FISSE giornaliere: 5 sessioni tra le 08 e le 22, sfalsate rispetto
+# a roberto_buonomo_ifbbpro (l'altro emulatore lavora negli intervalli).
+# Con total-sessions: -1 il bot fa UNA sessione per finestra, poi aspetta la
+# finestra successiva; di notte dorme e riparte da solo la mattina dopo:
+# nessun rilancio a mano. run-dynamic.py, vedendo -1, NON riscrive questa
+# riga (modalita' finestre fisse).
+working-hours: [08.00-09.30, 11.00-12.30, 14.00-15.30, 17.00-18.30, 20.00-21.30]
+time-delta: 0-15                            # ogni finestra slitta a caso di +/- 0-15 min, cosi' gli orari non sono identici ogni giorno
+repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
+total-sessions: -1                          # loop senza fine (rispetta le working-hours)

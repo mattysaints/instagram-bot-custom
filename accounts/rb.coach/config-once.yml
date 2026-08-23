@@ -10,7 +10,7 @@
 ##############################################################################
 
 username: rb.coach
-device: f2487e11                           # ADB serial (adb devices -l)
+device: emulator-5554                      # AVD rbcoach (deve combaciare con config.yml)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true

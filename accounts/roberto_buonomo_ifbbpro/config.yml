@@ -49,7 +49,7 @@ hot-zone-screens: 2
 hot-zone-jump-flings: 6
 hot-zone-max-jumps: 2
 
-auto-fbr-refresh: true
+auto-fbr-refresh: false                    # OFF su richiesta: la scansione dei follower a inizio sessione non serve su questi profili
 auto-fbr-interval-hours: 24
 auto-fbr-max-scan: 0
 
@@ -70,7 +70,14 @@ action-throttle-pm-min: 999999             # DM OFF
 # Taglio verticale: atleti e coach di bodybuilding agonistico, italiani e
 # internazionali. Chi segue questi profili e' gia' dentro al mondo delle gare.
 #
-# Handle verificati il 19/08/2026.
+# Tutti gli handle sotto sono stati verificati il 22/08/2026 APRENDOLI SULL'EMULATORE
+# con tools/verify-ig-handles.py. Non usare instagram.com/USERNAME per controllare:
+# risponde con la pagina di login sia per i profili veri sia per quelli
+# inesistenti, e cosi' erano entrate 11 sorgenti morte su 72. Una sorgente
+# inesistente brucia ~30s a sessione finche' la quarantena non la esclude.
+#
+# andrea.presti_ifbbpro e zagarella_ifbb_pro si vedono da QUESTO account ma
+# non da rb.coach (lo hanno bloccato): stanno solo qui, non nell'altro config.
 #
 # NOTA sui profili esteri: i follower di johnjewett3 (USA) e
 # kuba_sylvester_cielen (PL) sono in larga parte NON italiani. Vanno bene per
@@ -79,14 +86,14 @@ action-throttle-pm-min: 999999             # DM OFF
 # lascia il grosso del budget follow alle sorgenti italiane.
 #
 # Per aggiungere altri big internazionali (Bumstead, Walker, Labrada, Ruffin,
-# Queiroz...) verifica prima l'handle esatto aprendo instagram.com/USERNAME:
-# non sono stati inseriti perche' non e' stato possibile confermarli.
-blogger-followers: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.presti_ifbbpro, team_presti_coaching, lelerico_ifbbpro, mirco_fila, alex_ifbb_pro, andrea_muzilla_ifbbpro, marco_dambrosio_ifbbpro, manuel_santalucia_ifbbpro, albertomilani_ifbbpro, giulioalbi_ifbbpro, febo_gambacorta_ifbb_pro, ricky_ifbbpro, grumpy_grizzly_ifbbpro, legion_ifbbpro, anna.terzo_ifbb_pro, paola_wpd_ifbb_pro, zagarella_ifbb_pro, lorenzo.coppola_ifbbpro, dario_beloli_ifbbpro, gerard_ifbb_, punzetti_sara_ifbbpro, anna.ladurner.ifbbpro, ornella_angileri_ifbbpro, omarnonni_pnbapro, giusepperomanocoach, fabrizio_liparoti, valentinotozzi, gianzcoach, thehungrylonewolf, culturismoitaliano, italia.bodybuilding, ifbbproitaly, npc_italy, wnbfitaly, wbpf_italy, thenewclassic_s, bodybuilding_italia_community]
+# Queiroz...) trova l'handle in una fonte ufficiale e passalo da
+# tools/verify-ig-handles.py prima di scriverlo qui.
+blogger-followers: [albertomilani_ifbbpro, aldomasoloifbbpro, alessandrofichicelli, alessio.ice9.alfei, alex_ifbb_pro, alexrizzii_, andrea.presti_ifbbpro, andrea_mammoli, andrea_muzilla_ifbbpro, anna.ladurner.ifbbpro, anna.terzo_ifbb_pro, bbfitalia, biotechusa_it, bodybuilding_italia_community_, cap_pittiruti_pro, carlofiorentini__, coach_giorgio.terragno, cristianguastella, culturismoitaliano, damianoq_ifbbpro, daniele_gelmi, danielechisari, danielgoss_ifbbpro, dario_beloli_ifbbpro, dario_paolozzi_ifbbpro, denniss_calla, derek_deianov, dilorenzoifbbpro, dr.massimo.spattini, eliaolivierobarbon, enrico_pietrobon_ifbbpro, enzo.jossacoach, fabrizio_liparoti, febo_gambacorta_ifbb_pro, federico_sirna_, gab.stefanelli, garebodybuilding, gerard_ifbb_, gianzcoach, giorgiageraci_, giulioalbi_ifbbpro, giusepperomanocoach, grumpy_grizzly_ifbbpro, ifbb_pro_leonardo_vecchiato, ifbbproitaly, il.pump.quotidiano, ilbolz_ifbbpro, johnjewett3, kiamonteforte, kuba_sylvester_cielen, lady_invictus, legion_ifbbpro, lelerico_ifbbpro, lifeproitalia, lorenzo.coppola_ifbbpro, lorenzo.pansini, luca_pistolato_ifbbpro, lucabiolo_ifbbpro, lucamastra_fit, ludovico.lemme, manuel_santalucia_ifbbpro, marco.busc, marco_dambrosio_ifbbpro, mariovalentini_coach, mauro_sassi_team_stones, mirco_fila, nacciflex, nbfi_italy, nik_liani, npc_italy, npceuromasters, orguamentale, ornella_angileri_ifbbpro, project_invictus, prozis.team.italia, prozisitalia, punzetti_sara_ifbbpro, quiricofrancescopacelli, riccardo_croci_ifbbpro, riccardobenedetti_pt, ricky_ifbbpro, riminiwellness, sabrina_seminara, samuellfortuna, santiphysique8, silvialikki, skeptical_dragoon, sustainablebb, team_presti_coaching, thehungrylonewolf, tsunamibodybuilding, tsunaminutrition, veronica_ghiani_fit, vitastrong_ita, wabbaitalia, wbpf_italy, wnbfitaly, yamamoto_italia, zagarella_ifbb_pro]
 
 # blogger = commenta i post DI QUESTI ACCOUNT. Qui ci stanno anche gli esteri:
 # un commento tecnico sotto al post di un top coach e' esattamente il posto
 # dove un IFBB PRO italiano si fa notare dai pari.
-blogger: [johnjewett3, kuba_sylvester_cielen, andrea_mammoli, andrea.presti_ifbbpro, lelerico_ifbbpro, mirco_fila, andrea_muzilla_ifbbpro, alex_ifbb_pro, manuel_santalucia_ifbbpro, marco_dambrosio_ifbbpro, culturismoitaliano, italia.bodybuilding]
+blogger: [gianzcoach, andrea.presti_ifbbpro, johnjewett3, kuba_sylvester_cielen, andrea_mammoli, ludovico.lemme, project_invictus, lucamastra_fit, aldomasoloifbbpro, silvialikki, riccardo_croci_ifbbpro, luca_pistolato_ifbbpro, mirco_fila, giusepperomanocoach, lelerico_ifbbpro, manuel_santalucia_ifbbpro, alex_ifbb_pro, dilorenzoifbbpro, mauro_sassi_team_stones, ifbbproitaly, culturismoitaliano]
 
 # Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
 # follow, niente storie. Like/follow/sticker restano sui profili piccoli
@@ -105,10 +112,17 @@ blogger-comment-only: true
 can-reinteract-after: 168
 
 
-# Hashtag verticali sul bodybuilding agonistico, misti IT/EN.
-hashtag-likers-recent: [preparazionegara, peakweek, dietabodybuilding, offseason, bulkingseason, cuttingdiet, classicphysique, classicphysiqueitalia, posingpractice, garebodybuilding, bodybuildingitalia, ifbbitalia, ifbbpro, naturalbodybuildingitalia, allenamentopesante, schienaallenamento, periodizzazione, alimentazionesportiva, ipertrofia, massamuscolare]
+# Hashtag verticali sul bodybuilding agonistico, quasi tutti italiani.
+# Verificati sull'emulatore il 22/08/2026 (tools/verify-ig-handles.py --hashtag).
+# Tolti di proposito: ifbbpro, classicphysique, offseason, bulkingseason,
+# cuttingdiet (anglofoni ad altissimo flusso: il primo contenuto della griglia
+# e' sempre USA, e i likers non sono italiani), preparazionegara (lo usano
+# podismo e powerlifting, non il bodybuilding), protan (saloni di
+# abbronzatura). peakweek e posingpractice restano come secondari: sono
+# internazionali ma e' il lessico che usano anche gli atleti italiani.
+hashtag-likers-recent: [bodybuildingitalia, culturismoitaliano, ifbbitalia, culturafisica, garebodybuilding, bbfitalia, classicphysiqueitalia, naturalbodybuildingitalia, dietabodybuilding, peakweek, posingpractice, alimentazionesportiva, ipertrofia, massamuscolare]
 
-hashtag-likers-top: [classicphysique, ifbbpro, preparazionegara, peakweek, bodybuildingitalia, classicphysiqueitalia, posingpractice, dietabodybuilding]
+hashtag-likers-top: [bodybuildingitalia, culturismoitaliano, ifbbitalia, classicphysiqueitalia, peakweek]
 
 ## Watching content
 watch-video-time: 8-25
@@ -218,8 +232,13 @@ ai-sticker-language: auto
 ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 
 # ---------------------------------------------------------------------------
-# Scheduling - 4 sessioni/giorno (working-hours riscritta da run-dynamic.py)
+# Scheduling - 4 sessioni/giorno in finestre FISSE tra le 09 e le 20, negli
+# intervalli lasciati liberi da rb.coach (cosi' i due emulatori non lavorano
+# insieme). Con total-sessions: -1 il bot fa UNA sessione per finestra, poi
+# aspetta la successiva; di notte dorme e riparte da solo la mattina dopo:
+# nessun rilancio a mano. run-dynamic.py, vedendo -1, NON riscrive la riga.
 # ---------------------------------------------------------------------------
-working-hours: [10.00-11.30, 13.00-14.30, 17.00-18.30, 20.30-22.00]
-time-delta: 0-15
-total-sessions: 4
+working-hours: [09.30-11.00, 12.30-14.00, 15.30-17.00, 18.30-20.00]
+time-delta: 0-15                            # ogni finestra slitta a caso di +/- 0-15 min, cosi' gli orari non sono identici ogni giorno
+repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
+total-sessions: -1                          # loop senza fine (rispetta le working-hours)

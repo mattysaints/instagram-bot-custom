@@ -16,7 +16,7 @@
 # General Configuration
 # ---------------------------------------------------------------------------
 username: roberto_buonomo_ifbbpro
-device: f2487e11                           # ADB serial (adb devices -l)
+device: emulator-5556                      # AVD robertobuo (deve combaciare con config.yml)
 app-id: com.instagram.android
 use-cloned-app: false
 allow-untested-ig-version: true
@@ -40,9 +40,14 @@ truncate-sources: 1-1
 # ---------------------------------------------------------------------------
 unfollow-non-followers: 25-35
 
-## Aspetta almeno N giorni dal follow prima di sganciare. 3 giorni da' tempo
-## di ricambiare senza tenere appeso troppo a lungo il rapporto follow/following.
-unfollow-delay: 3
+## Aspetta almeno N giorni dal follow prima di sganciare. Il conto parte da
+## `last_interaction` in accounts/roberto_buonomo_ifbbpro/interacted_users.json,
+## quindi il bot sgancia solo chi ha seguito lui: chi seguivi gia' prima non
+## viene toccato. 2 giorni e' una scelta del cliente. Nota che accorciando la
+## finestra il ciclo follow -> unfollow diventa piu' fitto, ed e' il pattern che
+## Instagram riconosce piu' facilmente: se arrivano action-block, il primo
+## numero da rialzare e' questo.
+unfollow-delay: 2
 
 ## Dai piu' RECENTI ai piu' vecchi: su liste following grandi partire dai
 ## vecchi vuol dire scrollare per ore prima di arrivare ai candidati validi.
