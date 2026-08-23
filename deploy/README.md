@@ -469,22 +469,30 @@ modifica col miglior rapporto costo/beneficio di tutte.
 > banda verso la grafica integrata ed è, a oggi, l'unico intervento hardware
 > che valga la spesa su questa macchina.
 
-**Gli account sono già sfalsati, nei config.** I due `config.yml` hanno
-`total-sessions: -1` e **finestre fisse** alternate dentro la fascia
-consentita **08:00-23:00**, nove sessioni da 75 minuti in tutto:
+**I due account lavorano in simultanea**, nelle stesse finestre. I due
+`config.yml` hanno `total-sessions: -1` e **finestre fisse** dentro la fascia
+consentita **08:00-23:00**: cinque sessioni da 90 minuti, uguali per entrambi.
 
-| | rb.coach | roberto_buonomo_ifbbpro |
-|---|---|---|
-| 1 | 08:10-09:25 | 09:50-11:05 |
-| 2 | 11:30-12:45 | 13:10-14:25 |
-| 3 | 14:50-16:05 | 16:30-17:45 |
-| 4 | 18:10-19:25 | 19:50-21:05 |
-| 5 | 21:30-22:45 | — |
+| | rb.coach e roberto_buonomo_ifbbpro |
+|---|---|
+| 1 | 08:15-09:45 |
+| 2 | 11:15-12:45 |
+| 3 | 14:15-15:45 |
+| 4 | 17:15-18:45 |
+| 5 | 20:45-22:15 |
 
-Fra una finestra e la successiva ci sono 25 minuti; `time-delta: 0-10` sposta
-gli orari di ±10 minuti al giorno, quindi nemmeno nel caso peggiore i due
-emulatori si sovrappongono, la giornata non inizia prima delle 08:00 e non
-finisce dopo le 23:00. Ogni finestra vale una sessione sola: se finisce prima
+`time-delta: 0-15` sposta gli orari di ±15 minuti al giorno, così non sono
+identici ogni giorno e i due bot non partono nello stesso secondo; il margine
+tiene la giornata dentro 08:00-23:00 anche nel caso peggiore (08:00-22:30).
+
+Due AVD da 2 core su un mini PC a 4 core vuol dire contendersi la CPU: le
+sessioni vanno **più lente** e Instagram ci mette di più ad aprirsi (misurati
+90 s per la barra delle schede con entrambi attivi). È il motivo per cui il
+bot aspetta gli elementi veri invece di usare tempi fissi. Se il carico
+diventa un problema, la leva è tornare a finestre sfalsate nei due config
+(oppure 1 core per AVD).
+
+Ogni finestra vale una sessione sola: se finisce prima
 per i limiti, il bot aspetta la finestra dopo; la sera dorme e riparte la
 mattina senza che nessuno lo rilanci. Con `-1` nel config `run-dynamic.py`
 **non riscrive** `working-hours` (modalità `--fixed-hours`): per cambiare gli
