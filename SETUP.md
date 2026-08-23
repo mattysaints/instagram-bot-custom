@@ -23,6 +23,13 @@ pip install -r requirements.txt
 Python 3.11-3.14. Le pin in `requirements.txt` sono necessarie: `setuptools<81`
 (uiautomator2 2.16.x usa `pkg_resources`) e `emoji==1.6.1`.
 
+> **Con queste pin l'intervallo utile è 3.11-3.12, non 3.14.** `PyYAML==6.0.1`
+> pubblica wheel fino a cp312: su 3.13+ pip prova a compilarla e si ferma su
+> *«Microsoft Visual C++ 14.0 or greater is required»*. Le alternative sono
+> installare i Build Tools di Visual Studio o salire a `PyYAML==6.0.2` (la
+> prima con le wheel cp313), che vuol dire toccare una pin per un motivo che
+> con Python 3.12 non esiste. **Il mini PC gira su 3.12.10**, verificato.
+
 ## 2. Segreti
 
 ```bash
@@ -77,7 +84,7 @@ python run.py --config accounts/rb.coach/config-once.yml
 # loop giornaliero, 5 micro-sessioni con orari generati dinamicamente
 python run-dynamic.py --config accounts/rb.coach/config.yml
 
-# solo unfollow di chi non ha ricambiato dopo 3 giorni
+# solo unfollow di chi non ha ricambiato dopo 2 giorni (`unfollow-delay`)
 python run.py --config accounts/rb.coach/config-unfollow.yml
 ```
 
