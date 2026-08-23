@@ -273,6 +273,18 @@ def _back_to_list(device, rid, tentativi: int = 3) -> bool:
             continue
         if device.node_in_dump(nodi, rid.LIST) is not None:
             return True
+        # Un back di troppo porta alla schermata di ricerca: da li' la lista
+        # non si recupera premendo altri back (si finirebbe fuori da
+        # Instagram). Si dice chiaramente dove siamo finiti e si lascia
+        # decidere al recupero della sorgente, che sa riprendere dall'ancora
+        # alla sessione successiva.
+        if device.node_in_dump(nodi, rid.ACTION_BAR_SEARCH_EDIT_TEXT) is not None:
+            logger.info(
+                "Un back di troppo ci ha riportati alla ricerca: la lista non "
+                "e' piu' nello stack, chiudo la sorgente (riprendera' "
+                "dall'ancora)."
+            )
+            return False
         # ne' lista ne' profilo: schermata sconosciuta, meglio fermarsi
         # e lasciare che il recupero della lista decida
         logger.debug(
