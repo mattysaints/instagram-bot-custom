@@ -532,6 +532,73 @@ class SearchView:
             logger.warning(f"⌨️  adb-type: exception while running adb: {ex}")
             return False
 
+    def _clear_search_text(self, search_edit_text) -> bool:
+        """Svuota la searchbar prima di digitare.
+
+        Perche': `adb shell input text` APPENDE al testo che c'e' gia'. Se
+        Instagram si riapre con la ricerca precedente ancora scritta (succede
+        dopo un riavvio dell'app, rb.coach 23/08) il bot cerca
+        '#bodybuildingitalia#classicphysiqueitalia' e non trova niente,
+        mettendo in quarantena una sorgente che era sana.
+        """
+        residuo = ""
+        try:
+            residuo = search_edit_text.get_text(error=False) or ""
+        except Exception as e:
+            logger.debug(f"_clear_search_text: cannot read the searchbar: {e}")
+        if not residuo.strip():
+            return True
+        logger.info(
+            f"⌨️  Searchbar sporca: contiene gia' {residuo!r}, la svuoto prima di digitare."
+        )
+        try:
+            search_edit_text.clear_text()
+        except Exception as e:
+            logger.debug(f"_clear_search_text: clear_text failed: {e}")
+        if self._search_text_now(search_edit_text).strip():
+            # Ripiego: cursore a fine testo e tanti backspace quanti servono.
+            # Stessa strada di _adb_type_text, che sull'emulatore e' la piu'
+            # affidabile (FastInputIME spesso non reagisce).
+            self._adb_keyevents(["123"] + ["67"] * (len(residuo) + 5))
+        rimasto = self._search_text_now(search_edit_text).strip()
+        if rimasto:
+            logger.warning(f"⌨️  Searchbar ancora sporca dopo la pulizia: {rimasto!r}.")
+            return False
+        return True
+
+    def _search_text_now(self, search_edit_text) -> str:
+        """Testo attuale della searchbar, con ripiego sul dump quando il
+        selettore non risponde."""
+        try:
+            testo = search_edit_text.get_text(error=False)
+            if testo is not None:
+                return testo
+        except Exception as e:
+            logger.debug(f"_search_text_now: selector failed: {e}")
+        return self.device.text_from_dump(
+            case_insensitive_re(ResourceID.ACTION_BAR_SEARCH_EDIT_TEXT)
+        )
+
+    def _adb_keyevents(self, keycodes: list) -> None:
+        """Sequenza di keyevent via adb (un solo comando: sull'emulatore ogni
+        chiamata ad adb costa piu' del tasto stesso)."""
+        import subprocess
+
+        try:
+            serial = self.device.deviceV2.serial
+        except Exception as e:
+            logger.debug(f"_adb_keyevents: cannot read device serial: {e}")
+            return
+        try:
+            subprocess.run(
+                ["adb", "-s", serial, "shell", "input keyevent " + " ".join(keycodes)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+            )
+        except Exception as ex:
+            logger.debug(f"_adb_keyevents: adb failed: {ex}")
+
     def _kick_search(self):
         """
         After a PASTE-style set_text(), Instagram's search bar often does NOT trigger
@@ -577,6 +644,9 @@ class SearchView:
         if search_edit_text is not None:
             logger.info("⌨️  Searchbar trovata, clicco per dare focus.")
             search_edit_text.click(sleep=SleepTime.SHORT)
+            # adb input text APPENDE: senza questa pulizia la ricerca nuova si
+            # attacca a quella vecchia rimasta nella barra.
+            self._clear_search_text(search_edit_text)
         else:
             logger.warning("⌨️  Nessuna searchbar visibile: impossibile digitare.")
             return False
@@ -604,18 +674,35 @@ class SearchView:
         # Give IG some time to fetch search results
         random_sleep(2, 4, modulable=False)
         # Readback: verify what the searchbar actually contains right now.
-        try:
-            current = self._getSearchEditText()
-            if current is not None and current.exists():
+        # Se non combacia si riprova UNA volta (svuota e ridigita): la causa
+        # tipica e' testo vecchio rimasto nella barra, e senza il secondo
+        # tentativo la sorgente verrebbe contata come "nessun risultato" e
+        # finirebbe in quarantena pur essendo sana.
+        for tentativo in (1, 2):
+            try:
+                current = self._getSearchEditText()
+                if current is None or not current.exists():
+                    break
                 seen = current.get_text() or ""
                 if seen.strip().lower() == target.strip().lower():
                     logger.info(f"⌨️  Searchbar OK: contiene {seen!r}.")
-                else:
-                    logger.warning(
-                        f"⌨️  Searchbar MISMATCH: atteso {target!r} ma trovato {seen!r}."
+                    break
+                logger.warning(
+                    f"⌨️  Searchbar MISMATCH: atteso {target!r} ma trovato {seen!r}."
+                )
+                if tentativo == 2:
+                    break
+                logger.info("⌨️  Riprovo: svuoto la barra e ridigito.")
+                if not self._clear_search_text(current):
+                    break
+                if not self._adb_type_text(target):
+                    current.set_text(
+                        target, Mode.PASTE if args.dont_type else Mode.TYPE
                     )
-        except Exception as e:
-            logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
+                random_sleep(2, 4, modulable=False)
+            except Exception as e:
+                logger.debug(f"navigate_to_target: could not read searchbar text: {e}")
+                break
         if self._check_current_view(target, job):
             logger.info(f"{target} is in top view.")
             return True

@@ -1031,6 +1031,13 @@ class DeviceFacade:
             except uiautomator2.JSONRPCError as e:
                 raise DeviceFacade.JsonRpcError(e)
 
+        def clear_text(self) -> None:
+            """Svuota il campo di testo (dopo avergli dato il fuoco)."""
+            try:
+                self.viewV2.clear_text()
+            except uiautomator2.JSONRPCError as e:
+                raise DeviceFacade.JsonRpcError(e)
+
         def set_text(self, text: str, mode: Mode = Mode.TYPE) -> None:
             punct_list = string.punctuation
             try:
