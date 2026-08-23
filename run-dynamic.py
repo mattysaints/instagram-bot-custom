@@ -2,30 +2,28 @@
 """
 Wrapper per GramAddict: genera working-hours dinamiche basate sull'ora di lancio.
 
-Schema:
-  - SEMPRE N sessioni (default 5), prima parte SUBITO
-  - Durata: 90 min ciascuna (default), gap inizio-inizio: 3h con jitter +/-15 min
-  - Le sessioni possono sforare oltre la mezzanotte (wraparound 24h): se al
-    momento del lancio non ci stanno N sessioni entro le 23:59, le rimanenti
-    vengono pianificate dopo le 00:00 (GramAddict aspetta naturalmente fino
-    alla finestra successiva grazie al time_in_range con wraparound).
-  - HARD LIMIT anti-ban: nessuna sessione prima delle 09:00 ne' dopo le
-    EARLIEST_NEXT_DAY del giorno successivo (default: 03:00) -- evita di
-    finire le sessioni in piena notte 04-08 quando IG flagga aggressivamente.
+Schema (modalita' normale):
+  - La PRIMA sessione parte SUBITO, all'ora del lancio: si avvia il bot e
+    lavora, senza aspettare una finestra decisa a tavolino.
+  - Le altre N-1 (default 5 in tutto) seguono a distanza di gap-h (3h) con
+    jitter, tutte dentro la fascia consentita 08:00-23:00.
+  - Fuori fascia il lancio non lavora di notte: prima delle 08:00 la prima
+    sessione slitta all'apertura, dopo le 23:00 a domattina.
+  - Le working-hours cosi' calcolate vengono scritte nel config. Con
+    total-sessions: -1 e repeat, GramAddict poi le ripete ogni giorno da
+    solo: si rilancia solo quando si vuole spostare gli orari.
 
-Esempio: lancio alle 22:00 -> 5 sessioni:
-  22.00-23.30, ~01.10-02.40, ~04.20-05.50  ...  -> bloccate da hard limit
-  In quel caso il loop si ferma prima delle 03:00 e il giorno dopo si rilancia.
+Esempio: lancio alle 10:20 -> 10.20-11.50, ~13.25-14.55, ~16.30-18.00,
+  ~19.35-21.05, ~21.50-23.00 (l'ultima accorciata per non sforare le 23:00).
 
-Modalita' FINESTRE FISSE (quella usata h24 sul mini PC): se il config ha
-  total-sessions: -1 (o si passa --fixed-hours) le working-hours NON vengono
-  riscritte: valgono quelle del file (es. 5 finestre tra le 08 e le 22),
-  GramAddict fa una sessione per finestra, di notte dorme e riparte da solo
-  la mattina dopo. Questo script fa solo pre-flight ADB (+ avvio AVD) e lancio.
+Modalita' FINESTRE FISSE: se il config contiene il marcatore
+  '# finestre-fisse' (lo mettono i config alternati generati da
+  tools/make-alternato-config.py) o si passa --fixed-hours, le working-hours
+  NON vengono toccate: valgono quelle scritte nel file.
 
 Uso:
   python run-dynamic.py [--config <path>] [--sessions N] [--duration-min M] [--gap-h H]
-  python run-dynamic.py --config accounts/rb.coach/config.yml --fixed-hours --avd rbcoach
+  python run-dynamic.py --config accounts/rb.coach/config-alternato.yml --fixed-hours --avd rbcoach
 """
 import argparse
 import atexit
@@ -136,12 +134,24 @@ def _start_emulator(avd: str, serial: str) -> None:
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **flags)
 
-# Inizio "umano" anti-ban (mai sessioni notturne 03-07)
-EARLIEST_START = dt.time(7, 0)
-# Hard limit late-night: oltre questa ora del giorno successivo NON pianifichiamo
-# piu' sessioni, anche se il calcolo gap*N le richiederebbe. 03:00 e' il limite
-# massimo "umano" per uso reale di IG -- oltre, l'attivita' diventa sospetta.
-LATEST_NEXT_DAY = dt.time(3, 0)
+# Fascia oraria consentita, decisa con il cliente: nessuna sessione prima
+# delle 08:00 ne' dopo le 23:00. Le sessioni non sconfinano piu' nella notte:
+# l'attivita' notturna e' quella che Instagram guarda con piu' sospetto, e
+# comunque il pubblico di questi account di notte non c'e'.
+EARLIEST_START = dt.time(8, 0)
+LATEST_END = dt.time(23, 0)
+
+# Pausa minima fra la FINE di una sessione e l'INIZIO della successiva. Senza,
+# quando il tempo residuo e' poco il calcolo stipa le sessioni una addosso
+# all'altra (lancio delle 18:45: quattro sessioni da 50 min con 3 minuti di
+# stacco) e il risultato e' un'attivita' continua per ore, cioe' l'opposto di
+# quello che fa una persona. Meglio meno sessioni, ma distanziate.
+PAUSA_MINIMA_MIN = 30
+
+
+def gap_minimo_h(duration_min: int) -> float:
+    """Distanza minima inizio-inizio: durata della sessione piu' la pausa."""
+    return (duration_min + PAUSA_MINIMA_MIN) / 60.0
 
 
 def fmt(t: dt.time) -> str:
@@ -150,19 +160,11 @@ def fmt(t: dt.time) -> str:
 
 
 def _is_within_allowed(window_dt: dt.datetime, start_day: dt.date) -> bool:
-    """True se l'inizio della finestra e' in fascia consentita.
-
-    Regole:
-      - se siamo nello stesso giorno di partenza: tutto ok (siamo gia' >= EARLIEST_START)
-      - se siamo nel giorno successivo: deve essere < LATEST_NEXT_DAY (03:00)
-      - oltre il giorno successivo: vietato (mai pianificare sessioni a 48h)
-    """
-    delta_days = (window_dt.date() - start_day).days
-    if delta_days == 0:
-        return True
-    if delta_days == 1:
-        return window_dt.time() < LATEST_NEXT_DAY
-    return False
+    """True se l'inizio della finestra e' in fascia consentita: stesso giorno
+    del lancio e non oltre LATEST_END. Niente wraparound sulla notte."""
+    if (window_dt.date() - start_day).days != 0:
+        return False
+    return EARLIEST_START <= window_dt.time() < LATEST_END
 
 
 def build_windows(
@@ -171,18 +173,17 @@ def build_windows(
     duration_min: int,
     gap_h: float,
 ) -> list[str]:
-    """Genera fino a n_sessions finestre. Permette wraparound dopo mezzanotte
-    fino al hard limit LATEST_NEXT_DAY del giorno successivo.
+    """Genera fino a n_sessions finestre a partire dall'ora di lancio.
 
     Vincoli:
       - inizio sessione in fascia consentita (vedi _is_within_allowed)
-      - FINE sessione non oltre LATEST_NEXT_DAY del giorno successivo
-        (altrimenti scarta la sessione: meglio averne meno che notturne)
+      - FINE sessione non oltre LATEST_END dello stesso giorno (altrimenti
+        scarta la sessione: meglio averne meno che notturne)
     """
     windows: list[str] = []
     cur = start_dt
     start_day = start_dt.date()
-    hard_end = dt.datetime.combine(start_day + dt.timedelta(days=1), LATEST_NEXT_DAY)
+    hard_end = dt.datetime.combine(start_day, LATEST_END)
 
     for _ in range(n_sessions):
         if not _is_within_allowed(cur, start_day):
@@ -201,7 +202,7 @@ def build_windows(
         next_end = next_start + dt.timedelta(minutes=duration_min)
         slack_min = int((hard_end - next_end).total_seconds() // 60)  # min residui prima di sforare
         max_pos_jitter = max(0, min(15, slack_min))
-        max_neg_jitter = max(0, min(15, gap_min - duration_min))
+        max_neg_jitter = max(0, min(15, gap_min - duration_min - PAUSA_MINIMA_MIN))
         if max_pos_jitter == 0 and max_neg_jitter == 0:
             jitter = 0
         else:
@@ -217,7 +218,7 @@ def shrink_to_fit(
     duration_min: int,
 ) -> float:
     """Calcola il gap_h (>= duration) per far stare n_sessions tra start_dt e
-    LATEST_NEXT_DAY del giorno successivo SENZA sovrapporsi.
+    LATEST_END dello stesso giorno SENZA sovrapporsi.
 
     Vincoli:
       - (N-1)*G + D <= minutes_available  (l'ultima sessione finisce entro il limite)
@@ -225,7 +226,7 @@ def shrink_to_fit(
 
     Restituisce 0 se impossibile.
     """
-    end_of_window = dt.datetime.combine(start_dt.date() + dt.timedelta(days=1), LATEST_NEXT_DAY)
+    end_of_window = dt.datetime.combine(start_dt.date(), LATEST_END)
     minutes_available = (end_of_window - start_dt).total_seconds() / 60
     if n_sessions <= 1:
         return 0.0
@@ -453,17 +454,30 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
     Riscrive la riga working-hours del config e restituisce le finestre."""
     now = dt.datetime.now()
 
-    # Vincolo: prima di EARLIEST_START -> sposta a EARLIEST_START di oggi (con jitter umano)
+    # Lanciato di notte o di primissima mattina: la prima sessione si sposta
+    # all'apertura della fascia, non parte alle 4 del mattino.
     if now.time() < EARLIEST_START:
         now = now.replace(hour=EARLIEST_START.hour, minute=random.randint(0, 30), second=0, microsecond=0)
-        print(f"ℹ️  Prima delle {EARLIEST_START.strftime('%H:%M')} -> prima sessione spostata alle {now.strftime('%H:%M')}")
+        print(f"ℹ️  Prima delle {EARLIEST_START.strftime('%H:%M')}: prima sessione spostata alle {now.strftime('%H:%M')}.")
 
-    # Vincolo: tra LATEST_NEXT_DAY (03:00) e EARLIEST_START (07:00) di OGGI ->
-    # non possiamo lanciare ne' subito ne' la stessa "notte"; sposta a oggi EARLIEST_START.
-    # (Se ti svegli alle 4 e lanci, NON vogliamo sessioni alle 4-7.)
-    if LATEST_NEXT_DAY <= now.time() < EARLIEST_START:
-        now = now.replace(hour=EARLIEST_START.hour, minute=random.randint(0, 30), second=0, microsecond=0)
-        print(f"ℹ️  Sei nella fascia notte ({LATEST_NEXT_DAY.strftime('%H:%M')}-{EARLIEST_START.strftime('%H:%M')}). Prima sessione spostata alle {now.strftime('%H:%M')}.")
+    # Lanciato a fascia gia' chiusa (dopo le 23:00) o con cosi' poco tempo
+    # residuo che non ci sta nemmeno una sessione minima: oggi non si lavora
+    # piu', si riparte domattina. Il bot resta acceso e dorme fino ad allora:
+    # meglio che uscire, perche' chi lo ha avviato si aspetta che vada avanti
+    # da solo.
+    minuti_residui = (
+        dt.datetime.combine(now.date(), LATEST_END) - now
+    ).total_seconds() / 60
+    if now.time() < LATEST_END and minuti_residui < args.min_duration_min:
+        print(
+            f"ℹ️  Restano {int(minuti_residui)} min prima delle "
+            f"{LATEST_END.strftime('%H:%M')}: troppo pochi per una sessione, "
+            "si riparte domattina."
+        )
+    if now.time() >= LATEST_END or minuti_residui < args.min_duration_min:
+        domani = now.date() + dt.timedelta(days=1)
+        now = dt.datetime.combine(domani, EARLIEST_START) + dt.timedelta(minutes=random.randint(0, 30))
+        print(f"ℹ️  Prima sessione domani alle {now.strftime('%H:%M')}.")
 
     # auto-shrink: tenta in ordine
     #   1) gap_h originale, N sessioni
@@ -481,8 +495,8 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
     # tentativo 2: comprimi il gap mantenendo N e durata
     if len(windows) < args.sessions:
         new_gap = shrink_to_fit(now, args.sessions, duration_min)
-        if new_gap >= duration_min / 60.0:
-            print(f"ℹ️  Gap originale ({gap_h:.1f}h) troppo ampio entro le {LATEST_NEXT_DAY.strftime('%H:%M')} di domani. Comprimo a ~{new_gap:.2f}h.")
+        if new_gap >= gap_minimo_h(duration_min):
+            print(f"ℹ️  Gap originale ({gap_h:.1f}h) troppo ampio entro le {LATEST_END.strftime('%H:%M')}. Comprimo a ~{new_gap:.2f}h.")
             gap_h = new_gap
             windows = build_windows(now, args.sessions, duration_min, gap_h)
 
@@ -490,14 +504,16 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
     # vincolo: tempo totale = (N-1)*G + D <= window; G >= D (no overlap)
     # => G_min = D, quindi (N-1)*D + D = N*D <= window => D <= window/N
     if len(windows) < args.sessions:
-        end_of_window = dt.datetime.combine(now.date() + dt.timedelta(days=1), LATEST_NEXT_DAY)
+        end_of_window = dt.datetime.combine(now.date(), LATEST_END)
         minutes_available = (end_of_window - now).total_seconds() / 60
         # margine -2min per assorbire jitter accumulato e arrotondamenti
-        max_duration_for_n = int((minutes_available - 2) // args.sessions)
+        max_duration_for_n = int(
+            (minutes_available - 2 - PAUSA_MINIMA_MIN * (args.sessions - 1)) // args.sessions
+        )
         if max_duration_for_n >= args.min_duration_min:
             new_duration = min(duration_min, max_duration_for_n)
             new_gap = shrink_to_fit(now, args.sessions, new_duration)
-            if new_gap >= new_duration / 60.0:
+            if new_gap >= gap_minimo_h(new_duration):
                 candidate = build_windows(now, args.sessions, new_duration, new_gap)
                 if len(candidate) > len(windows):
                     print(
@@ -515,11 +531,11 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
         while n_eff > 1 and len(windows) < n_eff:
             n_eff -= 1
             new_gap = shrink_to_fit(now, n_eff, args.duration_min)
-            if new_gap < args.duration_min / 60.0:
+            if new_gap < gap_minimo_h(args.duration_min):
                 continue
             candidate = build_windows(now, n_eff, args.duration_min, new_gap)
             if len(candidate) >= n_eff:
-                print(f"ℹ️  Riduco da {args.sessions} a {n_eff} sessioni di {args.duration_min}min (gap ~{new_gap:.2f}h, fine entro {LATEST_NEXT_DAY.strftime('%H:%M')} di domani).")
+                print(f"ℹ️  Riduco da {args.sessions} a {n_eff} sessioni di {args.duration_min}min (gap ~{new_gap:.2f}h, fine entro le {LATEST_END.strftime('%H:%M')}).")
                 windows = candidate
                 gap_h = new_gap
                 duration_min = args.duration_min
@@ -527,7 +543,7 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
 
     # tentativo 5: ultima spiaggia, 1 sessione di durata ridotta
     if not windows:
-        end_of_window = dt.datetime.combine(now.date() + dt.timedelta(days=1), LATEST_NEXT_DAY)
+        end_of_window = dt.datetime.combine(now.date(), LATEST_END)
         minutes_left = int((end_of_window - now).total_seconds() / 60)
         if minutes_left >= args.min_duration_min:
             shrunk = min(args.duration_min, minutes_left)
@@ -535,7 +551,7 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
             windows = build_windows(now, 1, shrunk, gap_h)
             duration_min = shrunk
         else:
-            print(f"⚠️  Restano solo {minutes_left}min entro le {LATEST_NEXT_DAY.strftime('%H:%M')} di domani "
+            print(f"⚠️  Restano solo {minutes_left}min entro le {LATEST_END.strftime('%H:%M')} "
                   f"(min richiesto: {args.min_duration_min}min). Niente da fare ora.")
 
     if not windows:
@@ -568,6 +584,19 @@ def _read_working_hours(config_path: Path) -> list[str]:
         return []
     finestre = [w.strip() for w in m.group(1).split(",") if w.strip()]
     return [w for w in finestre if re.fullmatch(r"\d{1,2}\.\d{2}-\d{1,2}\.\d{2}", w)]
+
+
+def _finestre_fisse_richieste(config_path: Path) -> bool:
+    """True se il config chiede di NON rigenerare le working-hours, cioe' se
+    contiene il marcatore '# finestre-fisse'. Lo mettono i config alternati
+    (tools/make-alternato-config.py), che hanno orari decisi a tavolino.
+    Gli altri config vogliono finestre calcolate dall'ora di lancio: si
+    avvia il bot e la prima sessione parte subito."""
+    try:
+        text = config_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return False
+    return re.search(r"(?m)^\s*#\s*finestre-fisse(?![\w-])", text) is not None
 
 
 def _total_sessions_from_config(config_path: Path) -> Optional[int]:
@@ -629,7 +658,7 @@ def main():
         print(f"❌ Config non trovata: {config_path}", file=sys.stderr)
         sys.exit(1)
 
-    if args.fixed_hours or _total_sessions_from_config(config_path) == -1:
+    if args.fixed_hours or _finestre_fisse_richieste(config_path):
         # Finestre FISSE: il config ha le sue working-hours giornaliere (es.
         # 08-22) e total-sessions: -1, e GramAddict cicla da solo giorno dopo
         # giorno (di notte dorme fino alla prima finestra del mattino). Qui
@@ -641,7 +670,8 @@ def main():
                   "'working-hours: [...]' valida.", file=sys.stderr)
             sys.exit(1)
         if not args.fixed_hours:
-            print("ℹ️  total-sessions: -1 nel config -> finestre fisse (working-hours NON riscritte).")
+            print("ℹ️  Il config chiede finestre fisse (marcatore '# finestre-fisse'): "
+                  "working-hours NON riscritte.")
         print("┌─────────────────────────────────────────────────")
         print(f"│ Working-hours fisse dal config ({len(windows)} sessioni al giorno, in loop):")
         for k, w in enumerate(windows, 1):

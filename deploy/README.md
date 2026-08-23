@@ -469,21 +469,29 @@ modifica col miglior rapporto costo/beneficio di tutte.
 > banda verso la grafica integrata ed è, a oggi, l'unico intervento hardware
 > che valga la spesa su questa macchina.
 
-**I due account lavorano in simultanea**, nelle stesse finestre. I due
-`config.yml` hanno `total-sessions: -1` e **finestre fisse** dentro la fascia
-consentita **08:00-23:00**: cinque sessioni da 90 minuti, uguali per entrambi.
+**I due account lavorano in simultanea, e partono quando li avvii.**
+`run-dynamic.py` calcola le `working-hours` **dall'ora del lancio**: la prima
+sessione comincia subito, le altre seguono a distanza di ~3 ore, tutte dentro
+la fascia **08:00-23:00**. Lanciato alle 10:25 si ottiene per esempio
+`10.25-11.55, 12.59-14.29, 15.52-17.22, 18.37-20.07, 21.23-22.53`.
 
-| | rb.coach e roberto_buonomo_ifbbpro |
-|---|---|
-| 1 | 08:15-09:45 |
-| 2 | 11:15-12:45 |
-| 3 | 14:15-15:45 |
-| 4 | 17:15-18:45 |
-| 5 | 20:45-22:15 |
+Regole del calcolo:
 
-`time-delta: 0-15` sposta gli orari di ±15 minuti al giorno, così non sono
-identici ogni giorno e i due bot non partono nello stesso secondo; il margine
-tiene la giornata dentro 08:00-23:00 anche nel caso peggiore (08:00-22:30).
+- cinque sessioni da 90 minuti (`--sessions`, `--duration-min`); se il tempo
+  fino alle 23:00 non basta, prima si accorcia il gap, poi la durata, poi si
+  riduce il numero di sessioni;
+- fra la fine di una sessione e l'inizio della successiva restano sempre
+  almeno **30 minuti** di pausa: meglio poche sessioni distanziate che tante
+  attaccate, che di attività umana non hanno niente;
+- lanciato prima delle 08:00 la prima sessione slitta all'apertura; lanciato
+  dopo le 23:00 (o con meno di mezz'ora davanti) il bot resta acceso e riparte
+  **domattina**, senza uscire.
+
+Gli orari calcolati finiscono nel `config.yml`, e con `total-sessions: -1` più
+`repeat` GramAddict li **ripete ogni giorno da solo**: si rilancia solo per
+spostare la giornata. `time-delta` è `0-0` di proposito: uno slittamento
+positivo rimanderebbe la prima finestra e il bot, appena avviato, resterebbe
+fermo ad aspettare.
 
 Due AVD da 2 core su un mini PC a 4 core vuol dire contendersi la CPU: le
 sessioni vanno **più lente** e Instagram ci mette di più ad aprirsi (misurati

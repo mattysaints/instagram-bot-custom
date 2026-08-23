@@ -32,6 +32,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Avd,
     [Parameter(Mandatory = $true)][string]$Serial,
     [int]$BootTimeoutSec = 300,
+    # Quante sessioni pianificare nella giornata a partire dall'ora di lancio.
+    [int]$Sessioni = 5,
     # Emulatore senza finestra: risparmia CPU e memoria, ed e' quello che
     # serve su una macchina che gira h24 senza nessuno davanti. Il bot non
     # perde niente, perche' lavora via ADB e non guarda lo schermo; anche gli
@@ -163,27 +165,13 @@ if (-not (Test-Path (Join-Path $RepoRoot $config))) {
     exit 1
 }
 
-# Due modalita', decise da `total-sessions` nel config:
-#   -1  -> finestre FISSE: le working-hours del config valgono ogni giorno,
-#          GramAddict fa una sessione per finestra e di notte dorme; il
-#          processo non termina mai da solo (il watchdog serve solo per i
-#          crash). E' la modalita' h24 dei due account.
-#   N   -> finestre DINAMICHE dall'ora di lancio: run-dynamic.py ne genera N
-#          e riscrive working-hours; GramAddict si ferma dopo N sessioni e
-#          il watchdog rilancia. Passiamo N perche' i due numeri coincidano.
-$runArgs = @('run-dynamic.py', '--config', $config)
-$totalSessions = Select-String -Path (Join-Path $RepoRoot $config) `
-    -Pattern '^\s*total-sessions\s*:\s*(-?\d+)' | Select-Object -First 1
-if ($totalSessions) {
-    $n = $totalSessions.Matches[0].Groups[1].Value
-    if ($n -eq '-1') {
-        $runArgs += '--fixed-hours'
-        Write-Log "total-sessions: -1 nel config -> finestre fisse (working-hours del config, loop giornaliero)"
-    } else {
-        $runArgs += @('--sessions', $n)
-        Write-Log "total-sessions dal config: $n"
-    }
-}
+# Quante finestre generare nella giornata. run-dynamic.py le calcola dall'ora
+# del lancio (la prima sessione parte subito) e le scrive nel config; con
+# total-sessions: -1 GramAddict poi le ripete ogni giorno da solo.
+# Fanno eccezione i config con il marcatore '# finestre-fisse' (quelli
+# alternati): li' gli orari sono decisi a tavolino e run-dynamic non li tocca.
+$runArgs = @('run-dynamic.py', '--config', $config, '--sessions', "$Sessioni")
+Write-Log "finestre da generare al lancio: $Sessioni"
 
 Write-Log ("lancio: $python " + ($runArgs -join ' '))
 # Con $ErrorActionPreference = 'Stop' e 2>&1, PowerShell 5.1 trasforma la

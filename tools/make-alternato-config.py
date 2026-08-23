@@ -39,6 +39,9 @@ TIME_DELTA = "0-10"
 INTESTAZIONE = """# ===========================================================================
 # GIORNATA ALTERNATA - generata da tools/make-alternato-config.py
 # ===========================================================================
+# finestre-fisse   <- marcatore letto da run-dynamic.py: NON ricalcolare le
+#                     working-hours all'avvio, qui gli orari sono decisi a
+#                     tavolino per non far lavorare i due account insieme.
 # Copia di config.yml con le sole working-hours cambiate: qui i due account
 # NON lavorano mai insieme (in config.yml invece si', in simultanea).
 # Si lancia questa coppia quando si vuole un emulatore alla volta:

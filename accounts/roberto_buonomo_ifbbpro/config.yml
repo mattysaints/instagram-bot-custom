@@ -232,14 +232,14 @@ ai-sticker-language: auto
 ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 
 # ---------------------------------------------------------------------------
-# Scheduling - 5 sessioni/giorno da 90 min in finestre FISSE dentro la fascia
-# consentita 08:00-23:00. Sono le STESSE finestre di rb.coach: i due emulatori
-# lavorano in simultanea (scelta del cliente). Con total-sessions: -1 il bot
-# fa UNA sessione per finestra, poi aspetta la successiva; di notte dorme e
-# riparte da solo la mattina dopo: nessun rilancio a mano. run-dynamic.py,
-# vedendo -1, NON riscrive la riga.
+# Scheduling - 5 sessioni da 90 min, con le working-hours RISCRITTE da
+# run-dynamic.py a ogni lancio a partire dall'ora di avvio (dentro la fascia
+# 08:00-23:00): si avvia il bot e la prima sessione parte subito. Con
+# total-sessions: -1 e repeat, quegli orari si ripetono ogni giorno da soli.
+# Stesse finestre di rb.coach: i due account lavorano in simultanea. Per
+# farli lavorare a turno c'e' config-alternato.yml.
 # ---------------------------------------------------------------------------
-working-hours: [08.15-09.45, 11.15-12.45, 14.15-15.45, 17.15-18.45, 20.45-22.15]
-time-delta: 0-15                            # slittamento casuale di +/- 0-15 min: gli orari non sono identici ogni giorno e i due account non partono nello stesso secondo. Il margine tiene la giornata dentro 08:00-23:00
+working-hours: [08.15-09.45, 11.15-12.45, 14.15-15.45, 17.15-18.45, 20.45-22.15]   # riscritta a ogni lancio da run-dynamic.py
+time-delta: 0-0                             # ZERO di proposito: le finestre le calcola gia' run-dynamic.py dall'ora di lancio (con jitter fra una sessione e l'altra). Uno slittamento positivo qui sposterebbe in avanti la prima finestra e il bot, appena avviato, resterebbe fermo ad aspettare invece di partire subito
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
 total-sessions: -1                          # loop senza fine (rispetta le working-hours)

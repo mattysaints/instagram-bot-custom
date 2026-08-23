@@ -19,7 +19,7 @@
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="RUN_TOOL" value="" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/run-dynamic.py" />
-    <option name="PARAMETERS" value="--config accounts/roberto_buonomo_ifbbpro/config.yml --fixed-hours --avd robertobuo" />
+    <option name="PARAMETERS" value="--config accounts/roberto_buonomo_ifbbpro/config.yml --sessions 5 --avd robertobuo" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />

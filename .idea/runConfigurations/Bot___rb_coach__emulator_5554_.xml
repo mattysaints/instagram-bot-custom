@@ -19,7 +19,7 @@
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="RUN_TOOL" value="" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/run-dynamic.py" />
-    <option name="PARAMETERS" value="--config accounts/rb.coach/config.yml --fixed-hours --avd rbcoach" />
+    <option name="PARAMETERS" value="--config accounts/rb.coach/config.yml --sessions 5 --avd rbcoach" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />
