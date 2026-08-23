@@ -706,6 +706,25 @@ def _clean_caption(testo: str) -> str:
     return t
 
 
+_FOLLOW_DAL_DUMP = (
+    ("followback", r"(?i)^follow back$"),
+    ("following", r"(?i)^(following|requested)$"),
+    ("follow", r"(?i)^follow$"),
+)
+
+
+def _bottone_follow_dal_dump(device: DeviceFacade):
+    """Cerca nell'albero completo il bottone Follow / Following / Follow Back.
+    Restituisce (nodo, stato): stato dice cosa si e' trovato, il nodo serve
+    solo quando c'e' da toccare 'Follow'."""
+    nodi = device.nodes_from_dump()
+    for stato, regex in _FOLLOW_DAL_DUMP:
+        nodo = DeviceFacade.node_in_dump(nodi, text_regex=regex)
+        if nodo is not None and nodo.get("clickable"):
+            return nodo, stato
+    return None, None
+
+
 def _bounds_o_dump(device: DeviceFacade, resource_id: str):
     """Bounds di un elemento, senza far esplodere niente se non c'e':
     prima il selettore, poi l'albero completo, infine None."""
@@ -1196,10 +1215,37 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
             )
             universal_actions.detect_block(device)
         else:
-            logger.error(
-                "Cannot find neither Follow button, Follow Back button, nor Unfollow button."
+            # Il selettore non ha visto nessuno dei tre bottoni. Prima di
+            # dichiarare il fallimento si guarda l'albero completo: e' lo
+            # stesso caso gia' visto su avatar, liste e contenitori, dove la
+            # query nega un elemento che a schermo c'e'. (rb.coach, 23/08:
+            # due volte in una giornata, ogni volta con uno zip di crash
+            # salvato per un bottone.)
+            nodo, stato = _bottone_follow_dal_dump(device)
+            if stato in ("following", "followback"):
+                logger.info(
+                    f"@{username}: {'ti segue gia' if stato == 'followback' else 'lo segui gia'}, "
+                    "letto dall'albero completo."
+                )
+                return False
+            if nodo is not None:
+                logger.info("Bottone Follow negato dal selettore ma presente nel dump: lo tocco.")
+                get_throttler().wait_if_needed(ActionType.FOLLOW)
+                device.tap_node(nodo, "sul bottone Follow")
+                if device.find(
+                    textMatches=UNFOLLOW_REGEX,
+                    clickable=True,
+                ).exists(Timeout.MEDIUM):
+                    logger.info(f"Followed @{username}", extra={"color": Fore.GREEN})
+                    universal_actions.detect_block(device)
+                    return True
+            # Niente bottone nemmeno nell'albero: non e' un guasto del bot,
+            # e' una schermata dove il follow non si puo' fare. Si dice cosa
+            # c'era e si va avanti, senza zip di crash.
+            logger.warning(
+                "Nessun bottone Follow/Following/Follow Back su questa schermata: "
+                f"salto il follow. [{device.screen_summary(device.nodes_from_dump(), max_testi=8, max_ids=15)}]"
             )
-            save_crash(device)
 
     else:
         logger.info("Reached total follows limit, not following.")
