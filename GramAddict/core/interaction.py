@@ -198,12 +198,17 @@ def interact_with_user(
         stories_percentage,
         args,
         session_state,
+        skip_stickers=_blogger_comment_only(args, current_mode),
     )
     swipe_amount = 0
 
     if number_of_watched >= 1:
         interacted = True
     if can_like(session_state, likes_percentage):
+        # rete di sicurezza: se le storie (o qualunque altra cosa) hanno
+        # lasciato lo schermo altrove, qui si torna al profilo prima di
+        # cercare la griglia dei post
+        _back_to_profile(device)
         if profile_data.posts_count > 3:
             swipe_amount = ProfileView(device).swipe_to_fit_posts()
         else:
@@ -271,7 +276,23 @@ def interact_with_user(
             photos_indices = photos_indices[:likes_value]
             photos_indices = sorted(photos_indices)
         post_grid_view = PostsGridView(device)
+        comment_attempted = False
         for i in range(len(photos_indices)):
+            # Job blogger in modalita' commento: i 3 post servono solo a
+            # trovarne uno commentabile. Se il limite commenti della sessione
+            # e' gia' raggiunto nessun post lo sara': si resta al primo post
+            # (un like, come prima) invece di regalarne tre al big.
+            if (
+                i > 0
+                and _blogger_comment_only(args, current_mode)
+                and session_state.check_limit(
+                    limit_type=session_state.Limit.COMMENTS, output=False
+                )
+            ):
+                logger.info(
+                    "Comment limit reached: not opening more posts of this big profile."
+                )
+                break
             photo_index = photos_indices[i]
             row = photo_index // 3
             column = photo_index - row * 3
@@ -297,6 +318,17 @@ def interact_with_user(
                         like_succeed = opened_post_view.like_video()
                         logger.debug("Closing video...")
                         device.back()
+                    else:
+                        # Niente schermo intero: il post e' comunque aperto
+                        # nella vista feed, con il cuoricino sotto al media.
+                        # Prima si rinunciava al like (e al conteggio
+                        # dell'interazione) per un dettaglio di layout.
+                        logger.info(
+                            "Video not in full screen: liking from the post view."
+                        )
+                        opened_post_view.watch_media(media_type)
+                        get_throttler().wait_if_needed(ActionType.LIKE)
+                        like_succeed = opened_post_view.like_post(single_click=True)
                 elif media_type in (MediaType.CAROUSEL, MediaType.PHOTO):
                     if media_type == MediaType.CAROUSEL:
                         _browse_carousel(device, obj_count)
@@ -328,6 +360,8 @@ def interact_with_user(
                         )
                         if comment_done:
                             number_of_commented += 1
+                        elif comment_done is None:
+                            comment_attempted = True
                     else:
                         logger.info(
                             f"You've already did {max_comments_pro_user} {'comment' if max_comments_pro_user<=1 else 'comments'} for this user!"
@@ -348,6 +382,19 @@ def interact_with_user(
                 logger.debug("We are in the wrong place...")
                 device.back()
             device.back()
+            # Job blogger in modalita' commento: il like serve solo ad aprire
+            # il post, quello che conta e' il commento. Se e' andato, basta
+            # cosi'; se il post aveva i commenti limitati (virginactiveit,
+            # 22/08) si prova il successivo invece di chiudere a zero.
+            if _blogger_comment_only(args, current_mode) and (
+                number_of_commented >= 1 or comment_attempted
+            ):
+                logger.info(
+                    "Comment done: one post is enough on a big profile."
+                    if number_of_commented >= 1
+                    else "Comment posted but not verified: not risking a second one on this profile."
+                )
+                break
 
     if pm_percentage != 0 and can_send_PM(session_state, pm_percentage):
         sent_pm = _send_PM(device, session_state, my_username, swipe_amount)
@@ -629,6 +676,34 @@ def _browse_carousel(device: DeviceFacade, obj_count: int) -> None:
                 n += 1
 
 
+def _is_true(valore) -> bool:
+    if isinstance(valore, bool):
+        return valore
+    return str(valore).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _blogger_comment_only(args, current_mode) -> bool:
+    """True se siamo nel job blogger in modalita' "solo commento" (default)."""
+    return current_mode == "blogger" and _is_true(
+        getattr(args, "blogger_comment_only", "true")
+    )
+
+
+def _clean_caption(testo: str) -> str:
+    """Ripulisce la didascalia letta dal post prima di mandarla allo Space.
+
+    Instagram tronca le didascalie lunghe e chiude con "… more" (o "… altro"
+    con il telefono in italiano). Quel marcatore finiva nel prompt e il
+    modello lo prendeva per contenuto: su jayde_lifts ha scritto "That
+    'more' at the end says it all". Via il marcatore, via i puntini di
+    troncamento, spazi normalizzati.
+    """
+    t = (testo or "").strip()
+    t = re.sub(r"(\s*(\.{3}|…)\s*)?(?<!\w)(more|altro|leggi tutto|read more)\s*$", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
 def _comment(
     device: DeviceFacade,
     my_username: str,
@@ -637,7 +712,7 @@ def _comment(
     session_state: SessionState,
     media_type: MediaType,
     target_username: Optional[str] = None,
-) -> bool:
+) -> Optional[bool]:
     if not session_state.check_limit(
         limit_type=session_state.Limit.COMMENTS, output=False
     ):
@@ -686,7 +761,7 @@ def _comment(
                                 target_username.lower()
                             ):
                                 cap_text = cap_text[len(target_username):].strip()
-                            post_caption = cap_text.strip()
+                            post_caption = _clean_caption(cap_text)
                             if post_caption:
                                 logger.info(
                                     f"[ai-comment] caption captured ({len(post_caption)} chars): "
@@ -843,7 +918,11 @@ def _comment(
 
                 logger.info("Go back to post view.")
                 device.back()
-                return comment_confirmed
+                # None = "Post" premuto ma commento non verificato: per le
+                # statistiche non conta, ma chi chiama NON deve commentare un
+                # altro post dello stesso profilo (il commento potrebbe
+                # esserci eccome).
+                return True if comment_confirmed else None
             else:
                 like_button = device.find(
                     resourceId=ResourceID.ROW_FEED_BUTTON_LIKE,
@@ -1320,6 +1399,102 @@ def _try_answer_sticker(
     return _try_answer_poll_sticker(device, args, session_state, author)
 
 
+# Pulsanti con cui si chiude un dialogo modale generico di Instagram o di
+# Android (errore di caricamento storia, avviso, richiesta). Solo testi
+# "neutri": niente "Allow", "Accept", "Follow" o simili, che cambierebbero
+# qualcosa sull'account.
+_DIALOG_BUTTON_RE = r"(?i)^(ok|okay|close|chiudi|dismiss|got it|ho capito|capito|not now|non ora|cancel|annulla)$"
+
+
+def _dismiss_dialog(device, nodi) -> bool:
+    """Se nel dump c'e' un pulsante di chiusura di un dialogo, lo preme.
+    Restituisce True se ha premuto qualcosa."""
+    btn = device.node_in_dump(nodi, text_regex=_DIALOG_BUTTON_RE)
+    if btn is None:
+        return False
+    logger.info(
+        f"Dialogo a schermo: premo '{btn['text']}' per chiuderlo. "
+        f"[{device.screen_summary(nodi)}]"
+    )
+    device.tap_node(btn, motivo=f"(pulsante '{btn['text']}')")
+    return True
+
+
+def _back_to_profile(device, tentativi: int = 4) -> bool:
+    """Riporta a schermo il profilo dopo il viewer delle storie (o un dialogo
+    rimasto aperto). Restituisce True se il profilo e' a schermo.
+
+    Il controllo degli sticker apre le storie del profilo. Se il viewer carica
+    lentamente (o la storia e' gia' sparita) il codice usciva con un solo
+    device.back() condizionato a un elemento che spesso non c'era ancora: il
+    viewer restava aperto e TUTTO quello che veniva dopo falliva -- griglia
+    dei post non trovata, "Maybe a private/empty profile", "Unable to find
+    action bar". In una giornata: ~33 profili validi, zero azioni.
+
+    ATTENZIONE a come si riconosce "sono sul profilo": NON con l'avatar in
+    alto. Dopo l'espansione della bio la pagina e' scrollata e l'avatar e'
+    fuori schermo: una prima versione di questa funzione lo cercava, non lo
+    trovava, e premeva indietro 4 volte uscendo da un profilo perfettamente
+    valido. Si usano elementi che restano visibili a qualunque scroll: il
+    titolo della action bar e le schede dei post.
+
+    Il riconoscimento passa dall'albero completo (dump), non dal selettore:
+    nel processo del bot il selettore a volte nega elementi presenti, e un
+    falso "profilo assente" qui costa un back di troppo. Con il dump in mano
+    si decide cosi':
+      - profilo presente -> fatto;
+      - viewer delle storie presente -> indietro;
+      - pulsante di un dialogo (OK/Chiudi/Non ora) -> lo si preme. Caso
+        visto su dj.lug (rb.coach): la storia non caricava, a schermo
+        restava solo "OK", il bot non lo riconosceva, scrollava a vuoto e
+        poi perdeva anche la lista follower;
+      - lista follower presente -> non siamo sul profilo ma su una schermata
+        nota: si lascia cosi' e si risponde False;
+      - dump vuoto (uiautomator in difficolta') -> si aspetta, senza toccare;
+      - altrimenti -> un back, perche' il dump dice con certezza che NON
+        siamo sul profilo.
+    """
+    profilo_re = "|".join([
+        ResourceID.ACTION_BAR_TITLE,
+        ResourceID.PROFILE_TABS_CONTAINER,
+        ResourceID.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB,
+        ResourceID.ROW_PROFILE_HEADER_IMAGEVIEW,
+    ])
+    viewer_re = "|".join([
+        ResourceID.REEL_VIEWER_MEDIA_CONTAINER,
+        ResourceID.REEL_VIEWER_TITLE,
+        ResourceID.REEL_VIEWER_ROOT,
+    ])
+    for _ in range(tentativi):
+        if device.find(resourceIdMatches=profilo_re).exists(Timeout.SHORT):
+            return True
+        nodi = device.nodes_from_dump()
+        if not nodi:
+            logger.debug("Screen dump empty: waiting before deciding anything.")
+            sleep(3)
+            continue
+        if device.node_in_dump(nodi, profilo_re) is not None:
+            logger.debug("Profile not seen by the selector but present in the dump.")
+            return True
+        if device.node_in_dump(nodi, viewer_re) is not None:
+            logger.debug("Story viewer still open: pressing back.")
+            device.back()
+            continue
+        if _dismiss_dialog(device, nodi):
+            continue
+        if device.node_in_dump(nodi, ResourceID.LIST) is not None:
+            logger.debug("Followers list on screen, not the profile: leaving it as is.")
+            return False
+        logger.debug(
+            "Neither profile nor story viewer recognized: pressing back once. "
+            f"[{device.screen_summary(nodi)}]"
+        )
+        device.back()
+    if device.find(resourceIdMatches=profilo_re).exists(Timeout.SHORT):
+        return True
+    return device.node_in_dump(device.nodes_from_dump(), profilo_re) is not None
+
+
 def _watch_stories(
     device: DeviceFacade,
     profile_view: ProfileView,
@@ -1327,6 +1502,7 @@ def _watch_stories(
     stories_percentage: int,
     args: Namespace,
     session_state: SessionState,
+    skip_stickers: bool = False,
 ) -> int:
     from GramAddict.core import ai_sticker
 
@@ -1335,6 +1511,13 @@ def _watch_stories(
         getattr(args, "sticker_check_percentage", None) or "0", None, 0
     )
     want_sticker = ai_sticker.is_enabled(args) and random_choice(sticker_pct)
+    # Il job blogger in modalita' commento promette "niente storie": vale
+    # anche per la ricerca del box domande, che apriva comunque le storie dei
+    # big (lucamastra_fit, 22/08) spendendo un minuto e rischiando di
+    # lasciare il viewer aperto. Sui big lo sticker non ha senso: non e' la
+    # loro storia il posto dove farsi notare.
+    if skip_stickers:
+        want_sticker = False
     if not want_watch and not want_sticker:
         return 0
     # Il limite WATCHES governa solo il "guardare": cercare un box domande non
@@ -1390,6 +1573,16 @@ def _watch_stories(
             story_frame = story_view.getStoryFrame()
             story_frame.wait(Timeout.MEDIUM)
             story_username = story_view.getUsername()
+            # Sull'emulatore il viewer delle storie ci mette anche 10-20 s a
+            # mostrare il titolo: con un solo tentativo l'username risultava
+            # vuoto, si prendeva il ramo "storia non disponibile" e, peggio, il
+            # viewer restava aperto (vedi _back_to_profile). Qualche secondo
+            # di attesa in piu' qui evita entrambe le cose.
+            for _ in range(4):
+                if story_username and story_username != "BUG!":
+                    break
+                sleep(3)
+                story_username = story_view.getUsername()
             if (
                 story_username == "BUG!"
                 or story_username.strip().casefold() == username.casefold()
@@ -1433,6 +1626,7 @@ def _watch_stories(
                         device.back()
                     else:
                         break
+                _back_to_profile(device)
                 session_state.check_limit(
                     limit_type=session_state.Limit.WATCHES, output=True
                 )
@@ -1449,8 +1643,10 @@ def _watch_stories(
                     "Story non disponibile (chiusa/sparita), salto le storie."
                 )
                 logger.debug(f"Story username: {story_username}")
-                if story_frame.exists():
-                    device.back()
+                # non basta un back condizionato a story_frame: se il viewer
+                # e' ancora in caricamento quel frame non c'e' e si resta
+                # dentro la storia. Si torna al profilo con verifica.
+                _back_to_profile(device)
                 return 0
         return 0
     else:

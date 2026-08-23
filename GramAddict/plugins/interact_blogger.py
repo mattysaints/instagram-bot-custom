@@ -29,8 +29,28 @@ _SIZE_FIELDS = (
     "min_posts",
     "last_post_max_age_days",
 )
-# potency_ratio non usa None come "nessun limite" ma le sentinelle 0 e 999
-_POTENCY_NEUTRAL = {"min_potency_ratio": 0, "max_potency_ratio": 999}
+# potency_ratio non usa None come "nessun limite" ma le sentinelle 0 e 999.
+# skip_following / skip_follower: sul job blogger in modalita' commento vanno
+# spenti. Il profilo personale SEGUE i big della sua lista (sono i suoi pari),
+# e con skip_following attivo il job apriva kuba, mauro_sassi, silvialikki,
+# li leggeva e concludeva "You follow @..., skip": zero commenti in una
+# sessione intera. Commentare sotto a chi gia' segui e' esattamente il
+# comportamento naturale, non un'anomalia da filtrare.
+_POTENCY_NEUTRAL = {
+    "min_potency_ratio": 0,
+    "max_potency_ratio": 999,
+    "skip_following": False,
+    "skip_follower": False,
+    # I big della lista `blogger` li ha scelti il cliente a mano: sono
+    # pre-approvati. I filtri di bio servono a scartare sconosciuti spammosi
+    # pescati dalle liste, non loro -- e quasi tutti i big hanno un "codice
+    # sconto" in bio: con blacklist_words attiva malatidipalestraofficial
+    # (193K) veniva scartato per la parola "sconto" e non commentato.
+    "blacklist_words": [],
+    "mandatory_words": [],
+    "skip_business": False,
+    "skip_if_link_in_bio": False,
+}
 
 
 @contextmanager
@@ -252,8 +272,11 @@ class InteractBloggerPostLikers(Plugin):
         interaction = partial(
             interact_with_user,
             my_username=self.session_state.my_username,
-            # sui big basta un like: serve solo ad aprire il post per commentare
-            likes_count="1" if comment_only else self.args.likes_count,
+            # Sui big il like serve solo ad aprire il post per commentare.
+            # Si apre fino a 3 post, ma interact_with_user si ferma al primo
+            # commento riuscito: il 3 serve per i post con i commenti
+            # limitati, dove prima il job chiudeva senza aver fatto nulla.
+            likes_count="3" if comment_only else self.args.likes_count,
             likes_percentage=likes_percentage,
             stories_percentage=stories_percentage,
             follow_percentage=follow_percentage,

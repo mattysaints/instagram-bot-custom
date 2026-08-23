@@ -146,7 +146,14 @@ def _seek_anchor_in_followers(
             first_username = None
             try:
                 for it in user_list:
-                    uname_view = it.child(index=1).child(index=0).child()
+                    # per id, con ripiego posizionale: vedi nota nel ciclo
+                    # principale (la catena per posizione fallisce su una
+                    # delle due istanze di uiautomator)
+                    uname_view = it.child(
+                        resourceId=self_obj.ResourceID.FOLLOW_LIST_USERNAME
+                    )
+                    if not uname_view.exists():
+                        uname_view = it.child(index=1).child(index=0).child()
                     if not uname_view.exists():
                         continue
                     name = uname_view.get_text()
@@ -237,6 +244,64 @@ def interact(
         followed=followed,
         scraped=scraped,
     )
+
+
+def _back_to_list(device, rid, tentativi: int = 3) -> bool:
+    """Dal profilo di un utente torna alla lista (follower/likers) da cui era
+    stato aperto, verificando di esserci arrivati.
+
+    Un solo back "alla cieca" bastava finche' il profilo era l'unica cosa
+    sopra la lista. Se pero' resta aperto un dialogo o il viewer delle
+    storie, quel back chiude solo quello, il bot crede di essere sulla lista
+    mentre e' ancora sul profilo, e la sorgente si perde ("Could not get item
+    height", "Cannot find the list of followers"). Qui: indietro, poi si
+    guarda l'albero completo; se c'e' ancora il profilo (schede dei post,
+    avatar) si preme di nuovo, al massimo `tentativi` volte.
+    """
+    for _ in range(tentativi):
+        device.back()
+        nodi = device.nodes_from_dump()
+        if not nodi:
+            return False
+        # ATTENZIONE all'ordine: anche la pagina del profilo contiene un
+        # android:id/list (e' lo scroller dei contenuti, visto sul dump di
+        # _bendg_). "C'e' la lista" da solo non dice nulla: prima si esclude
+        # il profilo, poi si accetta la lista.
+        if _on_profile(device, rid, nodi):
+            logger.debug("Still on the profile after back: pressing back again.")
+            continue
+        if device.node_in_dump(nodi, rid.LIST) is not None:
+            return True
+        # ne' lista ne' profilo: schermata sconosciuta, meglio fermarsi
+        # e lasciare che il recupero della lista decida
+        logger.debug(
+            "Back pressed but neither list nor profile on screen. "
+            f"[{device.screen_summary(nodi)}]"
+        )
+        return False
+    return False
+
+
+def _on_profile(device, rid, nodi) -> bool:
+    """True se nel dump ci sono gli elementi propri della pagina profilo
+    (schede dei post, avatar): quelli che una lista follower/likers non ha."""
+    profilo_re = "|".join([
+        rid.PROFILE_TABS_CONTAINER,
+        rid.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB,
+        rid.ROW_PROFILE_HEADER_IMAGEVIEW,
+    ])
+    return device.node_in_dump(nodi, profilo_re) is not None
+
+
+def _list_in_dump(device, rid, nodi):
+    """Bounds della lista follower/likers nel dump, oppure None se non c'e'
+    o se la schermata e' in realta' un profilo (che ha un suo android:id/list)."""
+    if _on_profile(device, rid, nodi):
+        return None
+    b = device.bounds_from_dump(rid.LIST, nodi)
+    if b is not None and (b["bottom"] - b["top"]) > 200:
+        return b
+    return None
 
 
 def handle_blogger(
@@ -662,7 +727,7 @@ def handle_likers(
                     if element_opened:
                         opened = True
                         logger.info("Back to likers list.")
-                        device.back()
+                        _back_to_list(device, self.ResourceID)
 
             except IndexError:
                 logger.info(
@@ -1315,8 +1380,19 @@ def iterate_over_followers(
                     continue
                 if cur_row_height < row_height:
                     continue
-                user_info_view = item.child(index=1)
-                user_name_view = user_info_view.child(index=0).child()
+                # Prima per resource-id, poi per posizione. La catena
+                # child(index=1).child(index=0).child() dipende da come
+                # l'istanza di uiautomator numera i figli: sull'emulatore del
+                # profilo personale restituiva "non esiste" su OGNI riga, con
+                # un albero identico a quello dell'altro emulatore dove invece
+                # funzionava. Risultato: 4 sorgenti su 4 "vuote" e zero azioni.
+                # L'id follow_list_username e' lo stesso su entrambi.
+                user_name_view = item.child(
+                    resourceId=self.ResourceID.FOLLOW_LIST_USERNAME
+                )
+                if not user_name_view.exists():
+                    user_info_view = item.child(index=1)
+                    user_name_view = user_info_view.child(index=0).child()
                 if not user_name_view.exists():
                     # Una riga senza username NON implica "fine lista": dopo uno
                     # skip profondo o un anchor-miss, la prima riga visibile puo'
@@ -1414,7 +1490,7 @@ def iterate_over_followers(
                             return
                     if element_opened:
                         logger.info("Back to followers list")
-                        device.back()
+                        _back_to_list(device, self.ResourceID)
 
         except IndexError:
             logger.info(
@@ -1484,7 +1560,12 @@ def iterate_over_followers(
                     resourceId=self.ResourceID.LIST,
                     className=ClassName.LIST_VIEW,
                 )
-                if lv.exists():
+                # exists(MEDIUM), non exists(): mentre Instagram carica la
+                # pagina successiva della lista il contenitore sparisce per
+                # un attimo. Con il controllo istantaneo i 6 fling venivano
+                # saltati in blocco (1 secondo in tutto nel log), la
+                # schermata riletta era la stessa e la sorgente abbandonata.
+                if lv.exists(Timeout.MEDIUM):
                     for _f in range(hz_flings_per_jump):
                         try:
                             lv.fling(Direction.DOWN)
@@ -1543,15 +1624,49 @@ def iterate_over_followers(
             list_view = device.find(
                 resourceId=self.ResourceID.LIST, className=ClassName.LIST_VIEW
             )
-            if not list_view.exists():
+            # stessa cosa: la lista "sparisce" per un attimo quando Instagram
+            # carica altre righe; un controllo istantaneo la dava per persa e
+            # chiudeva la sorgente dopo UN profilo (12 volte in un pomeriggio)
+            if not list_view.exists(Timeout.MEDIUM):
+                # Il selettore nega la lista, ma l'albero completo la riporta?
+                # E' il caso visto in smoke: nessun back da fare, la lista e'
+                # li'. Si scrolla a mano dentro i suoi bounds e si rilegge la
+                # schermata al giro successivo del while. (Se invece siamo
+                # rimasti sul profilo, _list_in_dump dice None: li' l'unica
+                # cosa giusta e' il back.)
+                nodi = device.nodes_from_dump()
+                b = _list_in_dump(device, self.ResourceID, nodi)
+                if b is not None:
+                    logger.warning(
+                        "[recover] List not seen by the selector but present in the "
+                        f"hierarchy dump at {b}: swiping manually instead of pressing back."
+                    )
+                    x = (b["left"] + b["right"]) // 2
+                    device.swipe_points(x, b["bottom"] - 120, x, b["top"] + 120)
+                    random_sleep(2, 3, modulable=False)
+                    continue
                 logger.error(
-                    "Cannot find the list of followers. Trying to press back again."
+                    "Cannot find the list of followers. Trying to press back again. "
+                    f"[{device.screen_summary(nodi)}]"
                 )
                 device.back()
                 list_view = device.find(
                     resourceId=self.ResourceID.LIST,
                     className=ClassName.LIST_VIEW,
                 )
+                # Dopo il back la lista puo' metterci qualche secondo a
+                # ricomparire, e il selettore puo' negarla anche quando c'e'
+                # (dj.lug, rb.coach 22/08: back dal profilo, lista a schermo,
+                # controllo istantaneo fallito, sorgente chiusa dopo 8
+                # profili). Si aspetta, e si guarda l'albero completo.
+                if not list_view.exists(Timeout.MEDIUM):
+                    if _list_in_dump(device, self.ResourceID, device.nodes_from_dump()) is not None:
+                        logger.warning(
+                            "[recover] List back on screen (seen in the hierarchy "
+                            "dump): resuming the iteration."
+                        )
+                        random_sleep(2, 3, modulable=False)
+                        continue
 
             # Se la lista NON c'e' nemmeno dopo il back (tipico quando le storie
             # hanno spostato la view), NON scrollare una lista morta: era la
