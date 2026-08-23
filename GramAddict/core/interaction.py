@@ -702,8 +702,30 @@ def _clean_caption(testo: str) -> str:
     """
     t = (testo or "").strip()
     t = re.sub(r"(\s*(\.{3}|…)\s*)?(?<!\w)(more|altro|leggi tutto|read more)\s*$", "", t, flags=re.IGNORECASE)
+    # Via le menzioni: il modello le ripete, e un commento che nomina (o
+    # peggio tagga) un terzo account su un post altrui e' esattamente cio'
+    # che fa sembrare spam un profilo. Visto due volte il 23/08:
+    # "...costanza del percorso con @sustainablebb" e "quella vista da
+    # melijaz_pereira369...". La menzione non aggiunge niente al senso.
+    t = re.sub(r"@[A-Za-z0-9._]+", "", t)
     t = re.sub(r"\s+", " ", t).strip()
     return t
+
+
+def _ripulisci_commento(testo: str) -> str:
+    """Ultimo controllo sul commento prima di scriverlo. Se contiene la
+    menzione di un altro account lo si scarta e basta: toglierla lascerebbe
+    una frase monca ("...la costanza del percorso con"), che e' peggio del
+    commento di riserva. Chi chiama, davanti a una stringa vuota, usa
+    comments_list.txt."""
+    t = (testo or "").strip()
+    if "@" not in t:
+        return t
+    logger.info(
+        f"[ai-comment] scartato, menziona un altro account: '{t}'. "
+        "Uso il commento di riserva."
+    )
+    return ""
 
 
 _FOLLOW_DAL_DUMP = (
@@ -834,6 +856,7 @@ def _comment(
                             target_username=target_username,
                             media_type=getattr(media_type, "name", str(media_type)),
                         )
+                        comment = _ripulisci_commento(comment)
                         if comment:
                             logger.info(
                                 f"[ai-comment] generated: '{comment}'",
