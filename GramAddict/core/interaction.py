@@ -303,7 +303,9 @@ def interact_with_user(
 
             like_succeed = False
             if opened_post_view is None:
-                save_crash(device)
+                # navigateToPost ha gia' scritto perche': un post che non si
+                # apre e' un post saltato, non un crash da mettere in uno zip.
+                logger.info("Post non aperto: passo al successivo.")
                 continue
             already_liked, _ = opened_post_view._is_post_liked()
             if already_liked:

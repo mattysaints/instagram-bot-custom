@@ -2021,7 +2021,34 @@ class PostsGridView:
         media_type, obj_count = PostsViewList.detect_media_type(content_desc)
         post_view.click()
 
-        return OpenedPostView(self.device), media_type, obj_count
+        # Verificare che il post si sia APERTO davvero: prima il click veniva
+        # dato per buono, e se non apriva (cella non cliccabile, griglia che
+        # scorre sotto il dito, post rimosso) il bot proseguiva sulla griglia
+        # del profilo -- "It's a photo", "Watching photo", e poi like fallito
+        # perche' il contenitore del post non c'era mai stato (rb.coach,
+        # 23/08 13:19, su @kronos_palestra). Un secondo tentativo, poi si
+        # lascia perdere il post: e' un post saltato, non un guasto.
+        for tentativo in (1, 2):
+            if self._post_aperto():
+                return OpenedPostView(self.device), media_type, obj_count
+            if tentativo == 1:
+                logger.debug("Il post non si e' aperto al primo click: riprovo.")
+                post_view.click()
+        logger.warning(
+            "Il post non si e' aperto: lo salto. "
+            f"[{self.device.screen_summary(self.device.nodes_from_dump(), max_testi=6, max_ids=12)}]"
+        )
+        return None, None, None
+
+    def _post_aperto(self) -> bool:
+        """True se siamo nella vista di un post aperto: c'e' il contenitore
+        del media (chiesto al selettore e, se nega, all'albero completo)."""
+        contenitore = self.device.find(
+            resourceIdMatches=case_insensitive_re(ResourceID.MEDIA_CONTAINER)
+        )
+        if contenitore.exists(Timeout.MEDIUM):
+            return True
+        return self.device.bounds_from_dump(ResourceID.MEDIA_CONTAINER) is not None
 
 
 class ProfileView(ActionBarView):
