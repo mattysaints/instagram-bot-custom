@@ -96,6 +96,11 @@ class ResourceID:
         self.REEL_RING = f"{APP_ID}:id/reel_ring"
         self.REEL_VIEWER_IMAGE_VIEW = f"{APP_ID}:id/reel_viewer_image_view"
         self.REEL_VIEWER_MEDIA_CONTAINER = f"{APP_ID}:id/reel_viewer_media_container"
+        # Radice del viewer delle storie: e' l'unico elemento presente anche
+        # mentre la storia sta ancora caricando (IG 300, dump dal vivo del
+        # 22/08: solo reel_viewer_root e reel_viewer_front_avatar, niente
+        # media_container ne' title). Serve a riconoscere il viewer "vuoto".
+        self.REEL_VIEWER_ROOT = f"{APP_ID}:id/reel_viewer_root"
         self.REEL_VIEWER_TIMESTAMP = f"{APP_ID}:id/reel_viewer_timestamp"
         self.REEL_VIEWER_TITLE = f"{APP_ID}:id/reel_viewer_title"
         self.RESTRICTED_ACCOUNT_TITLE = f"{APP_ID}:id/restricted_account_title"

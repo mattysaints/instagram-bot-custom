@@ -5,7 +5,7 @@ from enum import Enum, auto
 from inspect import stack
 from os import getcwd, listdir
 from random import randint, uniform
-from re import search
+from re import compile as re_compile, search
 from subprocess import PIPE, run
 from time import sleep
 from typing import Optional
@@ -115,6 +115,39 @@ class Mode(Enum):
     PASTE = auto()
 
 
+_LOGIN_TEXT_RE = re_compile(
+    r"(?i)^(log in|login|accedi|forgot password\?|password dimenticata\?|"
+    r"hai dimenticato la password\?|"
+    # schermata "scegli l'account" che IG 300 mostra PRIMA della password
+    # quando la sessione e' scaduta (personal, 22/08 19:53: 'Continue',
+    # 'Use another profile', 'Create new account')
+    r"use another profile|usa un altro profilo|create new account|"
+    r"crea (un )?nuovo account)$"
+)
+_CHOOSER_TEXT_RE = re_compile(r"(?i)^(use another profile|usa un altro profilo)$")
+_CONTINUE_TEXT_RE = r"(?i)^(continue|continua)$"
+
+
+def _is_secret_node(n: dict, schermata_login: bool = False) -> bool:
+    """True se il testo del nodo va mascherato nei log: campo marcato
+    password="true" dal dump, id che parla di password, oppure -- su una
+    schermata di login -- qualunque campo di testo (con la password resa
+    visibile dall'occhio l'attributo password torna false e l'id puo' non
+    aiutare)."""
+    if n.get("password") or "password" in n.get("resource_id", "").lower():
+        return True
+    return schermata_login and n.get("cls", "").endswith("EditText")
+
+
+def _looks_like_login(nodi: list) -> bool:
+    """Schermata di login di Instagram: c'e' un campo password oppure i
+    testi tipici (Log in / Forgot password?)."""
+    return any(
+        n.get("password") or _LOGIN_TEXT_RE.match(n.get("text", "").strip())
+        for n in nodi
+    )
+
+
 class DeviceFacade:
     def __init__(self, device_id, app_id):
         self.device_id = device_id
@@ -147,6 +180,213 @@ class DeviceFacade:
             return func(self, **kwargs)
 
         return wrapper
+
+    def nodes_from_dump(self, xml: Optional[str] = None) -> list:
+        """Legge l'albero COMPLETO della schermata e lo restituisce come lista
+        di dict: resource_id, text, desc, cls, package, clickable, bounds.
+
+        Perche' esiste: nel processo del bot le query dei selettori
+        (exists, count) a volte negano elementi che sono a schermo -- e' stato
+        visto sull'avatar del profilo, sul contenitore delle schede dei post,
+        sulla lista follower -- mentre dump_hierarchy, che legge l'albero di
+        accessibilita' per intero, li riporta sempre. Un solo dump serve a
+        tutte le domande su quella schermata (c'e' il profilo? c'e' un
+        dialogo? qual e' la descrizione del primo post?), per questo la
+        lettura e' separata dalla ricerca.
+        Lista vuota = dump fallito o schermata senza nodi: chi chiama non deve
+        dedurne "non c'e' niente" e premere tasti a caso.
+        """
+        import html as _html
+        import re as _re
+
+        if xml is None:
+            if self is None:
+                return []
+            try:
+                xml = self.deviceV2.dump_hierarchy(compressed=False)
+            except Exception as e:
+                logger.debug(f"nodes_from_dump: dump failed: {e}")
+                return []
+        nodi = []
+        for m in _re.finditer(r"<node[^>]*>", xml):
+            node = m.group(0)
+
+            def attr(nome):
+                a = _re.search(rf'(?<![\w-]){nome}="([^"]*)"', node)
+                return _html.unescape(a.group(1)) if a else ""
+
+            b = _re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+            bounds = None
+            if b:
+                l, t, r, btm = (int(x) for x in b.groups())
+                bounds = {"left": l, "top": t, "right": r, "bottom": btm}
+            nodi.append(
+                {
+                    "resource_id": attr("resource-id"),
+                    "text": attr("text"),
+                    "desc": attr("content-desc"),
+                    "cls": attr("class"),
+                    "package": attr("package"),
+                    "clickable": attr("clickable") == "true",
+                    # campo password (attributo standard del dump): il suo
+                    # testo non deve mai finire nei log, vedi screen_summary
+                    "password": attr("password") == "true",
+                    "bounds": bounds,
+                }
+            )
+        return nodi
+
+    @staticmethod
+    def node_in_dump(nodi: list, resource_id_regex: Optional[str] = None,
+                     text_regex: Optional[str] = None):
+        """Primo nodo della lista che soddisfa i criteri dati (fullmatch),
+        oppure None. resource_id_regex va scritto con l'id completo
+        (package:id/nome); piu' id si uniscono con '|'."""
+        import re as _re
+
+        pat_id = _re.compile(resource_id_regex) if resource_id_regex else None
+        pat_tx = _re.compile(text_regex) if text_regex else None
+        for n in nodi:
+            if pat_id and not pat_id.fullmatch(n["resource_id"]):
+                continue
+            if pat_tx and not pat_tx.fullmatch(n["text"]):
+                continue
+            if n["bounds"] is None:
+                continue
+            return n
+        return None
+
+    def bounds_from_dump(self, resource_id_regex: str, nodi: Optional[list] = None):
+        """Bounds {left, top, right, bottom} del primo elemento con quel
+        resource-id nell'albero completo, oppure None. Ripiego per i punti in
+        cui un falso "non c'e'" del selettore costa un profilo o una sorgente
+        intera (vedi nodes_from_dump)."""
+        n = self.node_in_dump(
+            nodi if nodi is not None else self.nodes_from_dump(), resource_id_regex
+        )
+        return n["bounds"] if n else None
+
+    def desc_from_dump(self, resource_id_regex: str, nodi: Optional[list] = None) -> str:
+        """content-desc del primo elemento con quel resource-id nell'albero
+        completo, oppure stringa vuota."""
+        n = self.node_in_dump(
+            nodi if nodi is not None else self.nodes_from_dump(), resource_id_regex
+        )
+        return n["desc"] if n else ""
+
+    def box_from_dump(self, resource_id_regex: str, nodi=None):
+        """Come bounds_from_dump, ma restituisce un oggetto con click() e
+        double_click() (DumpBox) utilizzabile al posto di una View quando il
+        selettore nega un elemento che l'albero completo riporta. None se
+        l'elemento non c'e' nemmeno nel dump."""
+        b = self.bounds_from_dump(resource_id_regex, nodi)
+        return None if b is None else DeviceFacade.DumpBox(self, b)
+
+    class DumpBox:
+        """Surrogato minimo di View per un nodo visto solo nel dump: tocca
+        dentro i suoi bounds con un po' di casualita', come fa View."""
+
+        def __init__(self, device, bounds: dict):
+            self.device = device
+            self.bounds = bounds
+
+        def exists(self, *args, **kwargs) -> bool:
+            return True
+
+        def get_bounds(self) -> dict:
+            return self.bounds
+
+        def _random_point(self, padding: float = 0.3):
+            b = self.bounds
+            dx = int(padding * (b["right"] - b["left"]))
+            dy = int(padding * (b["bottom"] - b["top"]))
+            return (
+                int(uniform(b["left"] + dx, b["right"] - dx)),
+                int(uniform(b["top"] + dy, b["bottom"] - dy)),
+            )
+
+        def click(self, *args, **kwargs):
+            x, y = self._random_point()
+            logger.debug(f"Click from dump in ({x},{y}). Surface: {self.bounds}")
+            self.device.deviceV2.click(x, y)
+            DeviceFacade.sleep_mode(SleepTime.DEFAULT)
+
+        def double_click(self, *args, **kwargs):
+            x, y = self._random_point()
+            t = uniform(0.050, 0.140)
+            logger.debug(f"Double click from dump in ({x},{y}) with t={int(t*1000)}ms. Surface: {self.bounds}")
+            self.device.deviceV2.double_click(x, y, duration=t)
+            DeviceFacade.sleep_mode(SleepTime.DEFAULT)
+
+    def tap_node(self, nodo: dict, motivo: str = ""):
+        """Tocca il centro dei bounds di un nodo letto dal dump."""
+        b = nodo["bounds"]
+        x, y = (b["left"] + b["right"]) // 2, (b["top"] + b["bottom"]) // 2
+        logger.debug(f"Tap from dump in ({x},{y}) {motivo}".rstrip())
+        self.deviceV2.click(x, y)
+        random_sleep()
+
+    @staticmethod
+    def is_login_screen(nodi: list) -> bool:
+        """True se il dump e' la schermata di login di Instagram (sessione
+        scaduta): il bot non deve inserire credenziali ne' premere back."""
+        return _looks_like_login(nodi)
+
+    @staticmethod
+    def account_chooser_continue(nodi: list):
+        """Nella schermata "scegli l'account" (sessione scaduta, account
+        salvato) restituisce il nodo del pulsante Continue/Continua, altrimenti
+        None. Toccarlo non inserisce credenziali: riprende l'account salvato
+        e, se il cookie vale ancora, evita del tutto la password."""
+        if not any(_CHOOSER_TEXT_RE.match(n.get("text", "").strip()) for n in nodi):
+            return None
+        return DeviceFacade.node_in_dump(nodi, text_regex=_CONTINUE_TEXT_RE)
+
+    @staticmethod
+    def mask_secrets_in_xml(xml: str) -> str:
+        """Oscura nel dump grezzo il testo dei campi password (e, su una
+        schermata di login, di ogni campo di testo): il dump finisce negli
+        zip dei crash, che non devono contenere la password in chiaro."""
+        import re as _re
+
+        login = _looks_like_login(DeviceFacade.nodes_from_dump(None, xml))
+
+        def maschera(m):
+            node = m.group(0)
+            rid = _re.search(r'(?<![\w-])resource-id="([^"]*)"', node)
+            cls = _re.search(r'(?<![\w-])class="([^"]*)"', node)
+            segreto = (
+                'password="true"' in node
+                or (rid is not None and "password" in rid.group(1).lower())
+                or (login and cls is not None and cls.group(1).endswith("EditText"))
+            )
+            if not segreto:
+                return node
+            return _re.sub(r'(?<![\w-])text="[^"]*"', 'text="***"', node)
+
+        return _re.sub(r"<node[^>]*>", maschera, xml)
+
+    @staticmethod
+    def screen_summary(nodi: list, max_testi: int = 12, max_ids: int = 30) -> str:
+        """Riassunto leggibile di una schermata, per i log di diagnosi: quali
+        package, quali testi, quali resource-id (senza il prefisso del
+        package). Serve quando il bot non riconosce dove si trova: senza
+        questa riga la causa si indovina soltanto."""
+        pacchetti = sorted({n["package"] for n in nodi if n["package"]})
+        # Mai scrivere nel log il contenuto di un campo password: il 22/08 la
+        # schermata di login del personal e' finita nel riepilogo con la
+        # password in chiaro (l'utente l'aveva resa visibile con l'occhio).
+        # Si maschera sia il campo marcato password="true" dal dump, sia
+        # qualunque campo il cui id parli di password (a visibilita' attiva
+        # l'attributo torna false, ma l'id resta).
+        login = _looks_like_login(nodi)
+        testi = [
+            "***" if _is_secret_node(n, login) else n["text"][:60]
+            for n in nodi
+            if n["text"].strip()
+        ][:max_testi]
+        ids = sorted({n["resource_id"].split(":id/")[-1] for n in nodi if n["resource_id"]})[:max_ids]
+        return f"packages={pacchetti} texts={testi} ids={ids}"
 
     @check_if_ig_is_opened
     def find(
@@ -226,10 +466,11 @@ class DeviceFacade:
         else:
             self.deviceV2.screenshot(path)
 
-    def dump_hierarchy(self, path):
-        xml_dump = self.deviceV2.dump_hierarchy()
+    def dump_hierarchy(self, path, xml_dump=None):
+        if xml_dump is None:
+            xml_dump = self.deviceV2.dump_hierarchy()
         with open(path, "w", encoding="utf-8") as outfile:
-            outfile.write(xml_dump)
+            outfile.write(DeviceFacade.mask_secrets_in_xml(xml_dump))
 
     def press_power(self):
         self.deviceV2.press("power")
