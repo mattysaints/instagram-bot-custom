@@ -340,6 +340,34 @@ class SessionState:
             min(time_left_list) if len(time_left_list) > 1 else time_left_list[0],
         )
 
+    @staticmethod
+    def seconds_to_window_end(working_hours, delta_sec):
+        """Secondi che mancano alla fine della finestra di working-hours in
+        cui siamo ADESSO (con lo stesso delta usato da inside_working_hours),
+        oppure None se non siamo in nessuna finestra o se il config e' in
+        modalita' "tutto il giorno". Serve a fare UNA sessione per finestra:
+        se la sessione finisce prima (limiti raggiunti) il bot aspetta la
+        finestra successiva invece di ricominciare nella stessa."""
+        now = datetime.now()
+        delta = timedelta(seconds=delta_sec)
+        today = now.strftime("%Y-%m-%d")
+        for n in working_hours:
+            inf = datetime.strptime(f"{n.split('-')[0]} {today}", "%H.%M %Y-%m-%d") + delta
+            sup = datetime.strptime(f"{n.split('-')[1]} {today}", "%H.%M %Y-%m-%d") + delta
+            if sup - inf + timedelta(minutes=1) in (timedelta(days=1), timedelta(days=0)):
+                return None
+            if sup < inf:
+                # finestra a cavallo della mezzanotte (es. 22.40-00.06)
+                if now >= inf:
+                    sup += timedelta(days=1)
+                elif now <= sup:
+                    inf -= timedelta(days=1)
+                else:
+                    continue
+            if inf <= now <= sup:
+                return (sup - now).total_seconds()
+        return None
+
     def is_finished(self):
         return self.finishTime is not None
 

@@ -86,6 +86,17 @@ def _ensure_ig_foreground(device, configs, max_attempts: int = 4) -> bool:
         return False
 
 
+def _max_time_delta_sec(time_delta) -> int:
+    """Slittamento massimo (in secondi) che set_time_delta puo' applicare alle
+    working-hours: il limite alto di 'time-delta' (es. '0-15' -> 15 min) piu'
+    i 59 secondi casuali che aggiunge sempre."""
+    try:
+        minuti = int(str(time_delta).split("-")[-1])
+    except (TypeError, ValueError):
+        minuti = 0
+    return abs(minuti) * 60 + 59
+
+
 def start_bot(**kwargs):
     # Logging initialization
     logger = logging.getLogger(__name__)
@@ -126,7 +137,11 @@ def start_bot(**kwargs):
     load_views(configs)
 
     if not configs.args or not check_adb_connection():
-        return
+        # Uscita con codice diverso da zero: senza device non e' una giornata
+        # finita, e' un guasto. Con return (exit 0) il watchdog lo scambiava
+        # per un'uscita regolare e rilanciava ogni 15 minuti invece di
+        # applicare il backoff.
+        raise SystemExit(2)
 
     if len(configs.enabled) < 1:
         logger.error(
@@ -493,6 +508,28 @@ def start_bot(**kwargs):
                 time_left = (
                     get_value(configs.args.repeat, "Sleep for {} minutes.", 180) * 60
                 )
+                # UNA sessione per finestra di working-hours. Se la sessione
+                # e' finita prima della fine della finestra (limiti
+                # raggiunti), con un repeat breve il bot ricomincerebbe
+                # nella stessa finestra: si aspetta invece che la finestra
+                # chiuda. Il margine copre il time-delta, che viene
+                # ri-estratto a ogni giro e potrebbe allungare la finestra.
+                alla_fine = SessionState.seconds_to_window_end(
+                    configs.args.working_hours, configs.args.time_delta_session
+                )
+                if alla_fine is not None:
+                    margine = (
+                        _max_time_delta_sec(configs.args.time_delta)
+                        - configs.args.time_delta_session
+                        + random.randint(30, 120)
+                    )
+                    if alla_fine + margine > time_left:
+                        time_left = alla_fine + margine
+                        logger.info(
+                            "One session per working-hours window: the current "
+                            f"window ends in {int(alla_fine // 60)} minutes, the next "
+                            "session will start in the next window."
+                        )
                 print_telegram_reports(
                     configs,
                     telegram_reports_at_end,
