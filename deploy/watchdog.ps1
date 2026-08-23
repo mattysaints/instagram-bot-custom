@@ -38,16 +38,17 @@ $StatusFile = Join-Path $LogDir 'status.json'
 # Un account per emulatore. I serial devono combaciare con il campo `device:`
 # nei rispettivi config.yml, altrimenti il bot parla al device sbagliato.
 #
-# OffsetMin sfalsa la PRIMA partenza del secondo account. Serve perche' su un
-# mini PC a 4 core i due emulatori che lavorano insieme si contendono la CPU.
-# run-dynamic.py costruisce le finestre a partire dall'ORA DI LANCIO (sessioni
-# da 90 min ogni 3 h, quindi ciascun account lavora meta' del tempo): lanciando
-# il secondo 90 minuti dopo, i due si alternano invece di sovrapporsi.
-# Non ha senso invece sfalsare working-hours nei config.yml: quella riga viene
-# riscritta da run-dynamic.py a ogni lancio.
+# OffsetMin sfalsa la PRIMA partenza del secondo account, perche' su un mini
+# PC a 4 core i due emulatori che lavorano insieme si contendono la CPU.
+# Con i config attuali (total-sessions: -1, finestre FISSE alternate tra i
+# due account, vedi accounts/*/config.yml) l'alternanza giornaliera la danno
+# le finestre stesse e il processo non esce mai da solo: qui si gestiscono
+# solo i crash. L'offset resta per il primo avvio e per eventuali config a
+# finestre dinamiche (total-sessions: N), dove run-dynamic.py costruisce le
+# finestre dall'ora di lancio.
 $Accounts = @(
-    @{ Name = 'rb.coach';                Avd = 'bot_rb';   Serial = 'emulator-5554'; OffsetMin = 0 },
-    @{ Name = 'roberto_buonomo_ifbbpro'; Avd = 'bot_pers'; Serial = 'emulator-5556'; OffsetMin = 90 }
+    @{ Name = 'rb.coach';                Avd = 'rbcoach';    Serial = 'emulator-5554'; OffsetMin = 0 },
+    @{ Name = 'roberto_buonomo_ifbbpro'; Avd = 'robertobuo'; Serial = 'emulator-5556'; OffsetMin = 90 }
 )
 
 function Write-Log {

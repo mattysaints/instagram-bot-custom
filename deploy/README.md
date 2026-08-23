@@ -12,7 +12,10 @@ ripartenza automatica dopo un blackout e controllo da telefono.
 | `remote_control.py` | bot Telegram: stato, stop/start, log, screenshot, `/cmd` |
 | `install-autostart.ps1` | registra i due task pianificati |
 | `install-remote-shell.ps1` | SSH + Tailscale: terminale vero da remoto |
-| `common.ps1` | funzioni condivise (ricerca del virtualenv) |
+| `install-remote-desktop.ps1` | desktop remoto (RDP) limitato alla rete privata |
+| `view-emulator.ps1` | apre lo schermo di un emulatore e lo rende cliccabile |
+| `status.ps1` | riassunto in una schermata: task, emulatori, account, log |
+| `common.ps1` | funzioni condivise (virtualenv, strumenti dell'SDK) |
 
 ## Il vincolo da cui dipende tutto
 
@@ -23,6 +26,44 @@ che non ha desktop: l'emulatore non parte e non dà nemmeno un errore chiaro.
 Per questo i task partono **al logon**, e serve che Windows faccia il login da
 solo dopo un riavvio. Senza autologon, dopo un blackout il PC resta alla
 schermata di accesso e il bot non riparte.
+
+### Il nodo password contro autologon
+
+I due requisiti — *entrare da remoto* e *ripartire da solo* — tirano la
+password in direzioni opposte, e conviene deciderlo prima di installare
+qualsiasi cosa.
+
+| | account **senza** password | account **con** password |
+|---|---|---|
+| Logon automatico all'avvio | sì, Windows lo fa da solo | no, va configurato |
+| RDP | **rifiutato da Windows** | funziona |
+| SSH con password | rifiutato | funziona |
+| SSH con chiave | funziona | funziona |
+
+Windows blocca gli accessi *di rete* agli account con password vuota: è una
+policy predefinita, e il collegamento fallisce **senza spiegare il motivo**.
+Chi cerca la causa nel firewall o in Tailscale ci perde un pomeriggio.
+
+La configurazione da tenere è quindi **password + autologon**, in
+quest'ordine, mai una sola delle due:
+
+```powershell
+net user %USERNAME% *          # 1. metti la password
+                               # 2. Sysinternals Autologon, subito dopo
+```
+
+[Sysinternals Autologon](https://learn.microsoft.com/sysinternals/downloads/autologon)
+la salva cifrata (LSA secret) invece che in chiaro nel registro, che è quello
+che farebbe `netplwiz`.
+
+Se salti il passo 2, dopo un blackout il mini PC si riaccende ma resta fermo
+alla schermata di accesso: nessuna sessione desktop, nessun emulatore, e il bot
+non lavora finché qualcuno non entra fisicamente o via RDP.
+
+E c'è un gradino ancora prima, che nessuno script può toccare: **l'accensione
+automatica al ritorno della corrente** si imposta nel BIOS/UEFI, voce *Restore
+on AC Power Loss* / *AC Back*, da mettere su **Power On**. Senza quella, dopo
+un blackout il mini PC resta semplicemente spento.
 
 ## Prima di tutto: la macchina ce la fa?
 
@@ -43,7 +84,9 @@ dalla scheda del venditore non si può sapere.
 
 ## Installazione
 
-**1. Virtualenv e dipendenze** — vedi [SETUP.md](../SETUP.md). Gli script si
+**1. Virtualenv e dipendenze** — vedi [SETUP.md](../SETUP.md). Sul mini PC è
+già fatto: **Python 3.12.10** e `.venv` nella radice del repo. Non salire a
+3.13+ senza prima leggere la nota sulle pin in SETUP.md. Gli script si
 aspettano `.venv\` (o `venv\`) nella radice del repo. Se stai lavorando in un
 **git worktree**, che non ha un venv proprio, indica quello del clone
 principale:
@@ -80,7 +123,19 @@ Metti in conto anche il disco: una cartella AVD in esercizio arriva
 tranquillamente a **~30 GB**, quindi due sono ~60 GB. E l'emulatore si rifiuta
 di partire con meno di 5 GB liberi.
 
-I nomi degli AVD attesi da `watchdog.ps1` sono `bot_rb` e `bot_pers`. Se ne usi
+> **Sul mini PC gli AVD esistono già e si chiamano `rbcoach` (→ `rb.coach`,
+> `emulator-5554`) e `robertobuo` (→ `roberto_buonomo_ifbbpro`,
+> `emulator-5556`).** `watchdog.ps1` è già allineato a questi nomi. Su
+> entrambi c'è Instagram 300.0.0.29.110, il login è fatto e FastInputIME è la
+> tastiera predefinita. Il 22/08/2026 sono stati riportati ai valori della
+> tabella (2 core, 720×1280 a 320 dpi, `swiftshader_indirect`, cold boot): con
+> 4 core e 1080×2280 l'uno, i due insieme chiedevano il doppio della CPU
+> disponibile e il 5556 era morto da solo mentre si limitava ad aprire profili.
+> Dopo la modifica il boot di entrambi in parallelo è sceso da 3-4 minuti a
+> 80 secondi. I vecchi `config.ini` sono salvati accanto come
+> `config.ini.bak-2026-08-22`.
+
+I nomi degli AVD attesi da `watchdog.ps1` erano `bot_rb` e `bot_pers`. Se ne usi
 altri, cambiali nell'elenco `$Accounts` in cima al file.
 
 **3. Allinea i serial.** Il primo emulatore avviato prende `emulator-5554`, il
@@ -156,6 +211,20 @@ powercfg /change monitor-timeout-ac 10
 ```
 
 Lo schermo può spegnersi: è la sospensione del sistema che va evitata.
+(`install-remote-desktop.ps1` fa già questi tre comandi.)
+
+**9. Accesso da remoto**, in ordine di utilità:
+
+```powershell
+.\deploy\install-remote-shell.ps1   -InstallTailscale   # terminale (SSH)
+.\deploy\install-remote-desktop.ps1                     # schermo (RDP)
+.\deploy\view-emulator.ps1 -Account rb -Installa        # schermo dell'emulatore
+```
+
+Il primo dei due che installa Tailscale basta: il login va poi fatto a mano
+dall'app, con lo **stesso account** anche sull'altro PC. Dettagli e scelta
+dello strumento giusto nella sezione
+[Vedere e toccare il mini PC dall'altro PC](#vedere-e-toccare-il-mini-pc-dallaltro-pc).
 
 ## Comandi Telegram
 
@@ -241,11 +310,104 @@ più comune. Solo **dopo** aver verificato che entri senza password, aggiungi
 `-DisablePasswordAuth` (senza una chiave autorizzata lo script si rifiuta di
 farlo, per non chiuderti fuori).
 
+## Vedere e toccare il mini PC dall'altro PC
+
+SSH e Telegram coprono i *comandi*. Restano fuori le cose che si fanno solo con
+le mani: un popup di Instagram da chiudere, un login scaduto da rifare, un
+aggiornamento da rifiutare. Per quelle servono due strumenti diversi, perché
+sono due schermi diversi.
+
+### Il desktop di Windows — `install-remote-desktop.ps1`
+
+```powershell
+.\deploy\install-remote-desktop.ps1 -InstallaTailscale
+```
+
+Accende il Desktop remoto già incluso in Windows 11 Pro, tiene attiva
+l'autenticazione a livello di rete (NLA), **limita le regole del firewall alla
+rete locale e alla rete Tailscale** (`100.64.0.0/10`) e disattiva sospensione,
+ibernazione e spegnimento dei dischi. Prima di tutto questo controlla che
+l'account abbia una password: senza, si ferma e spiega perché (vedi il nodo
+password ↔ autologon qui sopra).
+
+Poi, dall'altro PC:
+
+```powershell
+mstsc /v:100.x.y.z          # indirizzo Tailscale del mini PC
+```
+
+Perché RDP e non VNC: è già dentro Windows, il traffico è cifrato, il client
+c'è ovunque (anche come app Android e iOS). L'unica differenza da sapere è che
+collegandosi la sessione viene *portata via* dal monitor fisico, che torna alla
+schermata di accesso — sul mini PC non è un problema, nessuno ci sta davanti, e
+i processi continuano a girare anche dopo che ti scolleghi.
+
+Quando il collegamento via Tailscale funziona, si può stringere:
+
+```powershell
+.\deploy\install-remote-desktop.ps1 -SoloTailscale
+```
+
+che toglie anche la rete locale dall'ambito. **La 3389 non va aperta sul
+router** in nessun caso.
+
+### Lo schermo dell'emulatore — `view-emulator.ps1`
+
+Il desktop remoto da solo non basta, e per un motivo che sfugge: in produzione
+gli emulatori partono con `-no-window`, quindi **non c'è nessuna finestra da
+guardare** nemmeno collegandosi in RDP. Lo schermo Android si prende da ADB:
+
+```powershell
+.\deploy\view-emulator.ps1 -Account rb -Installa
+.\deploy\view-emulator.ps1 -Account pers -SolaLettura
+```
+
+Apre `scrcpy` sull'emulatore dell'account: si vede quello che il bot sta
+facendo **e ci si può cliccare sopra**. Il serial non è scritto nello script:
+viene letto dal campo `device:` di `accounts/<account>/config.yml`, che è la
+fonte autorevole, così non c'è un terzo elenco da tenere allineato a mano.
+`-SolaLettura` guarda senza poter toccare, per non rischiare un click mentre il
+bot lavora.
+
+`scrcpy` deve disegnare una finestra, quindi va lanciato **dentro una sessione
+grafica**: davanti al mini PC o dentro RDP. Da SSH non ha nessuno schermo su
+cui disegnare.
+
+In alternativa lo si fa girare **sull'altro PC**, portandosi dietro il server
+ADB con un tunnel SSH — così il rendering lo paga l'altro PC e il video viaggia
+cifrato:
+
+```bash
+ssh -L 5037:localhost:5037 Roberto@mini-pc
+scrcpy -s emulator-5554
+```
+
+### Il colpo d'occhio — `status.ps1`
+
+```powershell
+ssh Roberto@mini-pc "powershell -File C:\...\deploy\status.ps1 -Righe 30"
+```
+
+Risponde in una schermata alle domande che ci si fa da lontano: da quanto è
+acceso, i task sono partiti, ADB vede gli emulatori, i due account girano o
+sono in pausa o in backoff, e cosa hanno scritto nei log. Legge e basta.
+Con `-Continuo` si aggiorna da solo e si può lasciare aperto in un angolo.
+
+### Quale strumento per cosa
+
+| Ti serve | Strumento |
+|---|---|
+| Sapere se sta girando, dal telefono | `/status`, `/shot` su Telegram |
+| Sapere se sta girando, dall'altro PC | `status.ps1` via SSH |
+| Leggere log, aggiornare il repo, riavviare un task | SSH |
+| Chiudere un popup di Instagram, rifare un login | `view-emulator.ps1` |
+| Creare un AVD, usare Android Studio, sistemare Windows | RDP |
+
 ## Come si comporta quando qualcosa va storto
 
 | Situazione | Reazione |
 |---|---|
-| Bot finisce le sessioni della giornata | riparte dopo 15 minuti |
+| Bot finisce le sessioni della giornata | con `total-sessions: -1` (i due account) non succede: il bot dorme fino alla prima finestra del mattino e riparte da solo; con un numero finito di sessioni il processo esce e il watchdog lo rilancia dopo 15 minuti |
 | Bot crasha | backoff esponenziale: 30 min, 1 h, 2 h (tetto) |
 | Emulatore piantato | `start-account.ps1` aspetta `sys.boot_completed`, se non arriva esce e il watchdog riprova |
 | Blackout | autologon → task al logon → watchdog → tutto riparte |
@@ -279,6 +441,11 @@ non un modello AMD. Dai listing gemelli americani risulta un **Ryzen 5 3500U**
 pagina d'acquisto — quindi va verificata sulla macchina con CPU-Z, controllando
 che la cache L3 sia di **4 MB**, che è il valore della 3500U.
 
+> **Verificato sulla macchina il 21/08/2026.** `Win32_Processor` riporta
+> `AMD Ryzen 5 3500U`, 4 core / 8 thread, **L3 = 4096 KB**: la deduzione era
+> giusta e la CPU è quella dichiarata dai listing americani. Windows 11 Pro,
+> 16 GB installati (14 GB utilizzabili, il resto va alla grafica integrata).
+
 Con i parametri qui sopra due emulatori ci stanno, ma **è il limite della
 macchina**, non una configurazione comoda: sono 2 core per emulatore e quasi
 niente per Windows, i due processi Python e ADB. Aspettati sessioni più lente
@@ -296,18 +463,31 @@ quello che l'emulatore usa. `check-machine.ps1` te lo dice ("Banchi di
 memoria"). Con uno slot libero, aggiungere un secondo modulo uguale è la
 modifica col miglior rapporto costo/beneficio di tutte.
 
-**Gli account sono già sfalsati.** In `watchdog.ps1` il secondo parte 90 minuti
-dopo il primo (`OffsetMin`). Le sessioni durano 90 minuti e distano 3 ore, cioè
-ogni account lavora metà del tempo: con quello scarto si alternano invece di
-pestarsi i piedi.
+> **Verificato: il rischio si è avverato.** C'è **un solo modulo** da 16 GB
+> (banco `P0 CHANNEL A`, DDR4-2667), quindi la macchina lavora in single
+> channel. Aggiungere un secondo modulo identico nell'altro slot raddoppia la
+> banda verso la grafica integrata ed è, a oggi, l'unico intervento hardware
+> che valga la spesa su questa macchina.
 
-Non serve invece toccare `working-hours` nei config: quella riga viene
-**riscritta da `run-dynamic.py` a ogni lancio**, calcolata sull'ora di
-partenza. Conta quando il watchdog lancia, non cosa c'è scritto nel file.
+**Gli account sono già sfalsati, nei config.** I due `config.yml` hanno
+`total-sessions: -1` e **finestre fisse** alternate: `rb.coach` lavora
+08-09:30, 11-12:30, 14-15:30, 17-18:30, 20-21:30; `roberto_buonomo_ifbbpro`
+9:30-11, 12:30-14, 15:30-17, 18:30-20 (più uno slittamento casuale di
+±0-15 min, `time-delta`). Ogni finestra vale una sessione sola: se finisce
+prima per i limiti, il bot aspetta la finestra dopo; la sera dorme e riparte
+la mattina senza che nessuno lo rilanci. Con `-1` nel config `run-dynamic.py`
+**non riscrive** `working-hours` (modalità `--fixed-hours`): per cambiare gli
+orari si modifica il file e si riavvia il bot.
+
+`OffsetMin` in `watchdog.ps1` (il secondo parte 90 minuti dopo il primo)
+resta utile solo al primo avvio; il ritmo giornaliero lo danno le finestre.
+La modalità storica (finestre generate dall'ora di lancio, N sessioni e poi
+il processo esce) resta attiva per i config con `total-sessions: N`, come
+quelli di smoke.
 
 Se l'uso h24 desse comunque problemi, in ordine di efficacia:
 
-1. alzare `OffsetMin` del secondo account se vedi che si accavallano
+1. allargare gli intervalli tra le finestre dei due account nei `config.yml` se vedi che si accavallano
 2. scendere a **1 core per AVD**, più lento ma più stabile
 3. passare a due telefoni Android fisici collegati in USB: il mini PC
    diventerebbe solo il controller e il carico crollerebbe
