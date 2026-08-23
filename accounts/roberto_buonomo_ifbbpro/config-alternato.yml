@@ -1,0 +1,255 @@
+# ===========================================================================
+# GIORNATA ALTERNATA - generata da tools/make-alternato-config.py
+# ===========================================================================
+# Copia di config.yml con le sole working-hours cambiate: qui i due account
+# NON lavorano mai insieme (in config.yml invece si', in simultanea).
+# Si lancia questa coppia quando si vuole un emulatore alla volta:
+#     python run-dynamic.py --config accounts/roberto_buonomo_ifbbpro/config-alternato.yml --fixed-hours --avd robertobuo
+# Ogni modifica va fatta su config.yml e riportata qui rilanciando lo script.
+# ===========================================================================
+
+##############################################################################
+# Config principale - @roberto_buonomo_ifbbpro (profilo personale atleta)
+#
+# Differenza rispetto a @rb.coach: qui Roberto parla come ATLETA IFBB PRO, non
+# come studio di coaching. Il taglio e' verticale sul bodybuilding agonistico e
+# guarda anche fuori dall'Italia (top athlete e coach internazionali), dove il
+# pubblico e' anglofono.
+#
+# @rb.coach  -> bacino italiano, Lombardia, clienti di coaching
+# questo     -> bacino verticale BB, anche internazionale, peer tra atleti
+#
+# Chi e': IFBB PRO (card a 25 anni), campione italiano IFBB 2019 heavyweight
+# -100kg + assoluto, 2o Arnold Classic Barcelona 2019. Vedi ../rb.coach/KB.md.
+#
+# ATTENZIONE - WARM-UP: se l'account non ha mai usato automazione, dimezza i
+# cap per le prime due settimane. Vedi SETUP.md.
+#
+# Target giornaliero a regime:
+#   follow: 40-50 | like: 90-110 | commenti: 20-30 | DM: 0
+##############################################################################
+
+# ---------------------------------------------------------------------------
+# General Configuration
+# ---------------------------------------------------------------------------
+username: roberto_buonomo_ifbbpro
+device: emulator-5556                      # deve combaciare con -Serial in deploy/watchdog.ps1 (avd bot_pers)
+app-id: com.instagram.android
+use-cloned-app: false
+allow-untested-ig-version: true
+screen-sleep: false
+screen-record: false
+speed-multiplier: 0.9
+debug: false
+close-apps: false
+kill-atx-agent: false
+restart-atx-agent: true
+disable-block-detection: false
+disable-filters: false
+dont-type: true
+total-crashes-limit: 3
+count-app-crashes: false
+shuffle-jobs: false
+truncate-sources: 6-8
+scroll-skip-start: 30-100
+resume-from-last-position: true
+resume-anchor-search-limit: 12
+resume-cooldown-days: 5
+hot-zone-screens: 2
+hot-zone-jump-flings: 6
+hot-zone-max-jumps: 2
+
+auto-fbr-refresh: false                    # OFF su richiesta: la scansione dei follower a inizio sessione non serve su questi profili
+auto-fbr-interval-hours: 24
+auto-fbr-max-scan: 0
+
+follow-only-if-engaged: true
+follow-min-engagement: 1
+
+action-throttle-enabled: true
+action-throttle-follow-min: 30-70
+action-throttle-like-min: 10-22
+action-throttle-unfollow-min: 25-50
+action-throttle-comment-min: 300-420
+action-throttle-pm-min: 999999             # DM OFF
+
+# ---------------------------------------------------------------------------
+# Actions - sorgenti
+# ---------------------------------------------------------------------------
+# blogger-followers = pesca i FOLLOWER di questi account.
+# Taglio verticale: atleti e coach di bodybuilding agonistico, italiani e
+# internazionali. Chi segue questi profili e' gia' dentro al mondo delle gare.
+#
+# Tutti gli handle sotto sono stati verificati il 22/08/2026 APRENDOLI SULL'EMULATORE
+# con tools/verify-ig-handles.py. Non usare instagram.com/USERNAME per controllare:
+# risponde con la pagina di login sia per i profili veri sia per quelli
+# inesistenti, e cosi' erano entrate 11 sorgenti morte su 72. Una sorgente
+# inesistente brucia ~30s a sessione finche' la quarantena non la esclude.
+#
+# andrea.presti_ifbbpro e zagarella_ifbb_pro si vedono da QUESTO account ma
+# non da rb.coach (lo hanno bloccato): stanno solo qui, non nell'altro config.
+#
+# NOTA sui profili esteri: i follower di johnjewett3 (USA) e
+# kuba_sylvester_cielen (PL) sono in larga parte NON italiani. Vanno bene per
+# reputazione e visibilita' nella nicchia, molto meno per vendere coaching in
+# Italia. Se l'obiettivo diventa acquisire clienti, tienili come secondari e
+# lascia il grosso del budget follow alle sorgenti italiane.
+#
+# Per aggiungere altri big internazionali (Bumstead, Walker, Labrada, Ruffin,
+# Queiroz...) trova l'handle in una fonte ufficiale e passalo da
+# tools/verify-ig-handles.py prima di scriverlo qui.
+blogger-followers: [albertomilani_ifbbpro, aldomasoloifbbpro, alessandrofichicelli, alessio.ice9.alfei, alex_ifbb_pro, alexrizzii_, andrea.presti_ifbbpro, andrea_mammoli, andrea_muzilla_ifbbpro, anna.ladurner.ifbbpro, anna.terzo_ifbb_pro, bbfitalia, biotechusa_it, bodybuilding_italia_community_, cap_pittiruti_pro, carlofiorentini__, coach_giorgio.terragno, cristianguastella, culturismoitaliano, damianoq_ifbbpro, daniele_gelmi, danielechisari, danielgoss_ifbbpro, dario_beloli_ifbbpro, dario_paolozzi_ifbbpro, denniss_calla, derek_deianov, dilorenzoifbbpro, dr.massimo.spattini, eliaolivierobarbon, enrico_pietrobon_ifbbpro, enzo.jossacoach, fabrizio_liparoti, febo_gambacorta_ifbb_pro, federico_sirna_, gab.stefanelli, garebodybuilding, gerard_ifbb_, gianzcoach, giorgiageraci_, giulioalbi_ifbbpro, giusepperomanocoach, grumpy_grizzly_ifbbpro, ifbb_pro_leonardo_vecchiato, ifbbproitaly, il.pump.quotidiano, ilbolz_ifbbpro, johnjewett3, kiamonteforte, kuba_sylvester_cielen, lady_invictus, legion_ifbbpro, lelerico_ifbbpro, lifeproitalia, lorenzo.coppola_ifbbpro, lorenzo.pansini, luca_pistolato_ifbbpro, lucabiolo_ifbbpro, lucamastra_fit, ludovico.lemme, manuel_santalucia_ifbbpro, marco.busc, marco_dambrosio_ifbbpro, mariovalentini_coach, mauro_sassi_team_stones, mirco_fila, nacciflex, nbfi_italy, nik_liani, npc_italy, npceuromasters, orguamentale, ornella_angileri_ifbbpro, project_invictus, prozis.team.italia, prozisitalia, punzetti_sara_ifbbpro, quiricofrancescopacelli, riccardo_croci_ifbbpro, riccardobenedetti_pt, ricky_ifbbpro, riminiwellness, sabrina_seminara, samuellfortuna, santiphysique8, silvialikki, skeptical_dragoon, sustainablebb, team_presti_coaching, thehungrylonewolf, tsunamibodybuilding, tsunaminutrition, veronica_ghiani_fit, vitastrong_ita, wabbaitalia, wbpf_italy, wnbfitaly, yamamoto_italia, zagarella_ifbb_pro]
+
+# blogger = commenta i post DI QUESTI ACCOUNT. Qui ci stanno anche gli esteri:
+# un commento tecnico sotto al post di un top coach e' esattamente il posto
+# dove un IFBB PRO italiano si fa notare dai pari.
+blogger: [gianzcoach, andrea.presti_ifbbpro, johnjewett3, kuba_sylvester_cielen, andrea_mammoli, ludovico.lemme, project_invictus, lucamastra_fit, aldomasoloifbbpro, silvialikki, riccardo_croci_ifbbpro, luca_pistolato_ifbbpro, mirco_fila, giusepperomanocoach, lelerico_ifbbpro, manuel_santalucia_ifbbpro, alex_ifbb_pro, dilorenzoifbbpro, mauro_sassi_team_stones, ifbbproitaly, culturismoitaliano]
+
+# Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
+# follow, niente storie. Like/follow/sticker restano sui profili piccoli
+# (i follower dei blogger), che sono il target che converte.
+# Questo flag sospende anche i limiti di dimensione di filters.yml per il
+# solo job `blogger`: con max_followers a 30000 un account da 300k verrebbe
+# scartato e non commenteremmo nulla.
+blogger-comment-only: true
+
+# Ogni profilo toccato finisce in interacted_users.json e senza questo viene
+# saltato PER SEMPRE ("already interacted ... Skip."). Sul job blogger vorrebbe
+# dire commentare i competitor una volta sola e mai piu'. 168h = 7 giorni.
+# NB: e' un parametro GLOBALE, vale anche per blogger-followers e hashtag; li'
+# l'effetto e' pero' contenuto, perche' chi gia' segui viene escluso da
+# skip_following e chi hai unfolloato da was_unfollowed_before.
+can-reinteract-after: 168
+
+
+# Hashtag verticali sul bodybuilding agonistico, quasi tutti italiani.
+# Verificati sull'emulatore il 22/08/2026 (tools/verify-ig-handles.py --hashtag).
+# Tolti di proposito: ifbbpro, classicphysique, offseason, bulkingseason,
+# cuttingdiet (anglofoni ad altissimo flusso: il primo contenuto della griglia
+# e' sempre USA, e i likers non sono italiani), preparazionegara (lo usano
+# podismo e powerlifting, non il bodybuilding), protan (saloni di
+# abbronzatura). peakweek e posingpractice restano come secondari: sono
+# internazionali ma e' il lessico che usano anche gli atleti italiani.
+hashtag-likers-recent: [bodybuildingitalia, culturismoitaliano, ifbbitalia, culturafisica, garebodybuilding, bbfitalia, classicphysiqueitalia, naturalbodybuildingitalia, dietabodybuilding, peakweek, posingpractice, alimentazionesportiva, ipertrofia, massamuscolare]
+
+hashtag-likers-top: [bodybuildingitalia, culturismoitaliano, ifbbitalia, classicphysiqueitalia, peakweek]
+
+## Watching content
+watch-video-time: 8-25
+watch-photo-time: 2-5
+delete-interacted-users: false
+sort-followers-newest-to-oldest: true
+unfollow-delay: 3
+delete-removed-followers: false
+telegram-reports: false
+
+# ---------------------------------------------------------------------------
+# Source Limits (per singola sorgente)
+# ---------------------------------------------------------------------------
+interactions-count: 10-15
+likes-count: 2
+likes-percentage: 85-95
+carousel-count: 1-2
+carousel-percentage: 50-70
+max-comments-pro-user: 1
+comment-percentage: 25-35
+pm-percentage: 0
+interact-percentage: 70-85
+follow-percentage: 50-65
+follow-limit: 5-8
+skipped-list-limit: 30-45
+skipped-posts-limit: 4
+fling-when-skipped: 0
+min-following: 50
+
+# ---------------------------------------------------------------------------
+# Total Limits Per Session (4 sessioni/giorno)
+# ---------------------------------------------------------------------------
+total-likes-limit: 20-25
+total-follows-limit: 9-12
+total-unfollows-limit: 0-0
+total-watches-limit: 0-0
+total-successful-interactions-limit: 9-12
+total-interactions-limit: 999
+total-comments-limit: 5-7
+total-pm-limit: 0-0
+total-scraped-limit: 200-300
+
+# ---------------------------------------------------------------------------
+# Daily Budget - separato da @rb.coach (file daily_budget.json per account)
+# ---------------------------------------------------------------------------
+daily-follows-cap: 50
+daily-likes-cap: 110
+daily-unfollows-cap: 50
+daily-comments-cap: 30
+daily-pm-cap: 0
+
+## Watch-stories OFF: guardare le storie durante le interazioni non porta
+## nulla e allunga la sessione. NB: e' diverso dal job answer-story-stickers,
+## che apre le storie dei target apposta per rispondere ai box domande.
+stories-count: 0
+stories-percentage: 0
+
+# ---------------------------------------------------------------------------
+# Ending Session Conditions
+# ---------------------------------------------------------------------------
+end-if-likes-limit-reached: false
+end-if-follows-limit-reached: false
+end-if-watches-limit-reached: false
+end-if-comments-limit-reached: false
+end-if-pm-limit-reached: false
+
+# ---------------------------------------------------------------------------
+# AI Comments
+#
+# language "auto": lo Space scrive nella STESSA lingua della caption. Serve
+# qui perche' le sorgenti sono miste: un commento in italiano sotto al post di
+# John Jewett suonerebbe fuori posto, e viceversa.
+# ---------------------------------------------------------------------------
+ai-comments-enabled: true
+ai-comments-space-url: https://mattysaints-instagram-bot.hf.space
+# ai-comments-space-key: "sk_..."          # NON metterla qui: usa .env.local
+ai-comments-language: auto
+ai-comments-prompt-hint: "Chi commenta e' Roberto Buonomo, atleta IFBB PRO italiano di classic physique: pro card a 25 anni, campione italiano IFBB 2019 categoria -100kg, secondo all'Arnold Classic Barcelona 2019. Il suo profilo racconta la vita da agonista: preparazione alle gare, cosa mangia in prep, allenamenti pesanti, peak week, posing, off-season. Commenta da ATLETA a ATLETA, mai da coach in cerca di clienti: e' uno che quelle cose le sta facendo davvero mentre scrive. Quando il post parla di allenamento, gara, dieta o condizione puo' entrare nel merito tecnico con naturalezza (esecuzione, volume e intensita', periodizzazione, scarico di sodio e acqua, simmetria, timing della peak week, gestione della fame in prep) perche' sono cose che vive in prima persona. IMPORTANTE: adatta il commento al CONTENUTO REALE della caption e non forzare il tema bodybuilding: se parla di viaggio commenta il posto, se di cibo il piatto, se e' un momento personale commenta con empatia. Cita SEMPRE un dettaglio concreto della caption (un numero, un esercizio, un luogo, un nome). Registro colloquiale e diretto, da pari a pari, mai formale e mai da venditore. MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o DM. VARIA IL LESSICO: non usare in ogni commento le stesse parole chiave. In particolare NON aprire ne' costruire il commento attorno a parole come costanza, dedizione, disciplina, percorso, sacrificio: sono i tormentoni che rendono evidente che a scrivere e' sempre la stessa entita'. Trova ogni volta un angolo diverso, partendo dal dettaglio concreto del post. MAI emoji, hashtag o punti esclamativi. Una frase breve."
+ai-comments-fallback-to-file: true
+
+# ---------------------------------------------------------------------------
+# Risposte agli sticker delle storie altrui (box domande)
+#
+# Il bot apre le storie di questi account e, se trova un box domande, risponde
+# con una frase corta generata dallo Space ("cosa alleni oggi?" -> "petto").
+# Il nome finisce nella casella risposte dell'autore, dove arrivano poche
+# decine di messaggi invece delle migliaia di commenti sotto ai post.
+#
+# Due modalita', indipendenti:
+#  1) sticker-check-percentage -> durante il flusso normale, per ogni
+#     profilo candidato il bot apre anche le sue storie e, se trova un box
+#     domande, risponde. E' la modalita' principale: colpisce i follower
+#     dei blogger, cioe' il target vero.
+#  2) answer-story-stickers   -> job dedicato che va sulle storie degli
+#     account elencati qui sotto (i big). Serve a farsi notare da loro.
+# Ogni risposta e' molto visibile, quindi i volumi restano bassi.
+# ---------------------------------------------------------------------------
+# answer-story-stickers: [...]   # DISATTIVATO: gli sticker si fanno solo sui
+#   profili piccoli, dentro il flusso normale (sticker-check-percentage).
+#   Riattivalo solo se vuoi rispondere anche ai box domande dei big.
+sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
+
+# sticker-replies-limit: 3-5                 # risposte per sessione
+# stories-per-source-limit: 6                # storie da controllare per account
+ai-sticker-enabled: true
+ai-sticker-language: auto
+ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
+
+# ---------------------------------------------------------------------------
+# Scheduling - 5 sessioni/giorno da 90 min in finestre FISSE dentro la fascia
+# consentita 08:00-23:00. Sono le STESSE finestre di rb.coach: i due emulatori
+# lavorano in simultanea (scelta del cliente). Con total-sessions: -1 il bot
+# fa UNA sessione per finestra, poi aspetta la successiva; di notte dorme e
+# riparte da solo la mattina dopo: nessun rilancio a mano. run-dynamic.py,
+# vedendo -1, NON riscrive la riga.
+# ---------------------------------------------------------------------------
+working-hours: [09.50-11.05, 13.10-14.25, 16.30-17.45, 19.50-21.05]   # giornata alternata: mai in contemporanea con l'altro account
+time-delta: 0-10   # slittamento +/- 10 min: resta dentro i 25 min di stacco fra i due account
+repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
+total-sessions: -1                          # loop senza fine (rispetta le working-hours)

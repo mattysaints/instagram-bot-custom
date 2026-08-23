@@ -488,9 +488,36 @@ tiene la giornata dentro 08:00-23:00 anche nel caso peggiore (08:00-22:30).
 Due AVD da 2 core su un mini PC a 4 core vuol dire contendersi la CPU: le
 sessioni vanno **più lente** e Instagram ci mette di più ad aprirsi (misurati
 90 s per la barra delle schede con entrambi attivi). È il motivo per cui il
-bot aspetta gli elementi veri invece di usare tempi fissi. Se il carico
-diventa un problema, la leva è tornare a finestre sfalsate nei due config
-(oppure 1 core per AVD).
+bot aspetta gli elementi veri invece di usare tempi fissi.
+
+**Se preferisci un emulatore alla volta** c'è la coppia alternata:
+`accounts/<account>/config-alternato.yml`, dove le finestre dei due account
+non si toccano mai (25 minuti di stacco, `time-delta: 0-10`, quindi nessuna
+sovrapposizione nemmeno nel caso peggiore).
+
+| | rb.coach | roberto_buonomo_ifbbpro |
+|---|---|---|
+| 1 | 08:10-09:25 | 09:50-11:05 |
+| 2 | 11:30-12:45 | 13:10-14:25 |
+| 3 | 14:50-16:05 | 16:30-17:45 |
+| 4 | 18:10-19:25 | 19:50-21:05 |
+| 5 | 21:30-22:45 | — |
+
+Si sceglie al lancio, il codice non c'entra: in PyCharm le configurazioni
+*Bot alternato - …*, a riga di comando
+
+```powershell
+python run-dynamic.py --config accounts/rb.coach/config-alternato.yml --fixed-hours --avd rbcoach
+```
+
+I due file sono copie di `config.yml` con le sole working-hours cambiate: se
+tocchi il config di produzione, riporta la modifica con
+`python tools/make-alternato-config.py`.
+
+**Un solo bot per emulatore.** Due istanze sullo stesso device si pestano i
+piedi e sono il modo più rapido per farsi bloccare l'account: se i bot girano
+già (watchdog o `start-account.ps1`), non lanciare anche le configurazioni di
+PyCharm. Per sapere cosa sta girando: `deploy/status.ps1`.
 
 Ogni finestra vale una sessione sola: se finisce prima
 per i limiti, il bot aspetta la finestra dopo; la sera dorme e riparte la
