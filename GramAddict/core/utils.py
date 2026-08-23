@@ -310,9 +310,47 @@ def open_instagram(device):
 
     logger.info("Ready for botting!🤫", extra={"color": f"{Style.BRIGHT}{Fore.GREEN}"})
 
-    # Extra wait to let Instagram UI fully initialize before interacting
+    # Aspetta la barra delle schede, non un tempo fisso. Sull'emulatore del
+    # mini PC (2 core, rendering software) Instagram resta sullo splash
+    # 16-26 secondi dopo un avvio a freddo: con un'attesa di 5-8 s il bot
+    # cercava la scheda Profilo sullo splash, premeva indietro, usciva
+    # dall'app e lo registrava come "App has crashed".
     logger.debug("Waiting for Instagram UI to fully load...")
     random_sleep(5, 8, modulable=False)
+    import time as _time
+
+    MARCATORI_HOME = ('content-desc="Profile"', "id/tab_avatar", "id/tab_bar",
+                      'content-desc="Instagram Home Feed"')
+    inizio = _time.monotonic()
+    scadenza = inizio + 90
+    pronta = False
+    while _time.monotonic() < scadenza:
+        try:
+            xml = device.deviceV2.dump_hierarchy(compressed=True)
+        except Exception:
+            xml = ""
+        if any(m in xml for m in MARCATORI_HOME):
+            pronta = True
+            break
+        # se nel frattempo Instagram e' finita in background (o non e' mai
+        # partita), rilanciarla costa niente e evita di aspettare 90 s a vuoto
+        try:
+            if device.deviceV2.app_current().get("package") != app_id:
+                logger.debug("Instagram is not in foreground, calling it again.")
+                call_ig()
+        except Exception:
+            pass
+        logger.debug(
+            f"Instagram UI not ready yet (no tab bar) after "
+            f"{_time.monotonic() - inizio:.0f}s, waiting..."
+        )
+        _time.sleep(3)
+    if pronta:
+        logger.debug(f"Instagram UI ready after {_time.monotonic() - inizio:.0f}s.")
+    else:
+        logger.warning(
+            f"Tab bar still not visible after {_time.monotonic() - inizio:.0f}s: going on anyway."
+        )
 
     random_sleep()
     if configs.args.close_apps:
@@ -559,15 +597,33 @@ def save_crash(device):
     except OSError:
         logger.error(f"Directory {directory_name} already exists.")
         return
-    screenshot_format = ".png"
+    # Prima l'albero, poi lo screenshot: se la schermata e' quella di login
+    # (sessione scaduta, magari con la password resa visibile dall'utente)
+    # lo screenshot non si salva e il dump viene scritto mascherato.
+    xml_dump = None
     try:
-        device.screenshot(os.path.join(crash_path, "screenshot" + screenshot_format))
-    except RuntimeError:
-        logger.error(f"Cannot save 'screenshot.{screenshot_format}'.")
+        xml_dump = device.deviceV2.dump_hierarchy()
+    except Exception:
+        xml_dump = None
+    login_screen = xml_dump is not None and device.is_login_screen(
+        device.nodes_from_dump(xml_dump)
+    )
+    screenshot_format = ".png"
+    if login_screen:
+        logger.warning(
+            "Login screen on the device: crash screenshot not saved (it could show credentials)."
+        )
+    else:
+        try:
+            device.screenshot(os.path.join(crash_path, "screenshot" + screenshot_format))
+        except RuntimeError:
+            logger.error(f"Cannot save 'screenshot.{screenshot_format}'.")
 
     hierarchy_format = ".xml"
     try:
-        device.dump_hierarchy(os.path.join(crash_path, "hierarchy" + hierarchy_format))
+        device.dump_hierarchy(
+            os.path.join(crash_path, "hierarchy" + hierarchy_format), xml_dump
+        )
     except RuntimeError:
         logger.error(f"Cannot save 'hierarchy.{hierarchy_format}'.")
     if args.screen_record:
@@ -795,7 +851,39 @@ def sample_sources(sources, n_sources, storage=None, job_name=None):
     logger.info(
         f"In this session, {'that source' if len(truncaded)<=1 else 'these sources'} will be handled: {', '.join(emoji.emojize(str(x), use_aliases=True) for x in truncaded)}"
     )
-    return truncaded
+    return _sources_within_working_hours(truncaded)
+
+
+def _sources_within_working_hours(sources):
+    """Cede le sorgenti una alla volta e si ferma quando la finestra oraria
+    e' chiusa.
+
+    Senza questo, a finestra scaduta succedeva una cosa assurda: ogni
+    interazione rispondeva "fuori orario" (_on_interaction) e la sorgente
+    veniva abbandonata dopo UN profilo, ma il ciclo del plugin apriva lo
+    stesso la sorgente successiva (1-2 minuti di navigazione), ci faceva un
+    profilo, la abbandonava... fino a esaurire la lista. Visto dal vivo:
+    "cambia hashtag subito". Qui invece, se l'orario e' passato, le sorgenti
+    rimanenti non vengono proprio aperte e la sessione chiude in fretta.
+    """
+    from GramAddict.core.session_state import SessionState
+
+    for i, source in enumerate(sources):
+        if i > 0:
+            try:
+                inside, _ = SessionState.inside_working_hours(
+                    args.working_hours, args.time_delta_session
+                )
+            except Exception:
+                inside = True
+            if not inside:
+                logger.info(
+                    f"Working hours are over: skipping the remaining "
+                    f"{len(sources) - i} source(s) of this job.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return
+        yield source
 
 
 def random_choice(number: int) -> bool:

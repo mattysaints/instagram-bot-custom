@@ -1533,7 +1533,7 @@ class OpenedPostView:
 
         return like_btn_view.get_selected(), like_btn_view
 
-    def like_post(self, is_carousel: bool = False) -> bool:
+    def like_post(self, is_carousel: bool = False, single_click: bool = False) -> bool:
         """
         Like the post.
 
@@ -1549,6 +1549,8 @@ class OpenedPostView:
             "umano"), con fallback al cuoricino se non passa.
 
         :param is_carousel: True se il post e' un carosello (multi-slide).
+        :param single_click: forza il click sul cuoricino (es. video rimasto
+            nella vista feed, dove il doppio tap metterebbe in pausa).
         :return: post has been liked
         :rtype: bool
         """
@@ -1566,9 +1568,14 @@ class OpenedPostView:
         logger.info("Liking post.")
         # Determina se usare single-click (sicuro ma richiede di trovare il
         # cuoricino) o double-tap (piu' naturale ma rischioso su tag/carosello).
-        use_single_click = bool(self.has_tags) or is_carousel
+        use_single_click = bool(self.has_tags) or is_carousel or single_click
         if use_single_click:
-            reason = "has tags" if self.has_tags else "is carousel"
+            if self.has_tags:
+                reason = "has tags"
+            elif is_carousel:
+                reason = "is carousel"
+            else:
+                reason = "is a video in the post view"
             logger.info(
                 f"Post {reason}: usando single-click sul cuoricino ❤️ "
                 f"(evito doppio-tap)."
@@ -1639,7 +1646,21 @@ class OpenedPostView:
         if post_media_view.exists():
             logger.info("Going in full screen.")
             post_media_view.click()
-            in_fullscreen, _ = self._is_video_in_fullscreen()
+            # Il passaggio a schermo intero sull'emulatore (GPU software)
+            # richiede qualche secondo: un controllo istantaneo dopo il click
+            # diceva "non in fullscreen" e il like del Reel veniva saltato
+            # (jayde_lifts, smoke del 22/08). Si aspetta, e se il selettore
+            # nega il contenitore si guarda l'albero completo.
+            video_container = self.device.find(
+                resourceIdMatches=case_insensitive_re(
+                    ResourceID.VIDEO_CONTAINER_AND_CLIPS_VIDEO_CONTAINER
+                )
+            )
+            in_fullscreen = video_container.exists(Timeout.MEDIUM)
+            if not in_fullscreen:
+                in_fullscreen, _ = self._is_video_in_fullscreen()
+            if not in_fullscreen:
+                logger.info("Video did not go full screen.")
         return in_fullscreen
 
     def watch_media(self, media_type: MediaType) -> None:
@@ -1701,7 +1722,22 @@ class OpenedPostView:
                 ResourceID.VIDEO_CONTAINER_AND_CLIPS_VIDEO_CONTAINER
             )
         )
-        return video_container.exists(), video_container
+        if video_container.exists():
+            return True, video_container
+        # Stesso ripiego di open_video: se il selettore nega il contenitore
+        # ma l'albero completo lo riporta, il video E' a schermo intero.
+        # Senza questo, open_video diceva "si'" dal dump e like_video
+        # rispondeva "no" dal selettore: like perso proprio nel caso per cui
+        # il ripiego era stato aggiunto.
+        box = self.device.box_from_dump(
+            ResourceID.VIDEO_CONTAINER_AND_CLIPS_VIDEO_CONTAINER
+        )
+        if box is not None:
+            logger.debug(
+                "Video container not seen by the selector but present in the dump."
+            )
+            return True, box
+        return False, video_container
 
     def _is_video_liked(self) -> Tuple[Optional[bool], Optional[DeviceFacade.View]]:
         """
@@ -1849,13 +1885,22 @@ class ProfileView(ActionBarView):
             first_post = self.device.find(
                 resourceIdMatches=case_insensitive_re(ResourceID.IMAGE_BUTTON),
             )
-            if not first_post.exists(Timeout.SHORT):
-                logger.debug("getFirstPostAgeDays: no IMAGE_BUTTON found in grid.")
-                return None
-            try:
-                desc = first_post.get_desc()
-            except Exception:
-                desc = None
+            desc = None
+            if first_post.exists(Timeout.SHORT):
+                try:
+                    desc = first_post.get_desc()
+                except Exception:
+                    desc = None
+            else:
+                # Il selettore nega spesso la prima cella della griglia (con
+                # la griglia a schermo): il filtro sull'eta' dell'ultimo post
+                # restava di fatto spento. L'albero completo la riporta.
+                desc = self.device.desc_from_dump(ResourceID.IMAGE_BUTTON)
+                if desc:
+                    logger.debug("getFirstPostAgeDays: first cell read from the hierarchy dump.")
+                else:
+                    logger.debug("getFirstPostAgeDays: no IMAGE_BUTTON found in grid.")
+                    return None
             if not desc:
                 logger.debug("getFirstPostAgeDays: first post has no content-desc.")
                 return None
@@ -2108,13 +2153,84 @@ class ProfileView(ActionBarView):
             found = True
         return found
 
+    def _profile_tab_button(self) -> bool:
+        # IG 300.x: la scheda e' un FrameLayout id/profile_tab con desc "Profile";
+        # tab_avatar e' la ImageView dentro. Se per qualunque motivo la ImageView
+        # non viene trovata, il contenitore cliccabile e' un secondo appiglio.
+        obj = self.device.find(resourceIdMatches=ResourceID.PROFILE_TAB)
+        if obj.exists(Timeout.SHORT):
+            obj.click()
+            return True
+        obj = self.device.find(description="Profile")
+        if obj.exists(Timeout.SHORT):
+            obj.click()
+            return True
+        return False
+
     def click_on_avatar(self):
-        while True:
+        # Era un `while True` con device.back() a ogni giro: se la scheda
+        # Profilo non compare (schermata inattesa, app ancora in caricamento),
+        # i back in serie ESCONO da Instagram e il bot registra "App has
+        # crashed" senza che nel log ci sia scritto cosa c'era sullo schermo.
+        continue_tapped = False
+        for tentativo in range(6):
             if self._new_ui_profile_button():
-                break
+                return
             if self._old_ui_profile_button():
-                break
+                return
+            if self._profile_tab_button():
+                return
+            # screen_summary maschera i campi password: il 22/08 questa
+            # diagnostica aveva scritto nel log la password del login in
+            # chiaro.
+            nodi = self.device.nodes_from_dump()
+            pacchetti = sorted({n["package"] for n in nodi if n["package"]})
+            logger.warning(
+                f"Profile tab not found (try {tentativo + 1}/6). "
+                f"On screen: {self.device.screen_summary(nodi)}"
+            )
+            if self.device.is_login_screen(nodi):
+                # Sessione scaduta. Se IG propone l'account salvato
+                # ("Continue" / "Use another profile") si tocca Continue una
+                # volta: non e' una credenziale, e se il cookie vale ancora
+                # si rientra senza password. Altrimenti Instagram chiede la
+                # password: il bot non inserisce mai credenziali, aspetta
+                # che lo faccia l'utente sull'emulatore. In entrambi i casi
+                # niente back: dalla schermata di login farebbe solo uscire
+                # dall'app (crash-loop visto il 22/08).
+                continua = (
+                    self.device.account_chooser_continue(nodi)
+                    if not continue_tapped
+                    else None
+                )
+                if continua is not None:
+                    continue_tapped = True
+                    logger.warning(
+                        "Logged out: Instagram offers the saved account. Tapping "
+                        "Continue (no credentials involved)."
+                    )
+                    self.device.tap_node(continua, "on the account chooser")
+                    random_sleep(8, 12, modulable=False)
+                    continue
+                logger.warning(
+                    "Instagram is asking for the password: the session is logged "
+                    "out. Log in manually on the emulator (the bot never types "
+                    "credentials). Waiting 60s before checking again."
+                )
+                random_sleep(55, 65, modulable=False)
+                continue
+            if self.device.app_id not in pacchetti:
+                # Instagram non e' nemmeno in primo piano: riaprirla serve,
+                # premere indietro no
+                logger.warning("Instagram is not in foreground: reopening it.")
+                try:
+                    self.device.deviceV2.app_start(self.device.app_id, use_monkey=True)
+                except Exception as e:
+                    logger.debug(f"app_start failed: {e}")
+                random_sleep(6, 8, modulable=False)
+                continue
             self.device.back()
+        raise DeviceFacade.JsonRpcError("Profile tab not found after 6 tries")
 
     def getFollowButton(self):
         button_regex = f"{ClassName.BUTTON}|{ClassName.TEXT_VIEW}"
@@ -2403,21 +2519,48 @@ class ProfileView(ActionBarView):
         element_to_swipe_over_obj = self.device.find(
             resourceIdMatches=ResourceID.PROFILE_TABS_CONTAINER
         )
-        for _ in range(2):
-            if not element_to_swipe_over_obj.exists():
+        # exists(Timeout.MEDIUM) e non exists(): sull'emulatore lento il
+        # contenitore delle schede arriva qualche secondo dopo l'intestazione
+        # del profilo. Con il controllo istantaneo il bot, su un profilo che
+        # aveva gia' superato tutti i filtri, concludeva "private/empty" e
+        # rinunciava a like e follow: 12 profili su 14 in una giornata.
+        # Dopo l'espansione della bio ("... more") l'intestazione dei profili
+        # grandi spinge le schede sotto il bordo dello schermo (1184 px a
+        # 720x1280). Due swipe da 300-350 px non bastavano, e sull'emulatore
+        # un gesto cosi' corto a volte non scrolla nemmeno: 4 tentativi con
+        # swipe da ~500 px.
+        for _ in range(4):
+            tabs_top = None
+            if element_to_swipe_over_obj.exists(Timeout.MEDIUM):
+                tabs_top = element_to_swipe_over_obj.get_bounds()["top"]
+            else:
+                # Il selettore dice "non c'e'". Nel processo del bot e' capitato
+                # spesso che fosse falso (vedi DeviceFacade.bounds_from_dump):
+                # prima di scrollare alla cieca si guarda l'albero completo.
+                b = self.device.bounds_from_dump(ResourceID.PROFILE_TABS_CONTAINER)
+                if b is not None:
+                    logger.debug(
+                        "Tabs container not seen by the selector but present in the "
+                        f"hierarchy dump at {b}: using the dump."
+                    )
+                    tabs_top = b["top"]
+            if tabs_top is None:
                 UniversalActions(self.device)._swipe_points(
-                    direction=Direction.DOWN, delta_y=randint(300, 350)
+                    direction=Direction.DOWN, delta_y=randint(450, 550)
                 )
                 element_to_swipe_over_obj = self.device.find(
                     resourceIdMatches=ResourceID.PROFILE_TABS_CONTAINER
                 )
                 continue
 
-            element_to_swipe_over = element_to_swipe_over_obj.get_bounds()["top"]
+            element_to_swipe_over = tabs_top
             try:
-                bar_container = self.device.find(
-                    resourceIdMatches=ResourceID.ACTION_BAR_CONTAINER
-                ).get_bounds()["bottom"]
+                bar = self.device.find(resourceIdMatches=ResourceID.ACTION_BAR_CONTAINER)
+                if bar.exists(Timeout.SHORT):
+                    bar_container = bar.get_bounds()["bottom"]
+                else:
+                    b = self.device.bounds_from_dump(ResourceID.ACTION_BAR_CONTAINER)
+                    bar_container = b["bottom"] if b else 172
 
                 logger.info("Scrolled down to see more posts.")
                 self.device.swipe_points(
@@ -2431,8 +2574,14 @@ class ProfileView(ActionBarView):
                 logger.debug(f"Exception: {e}")
                 logger.info("I'm not able to scroll down.")
                 return 0
+        # Prima di rinunciare, dire COSA c'e' sullo schermo: questo warning e'
+        # stato per un giorno intero il punto di morte di quasi ogni profilo
+        # valido, e senza questa riga la causa si indovinava soltanto.
         logger.warning(
             "Maybe a private/empty profile in which check failed or after whatching stories the view moves down :S.. Skip"
+        )
+        logger.warning(
+            f"[grid] On screen: {self.device.screen_summary(self.device.nodes_from_dump())}"
         )
         return -1
 

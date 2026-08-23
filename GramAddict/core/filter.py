@@ -693,13 +693,40 @@ class Filter:
                 logger.warning(
                     "Looks like this profile hasn't loaded yet! Wait a little bit more.."
                 )
-                if profile_picture.exists(Timeout.LONG):
+                # Sull'emulatore del mini PC (2 core, rendering software, due
+                # bot attivi insieme) un profilo ci mette 15-30 s ad arrivare:
+                # con 8+8 s il bot dichiarava "non caricato" quasi sempre,
+                # dormiva 1-2 minuti e poi scartava il profilo: ~2 minuti a
+                # profilo e zero azioni in una sessione intera.
+                # Tetto scelto a 30 s: entro quel tempo o e' arrivato o non
+                # arriva piu', e dormire un minuto in piu' non cambia nulla.
+                import time as _time
+                loaded = False
+                scadenza = _time.monotonic() + 22   # + gli 8 s gia' passati = ~30 s
+                while _time.monotonic() < scadenza:
+                    if profile_picture.exists(Timeout.SHORT):
+                        loaded = True
+                        break
+                    if restricted_profile.exists():
+                        is_restricted = True
+                        break
+                if not loaded and not is_restricted:
+                    # il selettore puo' negare un elemento che c'e' (visto piu'
+                    # volte sull'emulatore): fa fede l'albero completo
+                    if device.bounds_from_dump(
+                        ResourceID.PROFILE_HEADER_AVATAR_CONTAINER_TOP_LEFT_STUB
+                    ):
+                        logger.debug("Avatar stub not seen by the selector but present in the dump: profile is loaded.")
+                        loaded = True
+                if loaded:
                     logger.info("Profile loaded!")
+                elif is_restricted:
+                    pass
                 else:
                     logger.warning(
-                        "Profile not fully loaded after 16s. Is your connection ok? Let's sleep for 1-2 minutes."
+                        "Profile not fully loaded after 30s: short pause, then one last check."
                     )
-                    random_sleep(60, 120, modulable=False)
+                    random_sleep(8, 12, modulable=False)
                     if profile_picture.exists():
                         logger.warning(
                             "Profile won't load! Maybe you're soft-banned or you've lost your connection!"
