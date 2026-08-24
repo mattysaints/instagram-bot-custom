@@ -231,15 +231,10 @@ def interact(
         commented=number_of_comments,
         pm_sent=pm_sent,
     )
-    # Per-source quality tracking: count this follow against the source/target
-    # so future sessions can weight selection towards higher FBR sources.
-    if followed:
-        stats = getattr(storage, "source_stats", None)
-        if stats is not None and target:
-            try:
-                stats.register_follow(current_job, target)
-            except Exception as e:
-                logger.debug(f"[source-stats] register_follow failed: {e}")
+    # NB: il follow viene registrato in source_stats da
+    # storage.add_interacted_user (storage.py): registrarlo anche qui
+    # raddoppiava follows_done su ogni sorgente (140 contati vs 70 reali
+    # il 22-24/08), falsando FBR e rotazione delle sorgenti.
     return on_interaction(
         succeed=interaction_succeed,
         followed=followed,
