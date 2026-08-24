@@ -1252,6 +1252,17 @@ def _follow(device, username, follow_percentage, args, session_state, swipe_amou
             return False
         follow_chance = randint(1, 100)
         if follow_chance > follow_percentage:
+            if follow_percentage == 0:
+                # niente log: percentuale a 0 vuol dire follow disattivato
+                # per questo job (es. blogger comment-only), non un roll perso
+                return False
+            # Senza questa riga il roll scartava in silenzio: il 24/08 circa
+            # meta' dei profili gia' ingaggiati col like non veniva seguita e
+            # dai log era impossibile capire perche'.
+            logger.info(
+                f"@{username}: follow-percentage roll ({follow_chance}>{follow_percentage}). Skip follow.",
+                extra={"color": f"{Fore.GREEN}"},
+            )
             return False
         universal_actions = UniversalActions(device)
         coordinator_layout = device.find(resourceId=ResourceID.COORDINATOR_ROOT_LAYOUT)
