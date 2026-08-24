@@ -5,8 +5,11 @@ Wrapper per GramAddict: genera working-hours dinamiche basate sull'ora di lancio
 Schema (modalita' normale):
   - La PRIMA sessione parte SUBITO, all'ora del lancio: si avvia il bot e
     lavora, senza aspettare una finestra decisa a tavolino.
-  - Le altre N-1 (default 5 in tutto) seguono a distanza di gap-h (3h) con
-    jitter, tutte dentro la fascia consentita 08:00-23:00.
+  - Le altre N-1 (default 4 in tutto) seguono a distanza di gap-h (3.75h)
+    con jitter, tutte dentro la fascia consentita 08:00-23:00. Quattro
+    sessioni distanziate, non cinque attaccate: le pause tra le finestre
+    salgono a ~2-2.5h, piu' vicine al profilo prudente 2025-26 (sessioni
+    60-90 min con pause lunghe) senza rinunciare ai cap giornalieri.
   - Fuori fascia il lancio non lavora di notte: prima delle 08:00 la prima
     sessione slitta all'apertura, dopo le 23:00 a domattina.
   - Le working-hours cosi' calcolate vengono scritte nel config. Con
@@ -201,8 +204,12 @@ def build_windows(
         next_start = cur + dt.timedelta(hours=gap_h)
         next_end = next_start + dt.timedelta(minutes=duration_min)
         slack_min = int((hard_end - next_end).total_seconds() // 60)  # min residui prima di sforare
-        max_pos_jitter = max(0, min(15, slack_min))
-        max_neg_jitter = max(0, min(15, gap_min - duration_min - PAUSA_MINIMA_MIN))
+        # Jitter largo (fino a 35 min): con +-15 le finestre cadevano ogni
+        # giorno quasi alla stessa ora, e la regolarita' del ritmo e' il
+        # primo segnale che i sistemi anti-bot 2025-26 cercano. Il vincolo
+        # PAUSA_MINIMA_MIN resta rispettato dal bound su max_neg_jitter.
+        max_pos_jitter = max(0, min(35, slack_min))
+        max_neg_jitter = max(0, min(35, gap_min - duration_min - PAUSA_MINIMA_MIN))
         if max_pos_jitter == 0 and max_neg_jitter == 0:
             jitter = 0
         else:
@@ -612,9 +619,9 @@ def _total_sessions_from_config(config_path: Path) -> Optional[int]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=DEFAULT_CONFIG, help="Path al config.yml")
-    ap.add_argument("--sessions", type=int, default=5, help="Numero massimo di sessioni nella giornata")
+    ap.add_argument("--sessions", type=int, default=4, help="Numero massimo di sessioni nella giornata")
     ap.add_argument("--duration-min", type=int, default=90, help="Durata di ogni sessione (minuti)")
-    ap.add_argument("--gap-h", type=float, default=3.0, help="Distanza inizio-inizio tra sessioni (ore)")
+    ap.add_argument("--gap-h", type=float, default=3.75, help="Distanza inizio-inizio tra sessioni (ore)")
     ap.add_argument("--dry-run", action="store_true", help="Calcola e stampa senza lanciare il bot")
     ap.add_argument(
         "--forza-device",

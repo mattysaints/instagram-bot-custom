@@ -33,7 +33,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Serial,
     [int]$BootTimeoutSec = 300,
     # Quante sessioni pianificare nella giornata a partire dall'ora di lancio.
-    [int]$Sessioni = 5,
+    [int]$Sessioni = 4,
     # Emulatore senza finestra: risparmia CPU e memoria, ed e' quello che
     # serve su una macchina che gira h24 senza nessuno davanti. Il bot non
     # perde niente, perche' lavora via ADB e non guarda lo schermo; anche gli
