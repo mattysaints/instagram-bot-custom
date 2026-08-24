@@ -734,20 +734,51 @@ def _caption_utilizzabile(testo: str) -> bool:
     return latine / len(lettere) >= 0.5
 
 
+# Parole che rendono il commento una pubblicita'. I due prompt le vietano
+# gia' ("MAI nominare coaching, schede, consulenze, FIT LAB, prezzi, link o
+# DM"), ma il modello segue la caption e ogni tanto le riusa: il 24/08, sotto
+# al post di un competitor, e' uscito "Academy e' il biglietto per quella
+# sorpresa nei DM". Un'istruzione nel prompt e' una richiesta, non una
+# garanzia: qui c'e' il controllo deterministico.
+# Sono in entrambe le lingue perche' il profilo personale commenta anche in
+# inglese (ai-comments-language: auto).
+_PAROLE_PROMOZIONALI = re.compile(
+    r"(?i)\b("
+    r"dm|dms|coaching|coach\s+online|online\s+coach|"
+    r"consulenz\w*|consultation|"
+    r"fit\s*lab|"
+    r"prezz\w*|price|pricing|"
+    r"link\s+in\s+bio|"
+    r"scrivimi|contattami|scrivetemi|"
+    r"iscriviti|sign\s+up"
+    r")\b"
+)
+
+
 def _ripulisci_commento(testo: str) -> str:
     """Ultimo controllo sul commento prima di scriverlo. Se contiene la
-    menzione di un altro account lo si scarta e basta: toglierla lascerebbe
-    una frase monca ("...la costanza del percorso con"), che e' peggio del
-    commento di riserva. Chi chiama, davanti a una stringa vuota, usa
-    comments_list.txt."""
+    menzione di un altro account, o suona come una pubblicita', lo si scarta e
+    basta: ripulirlo lascerebbe una frase monca ("...la costanza del percorso
+    con"), che e' peggio del commento di riserva. Chi chiama, davanti a una
+    stringa vuota, usa comments_list.txt.
+
+    NB: chi chiama deve testare `not commento`, non `is None`. Qui si torna
+    sempre una stringa."""
     t = (testo or "").strip()
-    if "@" not in t:
-        return t
-    logger.info(
-        f"[ai-comment] scartato, menziona un altro account: '{t}'. "
-        "Uso il commento di riserva."
-    )
-    return ""
+    if "@" in t:
+        logger.info(
+            f"[ai-comment] scartato, menziona un altro account: '{t}'. "
+            "Uso il commento di riserva."
+        )
+        return ""
+    trovata = _PAROLE_PROMOZIONALI.search(t)
+    if trovata:
+        logger.info(
+            f"[ai-comment] scartato, suona promozionale (parola "
+            f"'{trovata.group(0)}'): '{t}'. Uso il commento di riserva."
+        )
+        return ""
+    return t
 
 
 _FOLLOW_DAL_DUMP = (
@@ -894,7 +925,14 @@ def _comment(
                             logger.info(
                                 "[ai-comment] generation failed/blocked; falling back to comments_list.txt"
                             )
-                    if comment is None:
+                    # NB: "not comment", non "comment is None". generate_comment
+                    # torna None sugli errori, ma _ripulisci_commento normalizza
+                    # a stringa VUOTA sia il None sia il commento scartato perche'
+                    # menziona un altro account. Con "is None" il fallback non
+                    # scattava e si finiva a scrivere un commento vuoto (visto il
+                    # 24/08: Space irraggiungibile -> "Write comment: " vuoto,
+                    # dato per riuscito dalla verifica e budget commenti bruciato).
+                    if not comment:
                         # rispetta l'opt-out hard del fallback al file
                         if (
                             ai_comment.is_enabled(args)
@@ -907,7 +945,9 @@ def _comment(
                             device.back()
                             return False
                         comment = load_random_comment(my_username, media_type)
-                    if comment is None:
+                    # anche qui "not comment": se pure il file di riserva non
+                    # produce nulla si esce, mai scrivere una stringa vuota.
+                    if not comment:
                         UniversalActions.close_keyboard(device)
                         device.back()
                         return False
@@ -963,9 +1003,14 @@ def _comment(
                 # ---- B: prefix match (commenti lunghi vengono troncati) ----
                 if not comment_confirmed:
                     snippet = comment[:30].strip()
-                    # contains-match su un nodo che contiene lo snippet
-                    snippet_node = device.find(textContains=snippet)
-                    if snippet_node.exists(Timeout.SHORT):
+                    # Difesa in profondita': uno snippet vuoto rende
+                    # textContains="" vero su QUALSIASI nodo, cioe' un commento
+                    # mai scritto risulterebbe "riuscito". A monte non deve piu'
+                    # arrivare una stringa vuota, ma qui non si indovina.
+                    snippet_node = (
+                        device.find(textContains=snippet) if snippet else None
+                    )
+                    if snippet_node is not None and snippet_node.exists(Timeout.SHORT):
                         logger.info(
                             f"Comment succeed (verify B: snippet '{snippet[:20]}...' found).",
                             extra={"color": f"{Fore.GREEN}"},
