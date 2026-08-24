@@ -169,7 +169,38 @@ class DeviceFacade:
             raise DeviceFacade.JsonRpcError(e)
 
     def _ig_is_opened(self) -> bool:
-        return self._get_current_app() == self.app_id
+        """Instagram e' l'app in primo piano?
+
+        Un solo campione di app_current() non basta. Nei log del 22-24/08 ci
+        sono 16 casi di "App has crashed / has been closed!" in cui la lista
+        dei processi, stampata un secondo dopo, conteneva ancora
+        com.instagram.android: l'app non era morta, era passata in secondo
+        piano per un attimo (tipicamente aprendo il visualizzatore storie,
+        dove il foreground diventa il launcher durante la transizione).
+        Il prezzo dell'errore e' alto: `restart` chiude IG, aspetta 8-15s, la
+        riapre e riaspetta la tab bar, cioe' oltre 2 minuti di sessione buttati
+        e un crash contato per niente.
+
+        Qui si concedono all'app qualche secondo per tornare davanti da sola.
+        Se non torna, e' un crash vero e la gestione prosegue come prima.
+
+        NB: si ASPETTA soltanto, non si tocca lo stato del dispositivo.
+        Riportare avanti l'app da un predicato la lascerebbe in una schermata
+        qualsiasi senza la rinavigazione al profilo che fa `restart`, e il
+        codice chiamante andrebbe avanti credendosi altrove.
+        """
+        if self._get_current_app() == self.app_id:
+            return True
+
+        for _ in range(4):
+            sleep(1.5)
+            if self._get_current_app() == self.app_id:
+                logger.info(
+                    "Instagram era momentaneamente dietro (transizione di "
+                    "schermata), e' tornato in primo piano: niente restart."
+                )
+                return True
+        return False
 
     def check_if_ig_is_opened(func):
         def wrapper(self, **kwargs):
