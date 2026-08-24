@@ -19,14 +19,31 @@
 ##############################################################################
 
 ## Filters on profile type
-skip_if_private: true                      # non valutabile prima del follow: si scarta
+#
+# PRIVATI: ACCETTATI (scelta del 23/08/2026, diversa dal profilo personale).
+# Nei log del 23/08 i privati erano 187 scarti su 332, il 56% del totale: ogni
+# scarto costava comunque l'apertura del profilo, e su 110 profili aperti solo
+# 9 diventavano interazioni utili. Per un business di coaching la persona
+# normale con profilo privato E' il cliente tipo, non un profilo da evitare.
+#
+# CONSEGUENZE, da tenere a mente prima di rimettere true:
+#  - su un privato non si possono mettere like: il follow e' per forza "a
+#    freddo" e salta il gate warm-follow di follow-only-if-engaged
+#    (comportamento voluto e documentato in core/interaction.py:405-413);
+#  - last_post_max_age_days non e' valutabile (griglia non visibile) e va in
+#    fail-open (core/filter.py:496-508): sui privati quel filtro non filtra;
+#  - i follow ai privati restano "richieste in sospeso" finche' non accettano,
+#    quindi il follow-back e' piu' lento da misurare.
+# Restano attivi tutti gli altri filtri (follower, following, potency ratio,
+# numero di post, bio): sui privati sono comunque leggibili.
+skip_if_private: false
 skip_if_public: false
 skip_business: false                       # molti utenti normali hanno l'account creator per le statistiche: escluderli taglierebbe clienti veri
 skip_non_business: false
 skip_following: true                       # non rifare chi gia' segui
 skip_follower: true                        # chi ti segue gia' non va ri-ingaggiato
 skip_if_link_in_bio: false
-follow_private_or_empty: false             # coerente con skip_if_private
+follow_private_or_empty: true              # coerente con skip_if_private: senza questo i privati verrebbero aperti e poi scartati lo stesso ("follow_private_or_empty is disabled in filters. Skip.")
 
 ## Pre-flight username filters (valutati SENZA aprire il profilo: 3-5s risparmiati per skip)
 skip_username_patterns:
