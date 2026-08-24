@@ -1939,24 +1939,31 @@ class OpenedPostView:
             logger.warning("❌ like_video: video NON in fullscreen — impossibile eseguire il like. "
                            "Probabile cambio layout Reel/IGTV o post non caricato.")
             return False
-        if full_screen:
-            logger.info("Liking video.")
+        logger.info("Liking video.")
+        # Cuoricino PRIMA, doppio tap solo come ripiego: sui reel il doppio
+        # tap falliva sistematicamente (4/4 il 24/08 tra i due account) e
+        # ogni fallimento costava 60-90s tra verifica e ripiego. Stessa
+        # scelta gia' fatta per i video in post view ("evito doppio-tap").
+        # Il controllo "gia' liked" viene PRIMA del click: il cuoricino,
+        # a differenza del doppio tap, un like esistente lo toglierebbe.
+        if not sidebar.exists():
+            logger.debug("Showing sidebar...")
+            obj.click()
+        liked, like_button = self._is_video_liked()
+        if liked:
+            logger.info("Video already liked!")
+            return True
+        if like_button is not None:
+            like_button.click()
+            UniversalActions.detect_block(self.device)
+            liked, _ = self._is_video_liked()
+        if not liked:
+            logger.info("Cuoricino non trovato o non scattato: provo il doppio tap.")
             obj.double_click()
             UniversalActions.detect_block(self.device)
-            if not sidebar.exists():
-                logger.debug("Showing sidebar...")
-                obj.click()
-            liked, like_button = self._is_video_liked()
-            if not liked:
-                logger.info("Double click failed, clicking on the little heart ❤️.")
-                if like_button is not None:
-                    like_button.click()
-                    UniversalActions.detect_block(self.device)
-                else:
-                    logger.error("❌ like_video: like_button non trovato — probabile layout Reel diverso (UFI_STACK assente).")
-                liked, _ = self._is_video_liked()
-            if not liked:
-                logger.warning("❌ like_video: like video fallito dopo double-click + fallback heart.")
+            liked, _ = self._is_video_liked()
+        if not liked:
+            logger.warning("❌ like_video: like fallito dopo cuoricino + doppio tap.")
         return liked
 
     def _getListViewLikers(self):
