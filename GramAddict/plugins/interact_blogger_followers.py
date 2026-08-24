@@ -18,6 +18,14 @@ from GramAddict.core.utils import get_value, init_on_things, sample_sources
 logger = logging.getLogger(__name__)
 
 
+def _as_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
 # Script Initialization
 seed()
 
@@ -47,6 +55,18 @@ class InteractBloggerFollowers_Following(Plugin):
                 "default": None,
                 "operation": True,
             },
+            {
+                "arg": "--blogger-followers-no-comment",
+                "nargs": None,
+                "help": (
+                    "on the `blogger-followers`/`blogger-following` jobs, never comment "
+                    "(like/follow/stickers unaffected, comment-percentage forced to 0). "
+                    "Useful when these sources are pages you already follow yourself "
+                    "(default: false)"
+                ),
+                "metavar": "true|false",
+                "default": "false",
+            },
         ]
 
     def run(self, device, configs, storage, sessions, profile_filter, plugin):
@@ -69,6 +89,13 @@ class InteractBloggerFollowers_Following(Plugin):
             sources = [s for s in self.args.blogger_followers if s.strip()]
         else:
             sources = [s for s in self.args.blogger_following if s.strip()]
+
+        if _as_bool(getattr(self.args, "blogger_followers_no_comment", None)):
+            logger.info(
+                "blogger-followers-no-comment attivo: niente commenti sui follower "
+                "di queste sorgenti (like/follow restano invariati).",
+                extra={"color": f"{Style.BRIGHT}"},
+            )
 
         # Start
         for source in sample_sources(sources, self.args.truncate_sources, storage=storage, job_name=plugin):
@@ -96,6 +123,9 @@ class InteractBloggerFollowers_Following(Plugin):
                 pm_percentage,
                 interact_percentage,
             ) = init_on_things(source, self.args, self.sessions, self.session_state)
+
+            if _as_bool(getattr(self.args, "blogger_followers_no_comment", None)):
+                comment_percentage = 0
 
             @run_safely(
                 device=device,

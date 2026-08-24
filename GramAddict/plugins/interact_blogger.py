@@ -119,6 +119,18 @@ class InteractBloggerPostLikers(Plugin):
                 "operation": True,
             },
             {
+                "arg": "--blogger-reinteract-after",
+                "nargs": None,
+                "help": (
+                    "hours that have to pass before commenting the same big again, "
+                    "for the `blogger` job ONLY. Overrides --can-reinteract-after, "
+                    "which stays in charge of every other job (followers, hashtag, "
+                    "place). Unset = use --can-reinteract-after."
+                ),
+                "metavar": "48",
+                "default": None,
+            },
+            {
                 "arg": "--blogger-comment-only",
                 "nargs": None,
                 "help": (
@@ -152,6 +164,16 @@ class InteractBloggerPostLikers(Plugin):
         else:
             sources = [s for s in self.args.blogger if s.strip()]
 
+        # In modalita' commento l'unico scopo del job e' il commento: una volta
+        # esaurito il budget commenti della sessione, ogni big che resta costa
+        # un'apertura profilo + un like e vale UNA interazione riuscita
+        # (session_state.add_interaction conta per profilo, non per azione),
+        # sottraendola ai job che seguono. Meglio chiudere qui. E' la stessa
+        # logica gia' applicata post per post in interaction.py.
+        comment_only_job = plugin == "blogger" and _as_bool(
+            getattr(self.args, "blogger_comment_only", None), default=True
+        )
+
         for source in sample_sources(sources, self.args.truncate_sources, storage=storage, job_name=plugin):
             (
                 active_limits_reached,
@@ -162,6 +184,16 @@ class InteractBloggerPostLikers(Plugin):
                 limit_reached = unfollow_limits_reached or actions_limit_reached
             else:
                 limit_reached = active_limits_reached or actions_limit_reached
+
+            if comment_only_job and self.session_state.check_limit(
+                limit_type=self.session_state.Limit.COMMENTS, output=False
+            ):
+                logger.info(
+                    "Budget commenti esaurito: chiudo il job blogger senza "
+                    "consumare gli altri big.",
+                    extra={"color": f"{Style.BRIGHT}"},
+                )
+                break
 
             self.state = State()
             logger.info(f"Handle {source}", extra={"color": f"{Style.BRIGHT}"})

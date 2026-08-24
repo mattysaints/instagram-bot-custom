@@ -342,8 +342,19 @@ def handle_blogger(
                     f"@{blogger}: previously unfollowed - will NOT be re-followed. Skip."
                 )
             else:
+                # Il job blogger ha una finestra sua. Sui big ripassare ogni
+                # paio di giorni e' normale (sono 12-20 account presidiati di
+                # proposito), mentre can-reinteract-after e' globale e sui
+                # follower deve restare lungo per non risultare insistenti con
+                # le stesse persone. Con i soli 168h globali, il 24/08 il job
+                # trovava 6 sorgenti su 8 in quarantena e commentava ~2 volte
+                # al giorno contro un daily-comments-cap di 40.
+                reinteract_after = (
+                    getattr(self.args, "blogger_reinteract_after", None)
+                    or self.args.can_reinteract_after
+                )
                 can_reinteract = storage.can_be_reinteract(
-                    interacted_when, get_value(self.args.can_reinteract_after, None, 0)
+                    interacted_when, get_value(reinteract_after, None, 0)
                 )
                 logger.info(
                     f"@{blogger}: already interacted on {interacted_when:%Y/%m/%d %H:%M:%S}. {'Interacting again now' if can_reinteract else 'Skip'}."
