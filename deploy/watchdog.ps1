@@ -23,7 +23,17 @@
 #>
 param(
     [int]$RestartDelaySec = 900,      # pausa normale tra due cicli (15 min)
-    [int]$MaxBackoffSec = 7200        # tetto della pausa dopo crash ripetuti (2h)
+    [int]$MaxBackoffSec = 7200,       # tetto della pausa dopo crash ripetuti (2h)
+    # Anti-freeze: se il log del bot non avanza per questo numero di minuti
+    # mentre il processo e' vivo (e non sta dichiaratamente aspettando la
+    # prossima finestra), il processo e' considerato congelato e viene
+    # riavviato. Il 22-23/08 due freeze cosi' sono costati 95 e 344 minuti
+    # di sessioni perse, senza che il watchdog se ne accorgesse: il processo
+    # non esce, resta appeso a meta' interazione.
+    [int]$StallMin = 15,
+    # Tregua dopo l'avvio: boot dell'emulatore + avvio app possono passare
+    # diversi minuti prima della prima riga di log del bot.
+    [int]$StallGraceMin = 20
 )
 
 $ErrorActionPreference = 'Continue'
@@ -105,6 +115,43 @@ function Start-AccountProcess {
     return $p
 }
 
+# Rileva un processo congelato: log fermo da piu' di $StallMin minuti SENZA
+# una spiegazione legittima. La spiegazione legittima e' l'attesa dichiarata
+# della prossima finestra: GramAddict la scrive nel log come
+#   "Next session will start at: HH:MM:SS (YYYY/MM/DD)."
+# e in quel caso il log resta fermo, anche per ore, fino all'orario indicato.
+# Quindi: se l'ultima riga di attesa promette un risveglio FUTURO, va tutto
+# bene; se il risveglio promesso e' passato da piu' di $StallMin minuti, o
+# non c'e' nessuna attesa dichiarata, il processo e' congelato.
+function Test-Frozen {
+    param([string]$Account)
+    $log = Join-Path $RepoRoot ("logs\{0}.log" -f $Account)
+    if (-not (Test-Path $log)) { return $false }
+    $staleMin = ((Get-Date) - (Get-Item $log).LastWriteTime).TotalMinutes
+    if ($staleMin -lt $StallMin) { return $false }
+
+    $tail = Get-Content $log -Tail 40 -ErrorAction SilentlyContinue
+    if ($null -eq $tail) { return $false }
+    $wake = $null
+    foreach ($line in $tail) {
+        if ($line -match 'Next session will start at: (\d{2}:\d{2}:\d{2} \(\d{4}/\d{2}/\d{2}\))') {
+            $wake = $Matches[1]   # l'ULTIMA occorrenza nel tail vince
+        }
+    }
+    if ($null -ne $wake) {
+        try {
+            $wakeDt = [datetime]::ParseExact($wake, 'HH:mm:ss (yyyy/MM/dd)', [System.Globalization.CultureInfo]::InvariantCulture)
+            if ((Get-Date) -lt $wakeDt.AddMinutes($StallMin)) { return $false }
+        }
+        catch {
+            # formato inatteso: meglio non uccidere un bot che forse dorme.
+            # Sotto le 3 ore di silenzio si lascia stare (pausa tra finestre).
+            if ($staleMin -lt 180) { return $false }
+        }
+    }
+    return $true
+}
+
 Write-Log '=== watchdog avviato ==='
 $procs = @{}
 $nextStart = @{}
@@ -137,7 +184,31 @@ while ($true) {
 
         # 2. il processo gira ancora?
         if ($st.running -and $procs.ContainsKey($name)) {
-            if (-not $procs[$name].HasExited) { continue }
+            if (-not $procs[$name].HasExited) {
+                # 2a. vivo ma congelato? (log fermo senza attesa dichiarata)
+                $ageMin = ((Get-Date) - [datetime]$st.last_start).TotalMinutes
+                if ($ageMin -gt $StallGraceMin -and (Test-Frozen $name)) {
+                    Write-Log "[$name] log fermo oltre $StallMin min senza attesa dichiarata: processo congelato, riavvio (taskkill /T)"
+                    # /T uccide tutta la catena: wrapper powershell,
+                    # run-dynamic.py, GramAddict e ANCHE l'emulatore, che
+                    # Windows considera discendente nonostante il
+                    # DETACHED_PROCESS (vedi stop-bots.py). Qui va bene cosi':
+                    # un bot congelato spesso vuol dire emulatore incantato, e
+                    # start-account.ps1 al rilancio lo riavvia e ne aspetta il
+                    # boot da solo.
+                    try { taskkill /PID $procs[$name].Id /T /F 2>$null | Out-Null } catch {}
+                    $procs.Remove($name)
+                    $st.running = $false
+                    $st.last_exit = (Get-Date -Format 'o')
+                    $st.last_code = 'frozen'
+                    # niente backoff: un freeze non e' un blocco di Instagram,
+                    # e ogni minuto di attesa e' una finestra di lavoro persa.
+                    # resume-from-last-position riprende da dove si era fermato.
+                    $nextStart[$name] = (Get-Date).AddSeconds(120)
+                    Save-Status
+                }
+                continue
+            }
 
             $code = $procs[$name].ExitCode
             $st.running = $false
