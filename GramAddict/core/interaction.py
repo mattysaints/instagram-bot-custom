@@ -277,6 +277,7 @@ def interact_with_user(
             photos_indices = sorted(photos_indices)
         post_grid_view = PostsGridView(device)
         comment_attempted = False
+        comments_limited = False
         for i in range(len(photos_indices)):
             # Job blogger in modalita' commento: i 3 post servono solo a
             # trovarne uno commentabile. Se il limite commenti della sessione
@@ -360,10 +361,12 @@ def interact_with_user(
                             media_type,
                             target_username=username,
                         )
-                        if comment_done:
+                        if comment_done is True:
                             number_of_commented += 1
                         elif comment_done is None:
                             comment_attempted = True
+                        elif comment_done == "limited":
+                            comments_limited = True
                     else:
                         logger.info(
                             f"You've already did {max_comments_pro_user} {'comment' if max_comments_pro_user<=1 else 'comments'} for this user!"
@@ -371,7 +374,7 @@ def interact_with_user(
             else:
                 logger.warning("Can't find the post element!")
                 save_crash(device)
-            if like_succeed or comment_done:
+            if like_succeed or comment_done is True:
                 interacted = True
 
             if not opened_post_view or (not like_succeed and not already_liked):
@@ -389,13 +392,18 @@ def interact_with_user(
             # cosi'; se il post aveva i commenti limitati (virginactiveit,
             # 22/08) si prova il successivo invece di chiudere a zero.
             if _blogger_comment_only(args, current_mode) and (
-                number_of_commented >= 1 or comment_attempted
+                number_of_commented >= 1 or comment_attempted or comments_limited
             ):
-                logger.info(
-                    "Comment done: one post is enough on a big profile."
-                    if number_of_commented >= 1
-                    else "Comment posted but not verified: not risking a second one on this profile."
-                )
+                if number_of_commented >= 1:
+                    msg = "Comment done: one post is enough on a big profile."
+                elif comment_attempted:
+                    msg = "Comment posted but not verified: not risking a second one on this profile."
+                else:
+                    msg = (
+                        "Comments limited on this profile: not opening more "
+                        "posts (it is an account-level setting)."
+                    )
+                logger.info(msg)
                 break
 
     if pm_percentage != 0 and can_send_PM(session_state, pm_percentage):
@@ -967,7 +975,12 @@ def _comment(
                     logger.info("Comments on this post have been limited.")
                     universal_actions.close_keyboard(device)
                     device.back()
-                    return False
+                    # Esito distinto da False: i commenti limitati sono quasi
+                    # sempre un'impostazione DELL'ACCOUNT, non del post. Il
+                    # chiamante smette di aprire altri post dello stesso
+                    # profilo (virginactiveit 24/08: 3 post su 3 limitati,
+                    # 11,5 minuti per zero commenti).
+                    return "limited"
 
                 universal_actions.detect_block(device)
                 universal_actions.close_keyboard(device)
