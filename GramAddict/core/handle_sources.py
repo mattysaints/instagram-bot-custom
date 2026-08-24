@@ -324,8 +324,10 @@ def handle_blogger(
     interaction,
     is_follow_limit_reached,
 ):
-    if not nav_to_blogger(device, blogger, session_state.my_username)[0]:
-        return
+    # Blacklist e cooldown si leggono dallo storage: deciderli PRIMA di
+    # navigare evita la ricerca completa in SEARCH (~35-45s) solo per
+    # scoprire lo skip. Il 22-24/08 il job ha fatto 62 navigazioni a vuoto
+    # in 3 giorni tra i due account, tutte chiuse con "already interacted".
     can_interact = False
     if storage.is_user_in_blacklist(blogger):
         logger.info(f"@{blogger} is in blacklist. Skip.")
@@ -360,6 +362,8 @@ def handle_blogger(
             can_interact = True
 
     if can_interact:
+        if not nav_to_blogger(device, blogger, session_state.my_username)[0]:
+            return
         logger.info(
             f"@{blogger}: interact",
             extra={"color": f"{Fore.YELLOW}"},
