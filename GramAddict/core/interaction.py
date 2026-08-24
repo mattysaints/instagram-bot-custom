@@ -1568,7 +1568,13 @@ def _try_answer_sticker(
     """
     if _try_answer_question_sticker(device, args, session_state, author):
         return True
-    return _try_answer_poll_sticker(device, args, session_state, author)
+    if _try_answer_poll_sticker(device, args, session_state, author):
+        return True
+    # Esito esplicito nel log: prima di ri-alzare sticker-check-percentage
+    # serve la prova che i box vengano trovati davvero (22-24/08: 0 sticker
+    # su 35 aperture di storie tra i due account).
+    logger.info(f"[sticker] nessun box domande/sondaggio nelle storie di @{author}.")
+    return False
 
 
 # Pulsanti con cui si chiude un dialogo modale generico di Instagram o di
