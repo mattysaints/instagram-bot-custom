@@ -159,7 +159,24 @@ action-throttle-pm-min: 999999             # DM OFF
 #   chiara.savage_ 101k | giulio.sicari 64k | __pietromonti__ 61k
 #   claires.cj 52k | simonetinifit 51k | _martina_bragagnolo_ 49k
 #   danielacastells 40k | jaco_tassinari 33k
-blogger: [cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin, dereklunsford_, nick_walker39, hunterlabrada, flex_lewis, jaycutler, hanyrambod, hypertrophycoach, jeffnippard, thefashionjogger, danny_lazzarin, cottoaldente, ilmasseo, deborahfashionsport, larosa_sw, traininpink, umbertomiletto, selenegenisella, silvia.fascians, lisalborghetti, luca.tarantino03, serefitfun, scarxlus_, _andrew.ace, madcarolina93, lorenzobianca01, calisteriklugli, chiara.savage_, giulio.sicari, __pietromonti__, claires.cj, simonetinifit, _martina_bragagnolo_, danielacastells, jaco_tassinari]
+# Aggiunti il 26/08/2026 su lista fornita dal cliente: marcomontemagno
+# (visibilita' trasversale) e marcobianchioff (chef-divulgatore, cucina/
+# macros). Nella lista originale erano @marco_montemagno e @marco_bianchi:
+# handle corretti su riscontro instagram.com.
+blogger: [cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin, dereklunsford_, nick_walker39, hunterlabrada, flex_lewis, jaycutler, hanyrambod, hypertrophycoach, jeffnippard, thefashionjogger, danny_lazzarin, cottoaldente, ilmasseo, deborahfashionsport, larosa_sw, traininpink, umbertomiletto, selenegenisella, silvia.fascians, lisalborghetti, luca.tarantino03, serefitfun, scarxlus_, _andrew.ace, madcarolina93, lorenzobianca01, calisteriklugli, chiara.savage_, giulio.sicari, __pietromonti__, claires.cj, simonetinifit, _martina_bragagnolo_, danielacastells, jaco_tassinari, marcomontemagno, marcobianchioff]
+
+# IN ATTESA DI VERIFICA - lista fornita dal cliente il 26/08/2026, MA la
+# ricerca online (26/08) non trova NESSUNO di questi handle su Instagram:
+# hanno l'aria di essere stati generati da una AI (pattern nome_cognome_fit).
+# NON attivarli cosi': ogni sorgente inesistente brucia ~30s a sessione.
+# Se il cliente li conferma o manda gli handle giusti, verificarli con
+# tools/verify-ig-handles.py e spostarli nella lista `blogger` qui sopra.
+#   daniele_mondadori, giovanni_cataldi, gabriele_galimberti, luca_fanara,
+#   alessandro_moretti_pt, federico_guglielmi, matteo_cazzola,
+#   giulia_b_fitness, francesca_lombardi_fit, alessia_berti_fit,
+#   fabio_marino_fit, chiara_neri_fit, lorenzo_de_santis_fit,
+#   martina_giordano_fit, riccardo_morelli_fit, sofia_lombardo_fit,
+#   andrea_rossi_fit, elisa_fontana_fit
 
 # Rete di sicurezza per la regola qui sopra: sul job blogger il filtro
 # skip_following resta ATTIVO anche in modalita' comment-only. Se Roberto
