@@ -270,6 +270,88 @@ def _read_device_from_config(config_path: Path) -> Optional[str]:
     return m.group(1).strip().strip('"').strip("'")
 
 
+def _leggi_chiave_config(config_path: Path, chiave: str) -> Optional[str]:
+    """Legge una chiave scalare dal config, stesso parsing minimale di
+    _read_device_from_config (niente dipendenza da PyYAML qui dentro)."""
+    try:
+        text = config_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    m = re.search(rf"^\s*{re.escape(chiave)}\s*:\s*([^\s#]+)", text, re.MULTILINE)
+    if not m:
+        return None
+    return m.group(1).strip().strip('"').strip("'")
+
+
+def _e_vero(valore: Optional[str]) -> bool:
+    return (valore or "").strip().lower() in ("true", "yes", "si", "1", "on")
+
+
+def _giornata_finita(config_path: Path) -> Optional[str]:
+    """Motivo per cui aprire un'altra sessione oggi non produrrebbe nulla,
+    oppure None se invece ha senso partire.
+
+    Il budget like giornaliero e' la risorsa che si esaurisce per prima. Con
+    `follow-only-if-engaged` un follow richiede un like che l'ha preceduto, e
+    con `end-if-likes-limit-reached` GramAddict chiude la sessione appena quel
+    budget finisce: in quelle condizioni la sessione successiva accende
+    l'emulatore, fa il login, controlla i limiti e chiude. Il 24/08 sono state
+    tre di fila cosi', ~13 minuti di CPU per zero azioni, e su Instagram
+    restano tre aperture dell'app senza nessun comportamento umano dietro.
+
+    Il file daily_budget.json e' scritto da GramAddict accanto al config, e
+    porta la data: quando cambia giorno il confronto fallisce da solo e si
+    riparte, senza bisogno di azzerare niente a mano.
+    """
+    # Config a ciclo infinito (total-sessions: -1): il processo NON esce a fine
+    # giornata, dorme fino alla finestra successiva e domani trova il contatore
+    # azzerato da solo. Saltarne il lancio significherebbe non avere nessun bot
+    # vivo per il giorno dopo - che senza watchdog installato vuol dire nessun
+    # bot e basta. Il cancello serve al modello opposto: lanci brevi che
+    # finiscono e vengono rilanciati da fuori.
+    sessioni = _leggi_chiave_config(config_path, "total-sessions")
+    try:
+        if sessioni is not None and int(sessioni) < 0:
+            return None
+    except ValueError:
+        pass
+
+    cap_raw = _leggi_chiave_config(config_path, "daily-likes-cap")
+    if not cap_raw:
+        return None
+    try:
+        cap = int(cap_raw)
+    except ValueError:
+        return None
+    if cap <= 0:
+        return None
+
+    # Senza almeno uno dei due interruttori la sessione qualcosa puo' ancora
+    # farlo (commenti, unfollow), quindi non tocca a noi deciderlo.
+    if not (_e_vero(_leggi_chiave_config(config_path, "follow-only-if-engaged"))
+            or _e_vero(_leggi_chiave_config(config_path, "end-if-likes-limit-reached"))):
+        return None
+
+    budget_file = config_path.parent / "daily_budget.json"
+    try:
+        dati = json.loads(budget_file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    if dati.get("date") != dt.date.today().isoformat():
+        return None
+
+    try:
+        usati = int(dati.get("likes", 0))
+    except (TypeError, ValueError):
+        return None
+    if usati < cap:
+        return None
+
+    return (f"budget like del giorno esaurito ({usati}/{cap}) e questo config "
+            f"non permette azioni senza like")
+
+
 def _adb_device_state(serial: Optional[str]) -> str:
     """Ritorna lo stato del device come riportato da `adb devices`:
       - 'device'   : pronto
@@ -636,6 +718,12 @@ def main():
              "(loop giornaliero con total-sessions: -1). Attivo da solo se il config ha total-sessions: -1.",
     )
     ap.add_argument(
+        "--ignora-budget",
+        action="store_true",
+        help="Parte anche se il budget like della giornata e' gia' esaurito. "
+             "Senza, la sessione viene saltata perche' non potrebbe fare nulla.",
+    )
+    ap.add_argument(
         "--min-duration-min",
         type=int,
         default=30,
@@ -689,6 +777,16 @@ def main():
 
     if args.dry_run:
         print("\n(--dry-run: bot non lanciato)")
+        return
+
+    # Il budget della giornata e' gia' finito? Meglio saperlo PRIMA di
+    # accendere l'emulatore e prendere il lock del device: cosi' la sessione a
+    # vuoto non costa niente. Uscita 0, non un errore: il watchdog deve
+    # aspettare il suo intervallo normale, non entrare in backoff da crash.
+    motivo = _giornata_finita(config_path)
+    if motivo and not args.ignora_budget:
+        print(f"⏸️  Sessione saltata: {motivo}.")
+        print("   Il conteggio si azzera a mezzanotte; con --ignora-budget si parte comunque.")
         return
 
     # Pre-flight ADB check: aspetta che il device specificato in config sia
