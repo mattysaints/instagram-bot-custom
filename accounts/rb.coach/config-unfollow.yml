@@ -38,7 +38,22 @@ truncate-sources: 1-1
 # ---------------------------------------------------------------------------
 # AZIONE: solo unfollow-non-followers
 # ---------------------------------------------------------------------------
-unfollow-non-followers: 30-40
+# ---------------------------------------------------------------------------
+# Throttle: qui NON si eredita niente da config.yml, ogni config e' a se'.
+# Senza queste righe valgono i default del codice (unfollow 20-45s), cioe'
+# 80-180 unfollow/ora: un burst, proprio sull'azione che le linee guida
+# indicano come la piu' delicata (15-20/ora, "spargi su piu' ore, con
+# intervalli irregolari"). Con 170-230s si sta a ~16-21/ora.
+action-throttle-enabled: true
+action-throttle-unfollow-min: 170-230
+action-throttle-like-min: 10-22
+action-throttle-follow-min: 30-70
+action-throttle-comment-min: 300-420
+action-throttle-pm-min: 999999
+
+# Ridotto da 30-40: a 170-230s l'uno, 23 unfollow riempiono gia' ~80 minuti.
+# Con total-sessions: 2 fanno ~46 al giorno, sotto daily-unfollows-cap 60.
+unfollow-non-followers: 20-26
 
 ## Aspetta almeno N giorni dal follow prima di sganciare. Il conto parte da
 ## `last_interaction` in accounts/rb.coach/interacted_users.json, quindi il bot
@@ -82,9 +97,9 @@ fling-when-skipped: 0
 # ---------------------------------------------------------------------------
 total-likes-limit: 0-0
 total-follows-limit: 0-0
-total-unfollows-limit: 30-40
+total-unfollows-limit: 20-26
 total-watches-limit: 0-0
-total-successful-interactions-limit: 30-40
+total-successful-interactions-limit: 20-26
 total-interactions-limit: 50-70            # include gli skip (follow_back / errori)
 total-comments-limit: 0-0
 total-pm-limit: 0-0

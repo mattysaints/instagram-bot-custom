@@ -50,7 +50,7 @@ use-cloned-app: false
 allow-untested-ig-version: true
 screen-sleep: false                        # non spegnere lo schermo: evita il blocco PIN tra sessioni
 screen-record: false
-speed-multiplier: 0.9                      # 10% piu' lento del default -> piu' umano
+speed-multiplier: 1.0                      # default upstream: il ritmo umano lo danno le pause casuali, 0.9 allungava ogni attesa dell'11% senza aggiungere varianza
 debug: false
 close-apps: false
 kill-atx-agent: false
@@ -113,8 +113,14 @@ action-throttle-pm-min: 999999             # DM OFF su questa config
 # risponde con la pagina di login sia per i profili veri sia per quelli
 # inesistenti, e cosi' erano entrate 11 sorgenti morte su 72. Una sorgente
 # inesistente brucia ~30s a sessione finche' la quarantena non la esclude.
-blogger-followers: [20hourspalestre, actionfit.carate, actionfit.cerromaggiore, actionfit.cologno, actionfit.fulviotesti, actionfit.italia, actionfit.liguria, afmi2_segrate, alessio_mirin, allenamentofunzionalemilano, animacorpofitness23, anytimefitness_milanorubattino, anytimefitnessitalia, areafitnessurbanclub, aspria_harbourclub, ceresio7gymspa, cerva16_milano, club2d, coach.valentinotozzi, corework_milano, crossfit_darsena, crossfit_portanuova, crossfitbicocca, crossfitcorsico, crossfitmissaglia, edwin_underwood, emanuelemauti3, energypaderno, esport_palestre_cinisello, femstudio_milano, fit.italia, fitactive.rho, fitactive_bustoarsizio, fitactive_cologno_monzese, fitactive_il_fitness_x_tutti, fitactive_legnano, fitactive_milanoripamonti, fitactive_saronno, fitactivecinisellobalsamo, fitactivemonzastucchi, fitactivesegrate, fitclass_tailoredworkout, fitexpress_brand, fitexpress_pioltello, fithouse_monza, fitlab_milano, fitlevel_palestreacerbi, fitmifitnessclub, fitup_bernareggio, gclub_torribianche, getfitlifestylemilano, giampaolo_fusco_thecoach, giulioramazio, goldsgymitaly, greta_francesconi_ptrainer, iltempiodellosport.asd, informaconfede, ironfitmonza, ironmanager, jofitpersonaltrainer___, kickandpunch, leviatano89, malatidipalestraofficial, marcodallabattista_pt, matteoinno88, maurofitnesscoach, maxifit.bollate, maxifit.rho, mcfit_it, melissa.ranni, milanotrainingclub, ms8trainingspace, officinepurestrength, oneforall.hub, palestra_magic_power, palestreopenclub, palextra_monza, paolozottatrainer, pieronocerino1, projectstrength_alessioferlito, ptstudiomilano, reverbia_pt, ricette_ghisa, roberto.personaltrainer, selenegenisella, spaziofitnessclub, sportingclubleonardo, sportingmilano3, sportplus_ssd, sportvillagemonza, t2_truetraining, tonic_milano, tonicitalia, ttcage_studio, upgradetraining.center, uptown.milano, valentinotozzi, virginactiveit, viveredipalestra]
-
+# ORDINE DEI JOB = ordine di queste chiavi (GramAddict/core/config.py:191).
+# `blogger` sta PRIMA di `blogger-followers` di proposito. La sessione si
+# interrompe appena e' raggiunto total-successful-interactions-limit
+# (bot_flow.py:432), e blogger-followers da solo lo esaurisce sempre: con
+# l'ordine inverso il job blogger non veniva MAI eseguito e l'account non
+# commentava piu' nulla. blogger costa poco (si ferma da solo a budget
+# commenti finito), quindi va servito per primo.
+#
 # blogger = commenta i post DI QUESTI ACCOUNT (non dei loro follower).
 # Serve a farsi vedere sotto ai post dei competitor e degli influencer, dove
 # c'e' gia' il pubblico giusto che legge i commenti.
@@ -123,7 +129,35 @@ blogger-followers: [20hourspalestre, actionfit.carate, actionfit.cerromaggiore, 
 # fuori luogo lo vedono in migliaia. Solo italiani, come richiesto.
 # NB: il volume reale e' governato da total-comments-limit e dal throttle,
 # non dalla lunghezza di questa lista.
-blogger: [malatidipalestraofficial, ricette_ghisa, valentinotozzi, fit.italia, pieronocerino1, giampaolo_fusco_thecoach, maurofitnesscoach, emanuelemauti3, paolozottatrainer, ironmanager, informaconfede, virginactiveit]
+# Tolto il 24/08/2026 sera: virginactiveit ha i COMMENTI LIMITATI su tutto il
+# profilo (3 post su 3, 11,5 min per zero commenti): il job blogger li' non
+# potra' mai riuscire. Resta in blogger-followers, dove contano i suoi
+# follower e non i commenti. La lista e' CORTA per il budget: con 11 account
+# e ri-commento a 48h il tetto reale e' ~5-6 commenti/giorno dal job blogger.
+# Per alzare i commenti servono altri handle verificati con
+# tools/verify-ig-handles.py (mai aggiungerli senza verifica).
+blogger: [malatidipalestraofficial, ricette_ghisa, valentinotozzi, fit.italia, pieronocerino1, giampaolo_fusco_thecoach, maurofitnesscoach, emanuelemauti3, paolozottatrainer, ironmanager, informaconfede]
+
+# Finestra di ri-commento per il SOLO job blogger (ore). Sovrascrive
+# can-reinteract-after, che resta a 168h per tutti gli altri job.
+# Serve perche' i 168h globali mettevano in quarantena 6 sorgenti su 8: il
+# 24/08 il job commentava ~2 volte al giorno contro un daily-comments-cap
+# di 40. Con 48h ogni big si ricommenta al massimo a giorni alterni, che
+# sotto ai post di un competitor e' una presenza normale, non insistente.
+blogger-reinteract-after: 48
+
+# Niente commenti sui follower di queste pagine (le seguiamo gia' noi: sono
+# palestre/competitor/brand, non concorrenza da "farsi notare" sotto ai post).
+# Like e follow restano invariati, cambia solo il commento AI.
+# Tolte il 24/08/2026 sui numeri di source_stats/history_filters (22-24/08):
+#   pieronocerino1 (41 profili aperti, 0 azioni), kickandpunch (37 -> 1),
+#   sportingmilano3 (88 -> 5, 67% di account privati), actionfit.cologno
+#   (la sera del 24/08, gia' coi privati accettati: 84 visite -> 13 azioni,
+#   meta' dell'audience sotto i filtri numerici). pieronocerino1 resta
+#   nel job `blogger` qui sopra: sono i suoi FOLLOWER a non rendere, non i
+#   commenti sotto ai suoi post.
+blogger-followers-no-comment: true
+blogger-followers: [20hourspalestre, actionfit.carate, actionfit.cerromaggiore, actionfit.fulviotesti, actionfit.italia, actionfit.liguria, afmi2_segrate, alessio_mirin, allenamentofunzionalemilano, animacorpofitness23, anytimefitness_milanorubattino, anytimefitnessitalia, areafitnessurbanclub, aspria_harbourclub, ceresio7gymspa, cerva16_milano, club2d, coach.valentinotozzi, corework_milano, crossfit_darsena, crossfit_portanuova, crossfitbicocca, crossfitcorsico, crossfitmissaglia, edwin_underwood, emanuelemauti3, energypaderno, esport_palestre_cinisello, femstudio_milano, fit.italia, fitactive.rho, fitactive_bustoarsizio, fitactive_cologno_monzese, fitactive_il_fitness_x_tutti, fitactive_legnano, fitactive_milanoripamonti, fitactive_saronno, fitactivecinisellobalsamo, fitactivemonzastucchi, fitactivesegrate, fitclass_tailoredworkout, fitexpress_brand, fitexpress_pioltello, fithouse_monza, fitlab_milano, fitlevel_palestreacerbi, fitmifitnessclub, fitup_bernareggio, gclub_torribianche, getfitlifestylemilano, giampaolo_fusco_thecoach, giulioramazio, goldsgymitaly, greta_francesconi_ptrainer, iltempiodellosport.asd, informaconfede, ironfitmonza, ironmanager, jofitpersonaltrainer___, leviatano89, malatidipalestraofficial, marcodallabattista_pt, matteoinno88, maurofitnesscoach, maxifit.bollate, maxifit.rho, mcfit_it, melissa.ranni, milanotrainingclub, ms8trainingspace, officinepurestrength, oneforall.hub, palestra_magic_power, palestreopenclub, palextra_monza, paolozottatrainer, projectstrength_alessioferlito, ptstudiomilano, reverbia_pt, ricette_ghisa, roberto.personaltrainer, selenegenisella, spaziofitnessclub, sportingclubleonardo, sportplus_ssd, sportvillagemonza, t2_truetraining, tonic_milano, tonicitalia, ttcage_studio, upgradetraining.center, uptown.milano, valentinotozzi, virginactiveit, viveredipalestra]
 
 # Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
 # follow, niente storie. Like/follow/sticker restano sui profili piccoli
@@ -179,8 +213,13 @@ telegram-reports: false
 # ---------------------------------------------------------------------------
 # Source Limits (per singola sorgente, dentro la sessione)
 # ---------------------------------------------------------------------------
-interactions-count: 12-18
-likes-count: 2                             # 2 like per profilo
+# Abbassato da 12-18 il 24/08 sera: con il tetto per sorgente a ~13 la
+# sessione delle 18:42 ha passato TUTTI i 90 minuti dentro una sola lista
+# follower (84 visite su actionfit.cologno, resa 15%). Con 8-12 si cambia
+# sorgente 2-3 volte a sessione: follower piu' freschi e meno dipendenza
+# dalla singola lista debole.
+interactions-count: 8-12
+likes-count: 1                             # 1 like per profilo: a parita' di budget like si ingaggia il DOPPIO dei profili, e con follow-only-if-engaged ogni profilo col like e' un candidato follow (il 24/08 i follow si sono fermati a 38/60 proprio per il budget like finito)
 likes-percentage: 85-95
 carousel-count: 1-2
 carousel-percentage: 50-70
@@ -188,7 +227,11 @@ max-comments-pro-user: 1
 comment-percentage: 25-35                  # ~1 profilo su 3 riceve commento AI
 pm-percentage: 0
 interact-percentage: 70-85
-follow-percentage: 55-70
+# Roll alto di proposito: il gate anti-cold-follow e' gia' follow-only-if-engaged,
+# e un secondo dado al 55-70% buttava via 1 profilo ingaggiato su 3 a like gia'
+# speso (24/08: ~15 profili con engagement mai seguiti). Il tetto vero restano
+# follow-limit per sorgente e daily-follows-cap.
+follow-percentage: 85-95
 follow-limit: 6-9                          # cap per sorgente: distribuisce invece di svuotarne una
 skipped-list-limit: 30-45
 skipped-posts-limit: 4
@@ -196,16 +239,34 @@ fling-when-skipped: 0
 min-following: 50                          # non scendere sotto questo numero di seguiti
 
 # ---------------------------------------------------------------------------
-# Total Limits Per Session (5 micro-sessioni/giorno via run-dynamic.py)
-# follow:   5 x 10 = ~50/g
-# like:     5 x 22 = ~110/g
-# comment:  5 x  6 = ~30/g
+# Total Limits Per Session (4 sessioni/giorno via run-dynamic.py)
+# follow:   4 x ~13 = ~52/g (cap 60)
+# like:     4 x ~32 = ~128/g (cap 130)
+# comment:  4 x  6  = ~24/g (cap 40)
 # ---------------------------------------------------------------------------
-total-likes-limit: 20-25
-total-follows-limit: 9-12
+# Con follow-only-if-engaged i like NON sono un contorno: sono cio' che
+# produce l'engagement richiesto per poter seguire. Media 39 = daily-likes-cap
+# 190 diviso le 5 finestre di config-alternato.yml; con likes-count: 1 ogni
+# like e' un profilo ingaggiato, quindi ~39 candidati al follow per sessione.
+#
+# Taratura del 24/08. Riferimento: limiti orari "safe" per account
+# consolidato (like 40-60/h, follow 20-30/h, commenti 8-12/h). Il ritmo
+# MISURATO nei log del 23-24/08 stava a un terzo di quei numeri: picco reale
+# 17 like/h e 10 follow/h. In una finestra da 75 minuti questi valori danno
+# ~31 like/h e ~13 follow/h, cioe' sempre sotto meta' del consentito.
+# Si alza il volume restando bassi sul RITMO, che e' la dimensione su cui
+# scattano i blocchi: e' il picco orario a contare, non il totale del giorno.
+total-likes-limit: 36-42
+total-follows-limit: 15-18
 total-unfollows-limit: 0-0                 # unfollow gestito da config-unfollow.yml
 total-watches-limit: 0-0
-total-successful-interactions-limit: 9-12
+# E' il limite che CHIUDE la sessione (bot_flow.py:432) e va diviso fra due
+# job (blogger ne consuma ~5-7; un profilo = una interazione riuscita,
+# session_state.py:66). Con likes-count: 1 ogni like e' un profilo riuscito:
+# ~39 like + follow + commenti devono starci tutti. A chiudere la sessione
+# pensano la finestra dei 75 min e end-if-likes-limit-reached; il tetto
+# giornaliero vero resta daily-follows-cap/daily-likes-cap.
+total-successful-interactions-limit: 38-46
 total-interactions-limit: 999
 total-comments-limit: 5-7
 total-pm-limit: 0-0
@@ -214,8 +275,15 @@ total-scraped-limit: 200-300               # NON 0: con 0 il bot esce subito
 # ---------------------------------------------------------------------------
 # Daily Budget (persistente su daily_budget.json, condiviso tra le config)
 # ---------------------------------------------------------------------------
-daily-follows-cap: 60
-daily-likes-cap: 130
+# Tetti del 24/08, alzati sul misurato invece che sulla paura. Con 5 finestre
+# da 75 min si sta a ~48 azioni/ora di picco: la soglia di rischio indicata
+# per un account consolidato e' 60-80/ora, il pericolo vero oltre 100/ora.
+# Sul giornaliero il margine e' ancora piu' largo: 190 like contro i 300-600
+# considerati sicuri, 80 follow contro 150-200.
+# Se arriva un action-block, il primo numero da riabbassare e' il PICCO
+# ORARIO (total-likes-limit per finestra), non questi tetti.
+daily-follows-cap: 80
+daily-likes-cap: 190
 daily-unfollows-cap: 60
 daily-comments-cap: 40
 daily-pm-cap: 0
@@ -229,7 +297,12 @@ stories-percentage: 0
 # ---------------------------------------------------------------------------
 # Ending Session Conditions
 # ---------------------------------------------------------------------------
-end-if-likes-limit-reached: false
+# true: con follow-only-if-engaged, esaurito il budget like nessuna azione e'
+# piu' possibile (engagement sempre 0, "Skip follow: engagement 0 < 1"). Il
+# 22-24/08 dopo il like-limit il bot ha aperto 148 profili in 69 min per 1
+# solo follow: chiudere subito recupera quel tempo e toglie un pattern
+# anomalo (raffica di visite senza azioni).
+end-if-likes-limit-reached: true
 end-if-follows-limit-reached: false         # non chiudere la sessione al cap follow: continua a likare
 end-if-watches-limit-reached: false
 end-if-comments-limit-reached: false
@@ -270,7 +343,11 @@ ai-comments-fallback-to-file: true
 # answer-story-stickers: [...]   # DISATTIVATO: gli sticker si fanno solo sui
 #   profili piccoli, dentro il flusso normale (sticker-check-percentage).
 #   Riattivalo solo se vuoi rispondere anche ai box domande dei big.
-sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
+# 0: il 22-24/08, su 35 aperture di storie, il check non ha trovato NEMMENO
+# UN box domande (~10-15 min/giorno per zero risposte). Prima di rialzarlo
+# controlla nel log le righe "[sticker]": ora il bot scrive l'esito di ogni
+# check, quindi si puo' riattivare a ragion veduta.
+sticker-check-percentage: 0
 
 # sticker-replies-limit: 3-5                 # risposte per sessione
 # stories-per-source-limit: 6                # storie da controllare per account
@@ -280,16 +357,18 @@ ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, IFBB PRO e coach a Mil
 # ---------------------------------------------------------------------------
 # Scheduling
 # ---------------------------------------------------------------------------
-# Finestre FISSE giornaliere: 5 sessioni da 90 min dentro la fascia consentita
-# 08:00-23:00. Sono le STESSE finestre di roberto_buonomo_ifbbpro: i due
-# emulatori lavorano in simultanea (scelta del cliente). Sul mini PC a 4 core
-# questo vuol dire due AVD da 2 core che si contendono la CPU: le sessioni
-# vanno piu' lente, ed e' il motivo per cui il bot aspetta la barra delle
-# schede fino a 90 s e il profilo fino a 30 s invece di usare tempi fissi.
-# Con total-sessions: -1 il bot fa UNA sessione per finestra, poi aspetta la
-# finestra successiva; di notte dorme e riparte da solo la mattina dopo:
-# nessun rilancio a mano. run-dynamic.py, vedendo -1, NON riscrive questa
-# riga (modalita' finestre fisse).
+# Le working-hours qui sotto le RISCRIVE run-dynamic.py a ogni lancio: quattro
+# sessioni da 90 minuti (gap ~3.75h, jitter fino a +-35 min) a partire
+# dall'ora in cui avvii il bot, dentro la fascia consentita 08:00-23:00.
+# Quattro e non cinque: pause lunghe tra le finestre (~2-2.5h), come il
+# profilo prudente 2025-26, senza rinunciare ai cap giornalieri. Avviarlo vuol dire vederlo lavorare subito.
+# Poi, con total-sessions: -1 e repeat, GramAddict ripete quegli orari ogni
+# giorno da solo: si rilancia solo per spostare la giornata.
+# I due account usano le stesse finestre e lavorano in simultanea (scelta del
+# cliente): sul mini PC a 4 core sono due AVD da 2 core che si contendono la
+# CPU, quindi sessioni piu' lente. E' il motivo per cui il bot aspetta la
+# barra delle schede fino a 90 s e il profilo fino a 30 s invece di usare
+# tempi fissi. Per farli lavorare a turno c'e' config-alternato.yml.
 working-hours: [08.10-09.25, 11.30-12.45, 14.50-16.05, 18.10-19.25, 21.30-22.45]   # giornata alternata: mai in contemporanea con l'altro account
 time-delta: 0-10   # slittamento +/- 10 min: resta dentro i 25 min di stacco fra i due account
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva

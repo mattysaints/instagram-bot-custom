@@ -42,7 +42,7 @@ use-cloned-app: false
 allow-untested-ig-version: true
 screen-sleep: false
 screen-record: false
-speed-multiplier: 0.9
+speed-multiplier: 1.0                      # default upstream: il ritmo umano lo danno le pause casuali, 0.9 allungava ogni attesa dell'11% senza aggiungere varianza
 debug: false
 close-apps: false
 kill-atx-agent: false
@@ -101,12 +101,35 @@ action-throttle-pm-min: 999999             # DM OFF
 # Per aggiungere altri big internazionali (Bumstead, Walker, Labrada, Ruffin,
 # Queiroz...) trova l'handle in una fonte ufficiale e passalo da
 # tools/verify-ig-handles.py prima di scriverlo qui.
-blogger-followers: [albertomilani_ifbbpro, aldomasoloifbbpro, alessandrofichicelli, alessio.ice9.alfei, alex_ifbb_pro, alexrizzii_, andrea.presti_ifbbpro, andrea_mammoli, andrea_muzilla_ifbbpro, anna.ladurner.ifbbpro, anna.terzo_ifbb_pro, bbfitalia, biotechusa_it, bodybuilding_italia_community_, cap_pittiruti_pro, carlofiorentini__, coach_giorgio.terragno, cristianguastella, culturismoitaliano, damianoq_ifbbpro, daniele_gelmi, danielechisari, danielgoss_ifbbpro, dario_beloli_ifbbpro, dario_paolozzi_ifbbpro, denniss_calla, derek_deianov, dilorenzoifbbpro, dr.massimo.spattini, eliaolivierobarbon, enrico_pietrobon_ifbbpro, enzo.jossacoach, fabrizio_liparoti, febo_gambacorta_ifbb_pro, federico_sirna_, gab.stefanelli, garebodybuilding, gerard_ifbb_, gianzcoach, giorgiageraci_, giulioalbi_ifbbpro, giusepperomanocoach, grumpy_grizzly_ifbbpro, ifbb_pro_leonardo_vecchiato, ifbbproitaly, il.pump.quotidiano, ilbolz_ifbbpro, johnjewett3, kiamonteforte, kuba_sylvester_cielen, lady_invictus, legion_ifbbpro, lelerico_ifbbpro, lifeproitalia, lorenzo.coppola_ifbbpro, lorenzo.pansini, luca_pistolato_ifbbpro, lucabiolo_ifbbpro, lucamastra_fit, ludovico.lemme, manuel_santalucia_ifbbpro, marco.busc, marco_dambrosio_ifbbpro, mariovalentini_coach, mauro_sassi_team_stones, mirco_fila, nacciflex, nbfi_italy, nik_liani, npc_italy, npceuromasters, orguamentale, ornella_angileri_ifbbpro, project_invictus, prozis.team.italia, prozisitalia, punzetti_sara_ifbbpro, quiricofrancescopacelli, riccardo_croci_ifbbpro, riccardobenedetti_pt, ricky_ifbbpro, riminiwellness, sabrina_seminara, samuellfortuna, santiphysique8, silvialikki, skeptical_dragoon, sustainablebb, team_presti_coaching, thehungrylonewolf, tsunamibodybuilding, tsunaminutrition, veronica_ghiani_fit, vitastrong_ita, wabbaitalia, wbpf_italy, wnbfitaly, yamamoto_italia, zagarella_ifbb_pro]
-
+# ORDINE DEI JOB = ordine di queste chiavi (GramAddict/core/config.py:191).
+# `blogger` sta PRIMA di `blogger-followers` di proposito. La sessione si
+# interrompe appena e' raggiunto total-successful-interactions-limit
+# (bot_flow.py:432), e blogger-followers da solo lo esaurisce quasi sempre:
+# con l'ordine inverso il job blogger girava solo 2 sessioni su 9. blogger
+# costa poco (si ferma da solo a budget commenti finito), quindi va servito
+# per primo.
+#
 # blogger = commenta i post DI QUESTI ACCOUNT. Qui ci stanno anche gli esteri:
 # un commento tecnico sotto al post di un top coach e' esattamente il posto
 # dove un IFBB PRO italiano si fa notare dai pari.
 blogger: [gianzcoach, andrea.presti_ifbbpro, johnjewett3, kuba_sylvester_cielen, andrea_mammoli, ludovico.lemme, project_invictus, lucamastra_fit, aldomasoloifbbpro, silvialikki, riccardo_croci_ifbbpro, luca_pistolato_ifbbpro, mirco_fila, giusepperomanocoach, lelerico_ifbbpro, manuel_santalucia_ifbbpro, alex_ifbb_pro, dilorenzoifbbpro, mauro_sassi_team_stones, ifbbproitaly, culturismoitaliano]
+
+# Finestra di ri-commento per il SOLO job blogger (ore). Sovrascrive
+# can-reinteract-after, che resta a 168h per tutti gli altri job.
+# Qui la lista e' piu' lunga (21 account) e il rischio di ripetersi e' minore,
+# ma vale lo stesso ragionamento di rb.coach: con i 168h globali il job
+# girava quasi a vuoto.
+blogger-reinteract-after: 48
+
+# Niente commenti sui follower di queste pagine (le seguiamo gia' noi: sono
+# atleti/coach/community, non concorrenza da "farsi notare" sotto ai post).
+# Like e follow restano invariati, cambia solo il commento AI.
+blogger-followers-no-comment: true
+# Tolta il 24/08/2026: garebodybuilding (94 profili aperti, 6 azioni: il 90%
+# dei suoi follower gia' ci segue o e' gia' seguito - audience saturata).
+# L'hashtag #garebodybuilding invece resta. enzo.jossacoach e' al limite
+# (24 FOLLOW_YOU su 43): da rivalutare col prossimo giro di dati.
+blogger-followers: [albertomilani_ifbbpro, aldomasoloifbbpro, alessandrofichicelli, alessio.ice9.alfei, alex_ifbb_pro, alexrizzii_, andrea.presti_ifbbpro, andrea_mammoli, andrea_muzilla_ifbbpro, anna.ladurner.ifbbpro, anna.terzo_ifbb_pro, bbfitalia, biotechusa_it, bodybuilding_italia_community_, cap_pittiruti_pro, carlofiorentini__, coach_giorgio.terragno, cristianguastella, culturismoitaliano, damianoq_ifbbpro, daniele_gelmi, danielechisari, danielgoss_ifbbpro, dario_beloli_ifbbpro, dario_paolozzi_ifbbpro, denniss_calla, derek_deianov, dilorenzoifbbpro, dr.massimo.spattini, eliaolivierobarbon, enrico_pietrobon_ifbbpro, enzo.jossacoach, fabrizio_liparoti, febo_gambacorta_ifbb_pro, federico_sirna_, gab.stefanelli, gerard_ifbb_, gianzcoach, giorgiageraci_, giulioalbi_ifbbpro, giusepperomanocoach, grumpy_grizzly_ifbbpro, ifbb_pro_leonardo_vecchiato, ifbbproitaly, il.pump.quotidiano, ilbolz_ifbbpro, johnjewett3, kiamonteforte, kuba_sylvester_cielen, lady_invictus, legion_ifbbpro, lelerico_ifbbpro, lifeproitalia, lorenzo.coppola_ifbbpro, lorenzo.pansini, luca_pistolato_ifbbpro, lucabiolo_ifbbpro, lucamastra_fit, ludovico.lemme, manuel_santalucia_ifbbpro, marco.busc, marco_dambrosio_ifbbpro, mariovalentini_coach, mauro_sassi_team_stones, mirco_fila, nacciflex, nbfi_italy, nik_liani, npc_italy, npceuromasters, orguamentale, ornella_angileri_ifbbpro, project_invictus, prozis.team.italia, prozisitalia, punzetti_sara_ifbbpro, quiricofrancescopacelli, riccardo_croci_ifbbpro, riccardobenedetti_pt, ricky_ifbbpro, riminiwellness, sabrina_seminara, samuellfortuna, santiphysique8, silvialikki, skeptical_dragoon, sustainablebb, team_presti_coaching, thehungrylonewolf, tsunamibodybuilding, tsunaminutrition, veronica_ghiani_fit, vitastrong_ita, wabbaitalia, wbpf_italy, wnbfitaly, yamamoto_italia, zagarella_ifbb_pro]
 
 # Sui profili grandi si fa SOLO il commento pubblico: niente like, niente
 # follow, niente storie. Like/follow/sticker restano sui profili piccoli
@@ -149,8 +172,11 @@ telegram-reports: false
 # ---------------------------------------------------------------------------
 # Source Limits (per singola sorgente)
 # ---------------------------------------------------------------------------
-interactions-count: 10-15
-likes-count: 2
+# Abbassato da 10-15 il 24/08 sera, stesso motivo di rb.coach: tetto per
+# sorgente piu' basso = 2-3 sorgenti per sessione invece di una sola lista
+# scrollata in profondita'.
+interactions-count: 8-12
+likes-count: 1                             # 1 like per profilo: a parita' di budget like si ingaggia il DOPPIO dei profili, e con follow-only-if-engaged ogni profilo col like e' un candidato follow (24/08: like esauriti 109/110 con solo 24 follow su cap 50)
 likes-percentage: 85-95
 carousel-count: 1-2
 carousel-percentage: 50-70
@@ -158,7 +184,10 @@ max-comments-pro-user: 1
 comment-percentage: 25-35
 pm-percentage: 0
 interact-percentage: 70-85
-follow-percentage: 50-65
+# Roll alto di proposito: il gate anti-cold-follow e' gia' follow-only-if-engaged,
+# e un secondo dado al 50-65% buttava via ~1 profilo ingaggiato su 2 a like gia'
+# speso. Il tetto vero restano follow-limit per sorgente e daily-follows-cap.
+follow-percentage: 85-95
 follow-limit: 5-8
 skipped-list-limit: 30-45
 skipped-posts-limit: 4
@@ -168,11 +197,30 @@ min-following: 50
 # ---------------------------------------------------------------------------
 # Total Limits Per Session (4 sessioni/giorno)
 # ---------------------------------------------------------------------------
-total-likes-limit: 20-25
-total-follows-limit: 9-12
+# Con follow-only-if-engaged i like sono il carburante dei follow. Media 39 =
+# daily-likes-cap 155 diviso le 4 finestre di config-alternato.yml; con
+# likes-count: 1 ogni like e' un profilo ingaggiato (~39 candidati al follow
+# per sessione).
+#
+# Taratura del 24/08. Riferimento: limiti orari "safe" per account
+# consolidato (like 40-60/h, follow 20-30/h, commenti 8-12/h). Il ritmo
+# MISURATO nei log del 23-24/08 stava a un terzo di quei numeri: picco reale
+# 22 like/h e 6 follow/h. In una finestra da 75 minuti questi valori danno
+# ~31 like/h e ~13 follow/h, sempre sotto meta' del consentito.
+# Questo account ha 4 finestre invece di 5, quindi a parita' di limite per
+# sessione il totale del giorno resta piu' basso di @rb.coach: e' voluto,
+# sono due account con due strategie diverse.
+total-likes-limit: 36-42
+total-follows-limit: 15-18
 total-unfollows-limit: 0-0
 total-watches-limit: 0-0
-total-successful-interactions-limit: 9-12
+# E' il limite che CHIUDE la sessione (bot_flow.py:432) e va diviso fra due
+# job (blogger ne consuma ~5-7; un profilo = una interazione riuscita,
+# session_state.py:66). Con likes-count: 1 ogni like e' un profilo riuscito:
+# ~39 like + follow + commenti devono starci tutti. A chiudere la sessione
+# pensano la finestra dei 75 min e end-if-likes-limit-reached; il tetto
+# giornaliero vero resta daily-follows-cap/daily-likes-cap.
+total-successful-interactions-limit: 38-46
 total-interactions-limit: 999
 total-comments-limit: 5-7
 total-pm-limit: 0-0
@@ -181,8 +229,15 @@ total-scraped-limit: 200-300
 # ---------------------------------------------------------------------------
 # Daily Budget - separato da @rb.coach (file daily_budget.json per account)
 # ---------------------------------------------------------------------------
-daily-follows-cap: 50
-daily-likes-cap: 110
+# Tetti del 24/08, alzati sul misurato invece che sulla paura. Con 4 finestre
+# da 75 min si sta a ~48 azioni/ora di picco: la soglia di rischio indicata
+# per un account consolidato e' 60-80/ora, il pericolo vero oltre 100/ora.
+# Sul giornaliero il margine e' ancora piu' largo: 155 like contro i 300-600
+# considerati sicuri, 65 follow contro 150-200.
+# Se arriva un action-block, il primo numero da riabbassare e' il PICCO
+# ORARIO (total-likes-limit per finestra), non questi tetti.
+daily-follows-cap: 65
+daily-likes-cap: 155
 daily-unfollows-cap: 50
 daily-comments-cap: 30
 daily-pm-cap: 0
@@ -196,7 +251,11 @@ stories-percentage: 0
 # ---------------------------------------------------------------------------
 # Ending Session Conditions
 # ---------------------------------------------------------------------------
-end-if-likes-limit-reached: false
+# true: con follow-only-if-engaged, esaurito il budget like nessuna azione e'
+# piu' possibile (engagement sempre 0). Il 24/08 dopo il like-limit il bot ha
+# aperto 43 profili in ~25 min senza poter fare nulla: chiudere subito
+# recupera quel tempo e toglie un pattern anomalo.
+end-if-likes-limit-reached: true
 end-if-follows-limit-reached: false
 end-if-watches-limit-reached: false
 end-if-comments-limit-reached: false
@@ -236,7 +295,11 @@ ai-comments-fallback-to-file: true
 # answer-story-stickers: [...]   # DISATTIVATO: gli sticker si fanno solo sui
 #   profili piccoli, dentro il flusso normale (sticker-check-percentage).
 #   Riattivalo solo se vuoi rispondere anche ai box domande dei big.
-sticker-check-percentage: 60-75            # su ~2 profili su 3 apre le storie per cercare un box domande
+# 0: il 22-24/08 il check non ha mai trovato un box domande su nessuno dei
+# due account (~12-15 min/giorno per zero risposte). Prima di rialzarlo
+# controlla nel log le righe "[sticker]": ora il bot scrive l'esito di ogni
+# check, quindi si puo' riattivare a ragion veduta.
+sticker-check-percentage: 0
 
 # sticker-replies-limit: 3-5                 # risposte per sessione
 # stories-per-source-limit: 6                # storie da controllare per account
@@ -245,12 +308,14 @@ ai-sticker-language: auto
 ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italiano. Risponde allo sticker da atleta a atleta: parola secca o due, niente presentazioni, niente complimenti, niente promozione."
 
 # ---------------------------------------------------------------------------
-# Scheduling - 5 sessioni/giorno da 90 min in finestre FISSE dentro la fascia
-# consentita 08:00-23:00. Sono le STESSE finestre di rb.coach: i due emulatori
-# lavorano in simultanea (scelta del cliente). Con total-sessions: -1 il bot
-# fa UNA sessione per finestra, poi aspetta la successiva; di notte dorme e
-# riparte da solo la mattina dopo: nessun rilancio a mano. run-dynamic.py,
-# vedendo -1, NON riscrive la riga.
+# Scheduling - 4 sessioni da 90 min (gap ~3.75h, jitter fino a +-35 min),
+# con le working-hours RISCRITTE da run-dynamic.py a ogni lancio a partire
+# dall'ora di avvio (dentro la fascia 08:00-23:00): si avvia il bot e la
+# prima sessione parte subito. Con total-sessions: -1 e repeat, quegli orari
+# si ripetono ogni giorno da soli. Quattro e non cinque: pause lunghe tra le
+# finestre (~2-2.5h), come il profilo prudente 2025-26.
+# Stesse finestre di rb.coach: i due account lavorano in simultanea. Per
+# farli lavorare a turno c'e' config-alternato.yml.
 # ---------------------------------------------------------------------------
 working-hours: [09.50-11.05, 13.10-14.25, 16.30-17.45, 19.50-21.05]   # giornata alternata: mai in contemporanea con l'altro account
 time-delta: 0-10   # slittamento +/- 10 min: resta dentro i 25 min di stacco fra i due account

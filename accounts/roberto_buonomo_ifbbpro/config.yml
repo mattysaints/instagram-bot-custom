@@ -184,20 +184,30 @@ min-following: 50
 # ---------------------------------------------------------------------------
 # Total Limits Per Session (4 sessioni/giorno)
 # ---------------------------------------------------------------------------
-# Con follow-only-if-engaged i like sono il carburante dei follow. Media 27 =
-# daily-likes-cap 110 diviso le 4 finestre; con likes-count: 1 ogni like e'
-# un profilo ingaggiato (~26 candidati al follow per sessione).
-total-likes-limit: 26-30
-total-follows-limit: 11-14
+# Con follow-only-if-engaged i like sono il carburante dei follow. Media 39 =
+# daily-likes-cap 155 diviso le 4 finestre di config-alternato.yml; con
+# likes-count: 1 ogni like e' un profilo ingaggiato (~39 candidati al follow
+# per sessione).
+#
+# Taratura del 24/08. Riferimento: limiti orari "safe" per account
+# consolidato (like 40-60/h, follow 20-30/h, commenti 8-12/h). Il ritmo
+# MISURATO nei log del 23-24/08 stava a un terzo di quei numeri: picco reale
+# 22 like/h e 6 follow/h. In una finestra da 75 minuti questi valori danno
+# ~31 like/h e ~13 follow/h, sempre sotto meta' del consentito.
+# Questo account ha 4 finestre invece di 5, quindi a parita' di limite per
+# sessione il totale del giorno resta piu' basso di @rb.coach: e' voluto,
+# sono due account con due strategie diverse.
+total-likes-limit: 36-42
+total-follows-limit: 15-18
 total-unfollows-limit: 0-0
 total-watches-limit: 0-0
 # E' il limite che CHIUDE la sessione (bot_flow.py:432) e va diviso fra due
 # job (blogger ne consuma ~5-7; un profilo = una interazione riuscita,
 # session_state.py:66). Con likes-count: 1 ogni like e' un profilo riuscito:
-# ~26 like + follow + commenti devono starci tutti. A chiudere la sessione
-# pensano la finestra dei 90 min e end-if-likes-limit-reached; il tetto
+# ~39 like + follow + commenti devono starci tutti. A chiudere la sessione
+# pensano la finestra dei 75 min e end-if-likes-limit-reached; il tetto
 # giornaliero vero resta daily-follows-cap/daily-likes-cap.
-total-successful-interactions-limit: 26-32
+total-successful-interactions-limit: 38-46
 total-interactions-limit: 999
 total-comments-limit: 5-7
 total-pm-limit: 0-0
@@ -206,8 +216,15 @@ total-scraped-limit: 200-300
 # ---------------------------------------------------------------------------
 # Daily Budget - separato da @rb.coach (file daily_budget.json per account)
 # ---------------------------------------------------------------------------
-daily-follows-cap: 50
-daily-likes-cap: 110
+# Tetti del 24/08, alzati sul misurato invece che sulla paura. Con 4 finestre
+# da 75 min si sta a ~48 azioni/ora di picco: la soglia di rischio indicata
+# per un account consolidato e' 60-80/ora, il pericolo vero oltre 100/ora.
+# Sul giornaliero il margine e' ancora piu' largo: 155 like contro i 300-600
+# considerati sicuri, 65 follow contro 150-200.
+# Se arriva un action-block, il primo numero da riabbassare e' il PICCO
+# ORARIO (total-likes-limit per finestra), non questi tetti.
+daily-follows-cap: 65
+daily-likes-cap: 155
 daily-unfollows-cap: 50
 daily-comments-cap: 30
 daily-pm-cap: 0
@@ -287,7 +304,7 @@ ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italia
 # Stesse finestre di rb.coach: i due account lavorano in simultanea. Per
 # farli lavorare a turno c'e' config-alternato.yml.
 # ---------------------------------------------------------------------------
-working-hours: [21.02-22.32]   # generata dinamicamente da run-dynamic.py
+working-hours: [20.34-22.04]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-0                             # ZERO di proposito: le finestre le calcola gia' run-dynamic.py dall'ora di lancio (con jitter fra una sessione e l'altra). Uno slittamento positivo qui sposterebbe in avanti la prima finestra e il bot, appena avviato, resterebbe fermo ad aspettare invece di partire subito
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
 total-sessions: -1                          # loop senza fine (rispetta le working-hours)

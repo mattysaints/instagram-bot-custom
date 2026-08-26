@@ -232,20 +232,28 @@ min-following: 50                          # non scendere sotto questo numero di
 # comment:  4 x  6  = ~24/g (cap 40)
 # ---------------------------------------------------------------------------
 # Con follow-only-if-engaged i like NON sono un contorno: sono cio' che
-# produce l'engagement richiesto per poter seguire. Media 32 = daily-likes-cap
-# 130 diviso le 4 finestre; con likes-count: 1 ogni like e' un profilo
-# ingaggiato, quindi ~30 candidati al follow per sessione.
-total-likes-limit: 30-34
-total-follows-limit: 12-15
+# produce l'engagement richiesto per poter seguire. Media 39 = daily-likes-cap
+# 190 diviso le 5 finestre di config-alternato.yml; con likes-count: 1 ogni
+# like e' un profilo ingaggiato, quindi ~39 candidati al follow per sessione.
+#
+# Taratura del 24/08. Riferimento: limiti orari "safe" per account
+# consolidato (like 40-60/h, follow 20-30/h, commenti 8-12/h). Il ritmo
+# MISURATO nei log del 23-24/08 stava a un terzo di quei numeri: picco reale
+# 17 like/h e 10 follow/h. In una finestra da 75 minuti questi valori danno
+# ~31 like/h e ~13 follow/h, cioe' sempre sotto meta' del consentito.
+# Si alza il volume restando bassi sul RITMO, che e' la dimensione su cui
+# scattano i blocchi: e' il picco orario a contare, non il totale del giorno.
+total-likes-limit: 36-42
+total-follows-limit: 15-18
 total-unfollows-limit: 0-0                 # unfollow gestito da config-unfollow.yml
 total-watches-limit: 0-0
 # E' il limite che CHIUDE la sessione (bot_flow.py:432) e va diviso fra due
 # job (blogger ne consuma ~5-7; un profilo = una interazione riuscita,
 # session_state.py:66). Con likes-count: 1 ogni like e' un profilo riuscito:
-# ~30 like + follow + commenti devono starci tutti. A chiudere la sessione
-# pensano la finestra dei 90 min e end-if-likes-limit-reached; il tetto
+# ~39 like + follow + commenti devono starci tutti. A chiudere la sessione
+# pensano la finestra dei 75 min e end-if-likes-limit-reached; il tetto
 # giornaliero vero resta daily-follows-cap/daily-likes-cap.
-total-successful-interactions-limit: 30-36
+total-successful-interactions-limit: 38-46
 total-interactions-limit: 999
 total-comments-limit: 5-7
 total-pm-limit: 0-0
@@ -254,8 +262,15 @@ total-scraped-limit: 200-300               # NON 0: con 0 il bot esce subito
 # ---------------------------------------------------------------------------
 # Daily Budget (persistente su daily_budget.json, condiviso tra le config)
 # ---------------------------------------------------------------------------
-daily-follows-cap: 60
-daily-likes-cap: 130
+# Tetti del 24/08, alzati sul misurato invece che sulla paura. Con 5 finestre
+# da 75 min si sta a ~48 azioni/ora di picco: la soglia di rischio indicata
+# per un account consolidato e' 60-80/ora, il pericolo vero oltre 100/ora.
+# Sul giornaliero il margine e' ancora piu' largo: 190 like contro i 300-600
+# considerati sicuri, 80 follow contro 150-200.
+# Se arriva un action-block, il primo numero da riabbassare e' il PICCO
+# ORARIO (total-likes-limit per finestra), non questi tetti.
+daily-follows-cap: 80
+daily-likes-cap: 190
 daily-unfollows-cap: 60
 daily-comments-cap: 40
 daily-pm-cap: 0
@@ -341,7 +356,7 @@ ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, IFBB PRO e coach a Mil
 # CPU, quindi sessioni piu' lente. E' il motivo per cui il bot aspetta la
 # barra delle schede fino a 90 s e il profilo fino a 30 s invece di usare
 # tempi fissi. Per farli lavorare a turno c'e' config-alternato.yml.
-working-hours: [21.02-22.32]   # generata dinamicamente da run-dynamic.py
+working-hours: [20.34-22.04]   # generata dinamicamente da run-dynamic.py
 time-delta: 0-0                             # ZERO di proposito: le finestre le calcola gia' run-dynamic.py dall'ora di lancio (con jitter fra una sessione e l'altra). Uno slittamento positivo qui sposterebbe in avanti la prima finestra e il bot, appena avviato, resterebbe fermo ad aspettare invece di partire subito
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
 total-sessions: -1                          # loop senza fine (rispetta le working-hours)
