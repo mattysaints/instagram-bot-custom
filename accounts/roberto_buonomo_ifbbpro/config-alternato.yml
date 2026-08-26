@@ -126,16 +126,40 @@ action-throttle-pm-min: 999999             # DM OFF
 #   3) blogger-skip-following (sotto) fa da rete di sicurezza: se un big di
 #      questa lista risulta gia' seguito, viene saltato e non commentato.
 #
-# La lista ora e' SOLO big internazionali (>20k, quasi tutti >500k) del giro
-# bodybuilding/classic physique che Roberto verosimilmente NON segue: top
-# athlete e top coach anglofoni. Un commento tecnico li' e' il posto giusto
-# per farsi notare dai pari; ai loro post l'AI risponde in inglese
-# (ai-comments-language: auto).
+# La lista e' fatta di DUE blocchi, entrambi profili che Roberto NON segue:
+#
+# A) big internazionali (>20k, quasi tutti >500k) del giro bodybuilding/
+#    classic physique: top athlete e top coach anglofoni. Un commento tecnico
+#    li' e' il posto giusto per farsi notare dai pari; ai loro post l'AI
+#    risponde in inglese (ai-comments-language: auto).
+#
+# B) fitness influencer italiani FAMOSI (>20k, molti >100k) fuori dal suo
+#    giro agonistico (richiesta del 26/08/2026): mainstream fitness, palestra,
+#    calisthenics, running. NON sono i colleghi IFBB che conosce di persona -
+#    quelli sono esclusi dal punto 1 qui sopra - e nessuno di questi handle
+#    sta in blogger-followers (le pagine che segue). Ricerca online del
+#    26/08/2026 su classifiche Modash / ClickAnalytic (giu 2026) / Kolsquare.
+#    Ai loro post l'AI commenta in italiano (caption ita -> commento ita).
 #
 # NB: handle presi da fonti note ma NON ancora verificati sull'emulatore.
 # Prima del primo run passali da tools/verify-ig-handles.py (vedi nota sopra:
 # una sorgente inesistente brucia ~30s a sessione).
-blogger: [cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin, dereklunsford_, nick_walker39, hunterlabrada, flex_lewis, jaycutler, hanyrambod, hypertrophycoach, jeffnippard]
+#
+# Blocco A - internazionali:
+#   cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin,
+#   dereklunsford_, nick_walker39, hunterlabrada, flex_lewis, jaycutler,
+#   hanyrambod, hypertrophycoach, jeffnippard
+# Blocco B - italiani fitness (follower al 06-08/2026):
+#   thefashionjogger 2.4M | danny_lazzarin 1M | cottoaldente 801k
+#   ilmasseo 765k | deborahfashionsport 679k | larosa_sw 500k+
+#   traininpink 472k | umbertomiletto 335k+ | selenegenisella 228k
+#   silvia.fascians 200k | lisalborghetti 189k | luca.tarantino03 178k
+#   serefitfun 147k | scarxlus_ 139k | _andrew.ace 132k
+#   madcarolina93 104k | lorenzobianca01 104k | calisteriklugli 102k
+#   chiara.savage_ 101k | giulio.sicari 64k | __pietromonti__ 61k
+#   claires.cj 52k | simonetinifit 51k | _martina_bragagnolo_ 49k
+#   danielacastells 40k | jaco_tassinari 33k
+blogger: [cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin, dereklunsford_, nick_walker39, hunterlabrada, flex_lewis, jaycutler, hanyrambod, hypertrophycoach, jeffnippard, thefashionjogger, danny_lazzarin, cottoaldente, ilmasseo, deborahfashionsport, larosa_sw, traininpink, umbertomiletto, selenegenisella, silvia.fascians, lisalborghetti, luca.tarantino03, serefitfun, scarxlus_, _andrew.ace, madcarolina93, lorenzobianca01, calisteriklugli, chiara.savage_, giulio.sicari, __pietromonti__, claires.cj, simonetinifit, _martina_bragagnolo_, danielacastells, jaco_tassinari]
 
 # Rete di sicurezza per la regola qui sopra: sul job blogger il filtro
 # skip_following resta ATTIVO anche in modalita' comment-only. Se Roberto
@@ -145,10 +169,10 @@ blogger-skip-following: true
 
 # Finestra di ri-commento per il SOLO job blogger (ore). Sovrascrive
 # can-reinteract-after, che resta a 168h per tutti gli altri job.
-# Con la lista ristretta ai 13 big internazionali, 72h invece di 48: sono
-# profili molto visibili e postano spesso, ricommentare ogni 2 giorni sotto
-# agli stessi 13 account sarebbe un pattern riconoscibile.
-blogger-reinteract-after: 72
+# La lista ora conta ~39 account (13 internazionali + 26 italiani) e
+# truncate-sources ne pesca 6-8 a sessione: il rischio di ripetersi sotto
+# allo stesso profilo e' basso, valgono le 48h come nella taratura originale.
+blogger-reinteract-after: 48
 
 # Niente commenti sui follower di queste pagine (le seguiamo gia' noi: sono
 # atleti/coach/community, non concorrenza da "farsi notare" sotto ai post).
