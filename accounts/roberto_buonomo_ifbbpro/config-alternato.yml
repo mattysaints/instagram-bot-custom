@@ -98,9 +98,10 @@ action-throttle-pm-min: 999999             # DM OFF
 # Italia. Se l'obiettivo diventa acquisire clienti, tienili come secondari e
 # lascia il grosso del budget follow alle sorgenti italiane.
 #
-# Per aggiungere altri big internazionali (Bumstead, Walker, Labrada, Ruffin,
-# Queiroz...) trova l'handle in una fonte ufficiale e passalo da
-# tools/verify-ig-handles.py prima di scriverlo qui.
+# Per aggiungere altri big internazionali trova l'handle in una fonte
+# ufficiale e passalo da tools/verify-ig-handles.py prima di scriverlo qui
+# (Bumstead, Walker, Labrada, Ruffin, Queiroz e altri sono gia' nel job
+# `blogger` qui sotto).
 # ORDINE DEI JOB = ordine di queste chiavi (GramAddict/core/config.py:191).
 # `blogger` sta PRIMA di `blogger-followers` di proposito. La sessione si
 # interrompe appena e' raggiunto total-successful-interactions-limit
@@ -109,17 +110,45 @@ action-throttle-pm-min: 999999             # DM OFF
 # costa poco (si ferma da solo a budget commenti finito), quindi va servito
 # per primo.
 #
-# blogger = commenta i post DI QUESTI ACCOUNT. Qui ci stanno anche gli esteri:
-# un commento tecnico sotto al post di un top coach e' esattamente il posto
-# dove un IFBB PRO italiano si fa notare dai pari.
-blogger: [gianzcoach, andrea.presti_ifbbpro, johnjewett3, kuba_sylvester_cielen, andrea_mammoli, ludovico.lemme, project_invictus, lucamastra_fit, aldomasoloifbbpro, silvialikki, riccardo_croci_ifbbpro, luca_pistolato_ifbbpro, mirco_fila, giusepperomanocoach, lelerico_ifbbpro, manuel_santalucia_ifbbpro, alex_ifbb_pro, dilorenzoifbbpro, mauro_sassi_team_stones, ifbbproitaly, culturismoitaliano]
+# blogger = commenta i post DI QUESTI ACCOUNT.
+#
+# REGOLA (richiesta di Roberto, 26/08/2026): NIENTE commenti sui big che gia'
+# seguiva prima del bot e in generale su quelli ITALIANI - li conosce di
+# persona, un commento generato li' e' riconoscibile. Per questo:
+#   1) gli italiani (gianzcoach, andrea.presti_ifbbpro, mammoli, lemme,
+#      invictus, mastra, masolo, silvialikki, croci, pistolato, fila,
+#      romano, lelerico, santalucia, alex_ifbb_pro, dilorenzo, sassi,
+#      ifbbproitaly, culturismoitaliano...) sono USCITI da questa lista.
+#      Restano sorgenti in blogger-followers: like/follow sui LORO follower
+#      continuano come prima, sparisce solo il commento sotto ai loro post.
+#   2) johnjewett3 e kuba_sylvester_cielen sono usciti anche loro: li segue
+#      gia' (il job li apriva e li saltava con "You follow @..., skip").
+#   3) blogger-skip-following (sotto) fa da rete di sicurezza: se un big di
+#      questa lista risulta gia' seguito, viene saltato e non commentato.
+#
+# La lista ora e' SOLO big internazionali (>20k, quasi tutti >500k) del giro
+# bodybuilding/classic physique che Roberto verosimilmente NON segue: top
+# athlete e top coach anglofoni. Un commento tecnico li' e' il posto giusto
+# per farsi notare dai pari; ai loro post l'AI risponde in inglese
+# (ai-comments-language: auto).
+#
+# NB: handle presi da fonti note ma NON ancora verificati sull'emulatore.
+# Prima del primo run passali da tools/verify-ig-handles.py (vedi nota sopra:
+# una sorgente inesistente brucia ~30s a sessione).
+blogger: [cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin, dereklunsford_, nick_walker39, hunterlabrada, flex_lewis, jaycutler, hanyrambod, hypertrophycoach, jeffnippard]
+
+# Rete di sicurezza per la regola qui sopra: sul job blogger il filtro
+# skip_following resta ATTIVO anche in modalita' comment-only. Se Roberto
+# segue gia' uno di questi big (o se ne aggiungiamo uno che segue), il bot
+# lo apre e lo salta ("You follow @..., skip") invece di commentarlo.
+blogger-skip-following: true
 
 # Finestra di ri-commento per il SOLO job blogger (ore). Sovrascrive
 # can-reinteract-after, che resta a 168h per tutti gli altri job.
-# Qui la lista e' piu' lunga (21 account) e il rischio di ripetersi e' minore,
-# ma vale lo stesso ragionamento di rb.coach: con i 168h globali il job
-# girava quasi a vuoto.
-blogger-reinteract-after: 48
+# Con la lista ristretta ai 13 big internazionali, 72h invece di 48: sono
+# profili molto visibili e postano spesso, ricommentare ogni 2 giorni sotto
+# agli stessi 13 account sarebbe un pattern riconoscibile.
+blogger-reinteract-after: 72
 
 # Niente commenti sui follower di queste pagine (le seguiamo gia' noi: sono
 # atleti/coach/community, non concorrenza da "farsi notare" sotto ai post).

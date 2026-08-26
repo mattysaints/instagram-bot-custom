@@ -36,6 +36,10 @@ _SIZE_FIELDS = (
 # li leggeva e concludeva "You follow @..., skip": zero commenti in una
 # sessione intera. Commentare sotto a chi gia' segui e' esattamente il
 # comportamento naturale, non un'anomalia da filtrare.
+# NB: se invece il cliente NON vuole commenti sotto ai profili che gia'
+# segue (li conosce, il commento del bot e' riconoscibile), c'e'
+# --blogger-skip-following: rimette skip_following a true per il solo job
+# blogger e quei big vengono aperti e saltati con "You follow @..., skip".
 _POTENCY_NEUTRAL = {
     "min_potency_ratio": 0,
     "max_potency_ratio": 999,
@@ -54,19 +58,28 @@ _POTENCY_NEUTRAL = {
 
 
 @contextmanager
-def _size_filters_suspended(profile_filter):
-    """Sospende i filtri di dimensione, poi li rimette esattamente com'erano."""
+def _size_filters_suspended(profile_filter, keep_skip_following=False):
+    """Sospende i filtri di dimensione, poi li rimette esattamente com'erano.
+
+    Con keep_skip_following=True (--blogger-skip-following) skip_following
+    resta attivo: i big che l'account segue gia' vengono saltati invece che
+    commentati.
+    """
     conditions = getattr(profile_filter, "conditions", None)
     if not conditions:
         yield
         return
 
-    watched = list(_SIZE_FIELDS) + list(_POTENCY_NEUTRAL)
+    overrides = dict(_POTENCY_NEUTRAL)
+    if keep_skip_following:
+        overrides["skip_following"] = True
+
+    watched = list(_SIZE_FIELDS) + list(overrides)
     saved = {k: conditions[k] for k in watched if k in conditions}
     try:
         for k in _SIZE_FIELDS:
             conditions.pop(k, None)
-        conditions.update(_POTENCY_NEUTRAL)
+        conditions.update(overrides)
         yield
     finally:
         for k in watched:
@@ -140,6 +153,17 @@ class InteractBloggerPostLikers(Plugin):
                 ),
                 "metavar": "true|false",
                 "default": "true",
+            },
+            {
+                "arg": "--blogger-skip-following",
+                "nargs": None,
+                "help": (
+                    "on the `blogger` job in comment-only mode, keep the "
+                    "skip_following filter ON: bigs the account already follows "
+                    "are opened and skipped instead of commented (default: false)"
+                ),
+                "metavar": "true|false",
+                "default": "false",
             },
         ]
 
@@ -335,7 +359,12 @@ class InteractBloggerPostLikers(Plugin):
         if comment_only:
             # senza questo, un account con piu' follower di max_followers
             # verrebbe scartato da check_profile e non commenteremmo nulla
-            with _size_filters_suspended(profile_filter):
+            skip_known = _as_bool(
+                getattr(self.args, "blogger_skip_following", None), default=False
+            )
+            with _size_filters_suspended(
+                profile_filter, keep_skip_following=skip_known
+            ):
                 handle_blogger(
                     self,
                     device,
