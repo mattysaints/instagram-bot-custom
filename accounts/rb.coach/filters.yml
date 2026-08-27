@@ -61,21 +61,33 @@ skip_username_digit_ratio_above: 0.6
 
 ## Filters on profile stats - tarati sul CLIENTE, non sull'addetto ai lavori
 min_followers: 200                         # sotto i 200 di solito e' un account appena aperto o inattivo: non risponde e non compra
-max_followers: 4000                        # sopra i 4k nel fitness sei quasi sempre un micro-influencer o un PT: vendi coaching, non lo compri
+max_followers: 15000                       # alzato da 4.000: un PT di Milano avviato sta fra i 3k e i 15k, e col tetto precedente non lo avremmo mai raggiunto. Sopra i 15k si entra nel territorio degli influencer, che non interessa
 min_followings: 80                         # segue almeno 80 profili -> usa Instagram davvero
 max_followings: 4000
 min_potency_ratio: 0.3                     # il principiante segue molti e ha pochi follower: ratio basso e' NORMALE per il cliente tipo
-max_potency_ratio: 4                       # oltre il 4 inizia a essere un "personaggio", non un cliente
+max_potency_ratio: 15                      # alzato da 4: un professionista con pubblico vero ha un rapporto alto per definizione. Il tetto serve solo a escludere i profili da "personaggio"
 min_posts: 9                               # profilo vissuto, non vetrina vuota
 mutual_friends: -1
 last_post_max_age_days: 45                 # attivo nell'ultimo mese e mezzo. Fail-open: se non legge la data non scarta
 
 ## Filters on biography and name
-# Oltre allo spam, qui si escludono i COLLEGHI: chi si presenta come coach o
-# preparatore non comprera' un percorso di coaching. Volutamente si evita la
-# parola "coach" da sola, che matcherebbe anche "coached by @tizio" (cioe' un
-# cliente di un concorrente, che invece interessa).
-blacklist_words: [onlyfans, onlyf, escort, sex, "link in bio", telegram, vendita, sconto, codice sconto, spedizione, dropship, crypto, forex, casino, scommesse, "personal trainer", "coach online", "online coach", preparatore, istruttore, "chiedi il tuo piano", "scrivimi per"]
+# Qui si esclude SOLO lo spam. I colleghi NON si escludono piu': RB Coaching e'
+# una societa' di consulenza con un team di personal trainer, e Roberto ne e'
+# l'head coach. Un PT non e' un concorrente da evitare ma un possibile
+# collaboratore, e a Milano in particolare e' esattamente chi vogliamo
+# raggiungere.
+#
+# Tolte quindi "personal trainer", "coach online", "online coach",
+# "preparatore" e "istruttore", piu' le formule di vendita tipiche di un PT
+# ("chiedi il tuo piano", "scrivimi per"). Erano la ragione per cui i profili
+# pescati dagli hashtag personaltrainermilano, coachonline e
+# preparatoreatletico venivano poi buttati via in fase di filtro: la config
+# andava a cercarli e i filtri li scartavano.
+#
+# Tolte anche "link in bio" (ce l'ha qualunque professionista), "vendita" e
+# "sconto": come parole nude scartavano troppi profili legittimi. Contro i
+# negozi restano "codice sconto", "spedizione" e "dropship".
+blacklist_words: [onlyfans, onlyf, escort, sex, telegram, dropship, crypto, forex, casino, scommesse, codice sconto, spedizione]
 # mandatory_words: [fitness, palestra, gym]      # non attivato: taglia troppo e costa una lettura bio in piu' per ogni profilo
 # specific_alphabet: [LATIN]                     # disabilitato (costoso)
 # biography_language: [it]                       # disabilitato (costoso)

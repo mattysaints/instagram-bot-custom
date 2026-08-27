@@ -54,6 +54,31 @@ Posizionamento: alternativa alle palestre affollate, per chi vuole seguire un
 percorso serio con supervisione sulla tecnica. Frase ricorrente sul sito:
 *"Sei seguito in ogni momento"*.
 
+### Struttura: societa' di consulenza, non coach singolo
+
+*Fonte: indicazione diretta del cliente, 27/08/2026. Non compare sul sito, che
+descrive ancora Roberto come professionista singolo.*
+
+RB Coaching e' una **societa' di consulenza di personal trainer**, non
+l'attivita' di una persona sola:
+
+- Roberto e' l'**head coach**: la guida tecnica e il riferimento del metodo
+- altri **personal trainer collaborano** come parte del team
+- lo scopo dichiarato e' migliorare le persone nel loro insieme: **stile di
+  vita e sostenibilita' delle abitudini nel tempo**, non il singolo ciclo di
+  allenamento
+
+**Conseguenza diretta sul bot**: i personal trainer non sono piu' concorrenti
+da escludere ma un pubblico da raggiungere, **in particolare a Milano**, perche'
+sono potenziali collaboratori del team. Per questo in `filters.yml` sono state
+tolte dalla blacklist le parole "personal trainer", "coach online",
+"preparatore" e "istruttore", ed e' stato alzato il tetto follower da 4.000 a
+15.000: con i valori precedenti un PT avviato non sarebbe mai stato raggiunto.
+
+Il prompt dei commenti deve quindi reggere **due pubblici**: chi si allena, con
+cui il registro resta semplice, e i colleghi professionisti, con cui si parla da
+pari a pari e il gergo tecnico e' appropriato.
+
 ## Tono di voce
 
 Professionale ma diretto. Precisione tecnica unita a spinta motivazionale.
