@@ -78,6 +78,15 @@ def _ensure_ig_foreground(device, configs, max_attempts: int = 4) -> bool:
             f"Instagram not in foreground (current: {current}). "
             f"Reopening... ({attempt}/{max_attempts})"
         )
+        # Se davanti c'e' il dialogo "l'app non risponde", riaprire Instagram
+        # non serve: quel dialogo e' di 'android' e resta sopra. Va chiuso
+        # prima, altrimenti si consumano tutti i tentativi a vuoto.
+        try:
+            if device.dismiss_anr(preferisci="close" if attempt > 1 else "wait"):
+                sleep(5)
+                continue
+        except Exception as e:
+            logger.debug(f"_ensure_ig_foreground: dismiss_anr failed: {e}")
         if not open_instagram(device):
             sleep(3)
     try:

@@ -365,6 +365,46 @@ class DeviceFacade:
         self.deviceV2.click(x, y)
         random_sleep()
 
+    # Il dialogo di sistema "<app> isn't responding" appartiene al package
+    # 'android', non a Instagram: riaprire l'app non lo tocca nemmeno, resta
+    # sopra a tutto. Il 27/08 questo ha bloccato una sessione per sei
+    # tentativi di fila, con il bot che rilanciava Instagram sotto un dialogo
+    # che non se ne andava, fino a "Profile tab not found after 6 tries".
+    ANR_BUTTONS = {
+        "wait": "android:id/aerr_wait",
+        "close": "android:id/aerr_close",
+        "restart": "android:id/aerr_restart",
+    }
+
+    def dismiss_anr(self, nodi: Optional[list] = None, preferisci: str = "wait"):
+        """Chiude il dialogo "l'app non risponde", se c'e'.
+
+        Restituisce il nome del pulsante premuto ('wait', 'close', 'restart')
+        oppure None se il dialogo non c'era.
+
+        L'ordine non e' indifferente. 'wait' lascia all'app la possibilita' di
+        riprendersi ed e' la scelta giusta al primo colpo, soprattutto su un
+        emulatore lento dove l'ANR e' spesso solo lentezza. Se pero' il
+        dialogo torna, aspettare ancora non porta da nessuna parte: allora si
+        passa a 'close' e il chiamante riapre Instagram pulita.
+        """
+        if nodi is None:
+            nodi = self.nodes_from_dump()
+        ordine = [preferisci] + [
+            k for k in ("wait", "close", "restart") if k != preferisci
+        ]
+        for nome in ordine:
+            nodo = DeviceFacade.node_in_dump(
+                nodi, resource_id_regex=DeviceFacade.ANR_BUTTONS[nome]
+            )
+            if nodo is not None:
+                logger.warning(
+                    f"System dialog: the app is not responding. Pressing '{nome}'."
+                )
+                self.tap_node(nodo, f"on the ANR dialog ({nome})")
+                return nome
+        return None
+
     @staticmethod
     def is_login_screen(nodi: list) -> bool:
         """True se il dump e' la schermata di login di Instagram (sessione

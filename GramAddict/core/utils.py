@@ -336,8 +336,15 @@ def open_instagram(device):
         # partita), rilanciarla costa niente e evita di aspettare 90 s a vuoto
         try:
             if device.deviceV2.app_current().get("package") != app_id:
-                logger.debug("Instagram is not in foreground, calling it again.")
-                call_ig()
+                # Stesso motivo degli altri due punti: sotto il dialogo ANR
+                # rilanciare Instagram non produce nulla. Qui si preme sempre
+                # "Wait", perche' siamo nell'attesa di avvio e l'app di solito
+                # e' solo lenta a disegnare la tab bar.
+                if device.dismiss_anr():
+                    _time.sleep(5)
+                else:
+                    logger.debug("Instagram is not in foreground, calling it again.")
+                    call_ig()
         except Exception:
             pass
         logger.debug(

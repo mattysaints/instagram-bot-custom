@@ -226,7 +226,12 @@ class ResourceID:
         self.LIST = "android:id/list"
         self.AERR_RESTART = "android:id/aerr_restart"
         self.AERR_CLOSE = "android:id/aerr_close"
+        # "Wait" mancava: e' il pulsante che compare sul dialogo ANR
+        # ("<app> isn't responding") insieme a "Close app", ed e' quello da
+        # premere per primo quando l'app e' solo lenta e non morta.
+        self.AERR_WAIT = "android:id/aerr_wait"
         self.CRASH_POPUP = f"{self.AERR_RESTART}|{self.AERR_CLOSE}"
+        self.ANR_POPUP = f"{self.AERR_WAIT}|{self.AERR_CLOSE}|{self.AERR_RESTART}"
 
         # device specific
         ## MIUI

@@ -2375,6 +2375,7 @@ class ProfileView(ActionBarView):
         # crashed" senza che nel log ci sia scritto cosa c'era sullo schermo.
         continue_tapped = False
         attese_login = 0
+        anr_visto = False
         # La schermata di login non consuma tentativi: si aspetta a parte
         # (vedi sotto), perche' il bot da solo non puo' fare niente per
         # risolverla e uscire dal ciclo servirebbe solo a perdere la finestra.
@@ -2443,6 +2444,23 @@ class ProfileView(ActionBarView):
                     )
                 random_sleep(55, 65, modulable=False)
                 continue
+            # Prima di tutto il resto: se c'e' il dialogo di sistema "l'app
+            # non risponde", va chiuso, perche' finche' resta li' nessuna
+            # altra mossa ha effetto. Riaprire Instagram sotto quel dialogo
+            # non serve a niente: appartiene al package 'android' e resta in
+            # primo piano (visto il 27/08, sei tentativi buttati).
+            # Al primo incontro si preme "Wait": spesso l'app e' solo lenta e
+            # si riprende da sola. Se ricompare, si chiude e si riparte.
+            premuto = self.device.dismiss_anr(
+                nodi, preferisci="close" if anr_visto else "wait"
+            )
+            if premuto is not None:
+                anr_visto = True
+                # dopo "Wait" l'app ha bisogno di respirare; dopo "Close"
+                # tocca al giro successivo riaprirla
+                random_sleep(8, 12, modulable=False)
+                continue
+
             if self.device.app_id not in pacchetti:
                 # Instagram non e' nemmeno in primo piano: riaprirla serve,
                 # premere indietro no
