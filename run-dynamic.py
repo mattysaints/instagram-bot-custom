@@ -5,19 +5,26 @@ Wrapper per GramAddict: genera working-hours dinamiche basate sull'ora di lancio
 Schema (modalita' normale):
   - La PRIMA sessione parte SUBITO, all'ora del lancio: si avvia il bot e
     lavora, senza aspettare una finestra decisa a tavolino.
-  - Le altre N-1 (default 4 in tutto) seguono a distanza di gap-h (3.75h)
-    con jitter, tutte dentro la fascia consentita 08:00-23:00. Quattro
-    sessioni distanziate, non cinque attaccate: le pause tra le finestre
-    salgono a ~2-2.5h, piu' vicine al profilo prudente 2025-26 (sessioni
-    60-90 min con pause lunghe) senza rinunciare ai cap giornalieri.
+  - Le altre seguono a distanza di gap-h (3.75h) con jitter, tutte dentro la
+    fascia consentita 08:00-23:59. Quante sono lo decide la fascia stessa
+    (--sessions 0, default): sessioni distanziate, non attaccate, con pause
+    di ~2-2.5h fra una e l'altra, in linea col profilo prudente 2025-26
+    (sessioni 60-90 min con pause lunghe) senza rinunciare ai cap giornalieri.
+  - Le ore GIA' PASSATE del giorno di lancio vengono riempite anche loro.
+    Sembra inutile e invece e' il punto: il config ha total-sessions: -1,
+    quindi GramAddict ripete queste working-hours ogni giorno. Generandole
+    solo in avanti, un lancio delle 20:34 lasciava nel config una sola
+    finestra (20.34-22.04) e il bot lavorava 90 minuti al giorno per sempre.
+    Oggi le finestre passate le salta da solo; da domani lavora tutto il
+    giorno.
   - Fuori fascia il lancio non lavora di notte: prima delle 08:00 la prima
-    sessione slitta all'apertura, dopo le 23:00 a domattina.
+    sessione slitta all'apertura, dopo le 23:59 a domattina.
   - Le working-hours cosi' calcolate vengono scritte nel config. Con
     total-sessions: -1 e repeat, GramAddict poi le ripete ogni giorno da
     solo: si rilancia solo quando si vuole spostare gli orari.
 
-Esempio: lancio alle 10:20 -> 10.20-11.50, ~13.25-14.55, ~16.30-18.00,
-  ~19.35-21.05, ~21.50-23.00 (l'ultima accorciata per non sforare le 23:00).
+Esempio: lancio alle 10:20 -> ~08.30-10.00 (oggi gia' passata), 10.20-11.50,
+  ~14.05-15.35, ~17.50-19.20, ~21.35-23.05.
 
 Modalita' FINESTRE FISSE: se il config contiene il marcatore
   '# finestre-fisse' (lo mettono i config alternati generati da
@@ -138,11 +145,16 @@ def _start_emulator(avd: str, serial: str) -> None:
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **flags)
 
 # Fascia oraria consentita, decisa con il cliente: nessuna sessione prima
-# delle 08:00 ne' dopo le 23:00. Le sessioni non sconfinano piu' nella notte:
-# l'attivita' notturna e' quella che Instagram guarda con piu' sospetto, e
-# comunque il pubblico di questi account di notte non c'e'.
+# delle 08:00 ne' dopo la mezzanotte. Le sessioni non sconfinano nella notte
+# piena: l'attivita' delle ore piccole e' quella che Instagram guarda con piu'
+# sospetto, e comunque il pubblico di questi account alle 3 di notte non c'e'.
+#
+# 23:59 e non 00:00 di proposito: una finestra che finisce a 00.00 avrebbe
+# sup < inf e SessionState.inside_working_hours la leggerebbe come finestra a
+# cavallo della mezzanotte (session_state.py:306), cioe' una cosa diversa da
+# quella che vogliamo. 23.59 e' la mezzanotte senza ambiguita'.
 EARLIEST_START = dt.time(8, 0)
-LATEST_END = dt.time(23, 0)
+LATEST_END = dt.time(23, 59)
 
 # Pausa minima fra la FINE di una sessione e l'INIZIO della successiva. Senza,
 # quando il tempo residuo e' poco il calcolo stipa le sessioni una addosso
@@ -217,6 +229,73 @@ def build_windows(
         cur = cur + dt.timedelta(hours=gap_h, minutes=jitter)
 
     return windows
+
+
+def build_windows_backward(
+    anchor_dt: dt.datetime,
+    duration_min: int,
+    gap_h: float,
+    max_sessions: Optional[int] = None,
+) -> list[str]:
+    """Finestre PRIMA dell'ora di lancio, dall'ancora indietro fino a
+    EARLIEST_START. Restituite in ordine cronologico.
+
+    PERCHE' ESISTE
+        Le working-hours calcolate qui finiscono in un config con
+        total-sessions: -1, cioe' GramAddict le RIPETE ogni giorno da solo.
+        Generandole solo in avanti, l'orario di lancio diventava per sempre
+        l'inizio della giornata: lanciato alle 20:34 il config si ritrovava
+        con una sola finestra (20.34-22.04) e da li' in poi il bot lavorava
+        90 minuti al giorno, con 22 ore di pausa in mezzo. E' esattamente il
+        sintomo visto sui due emulatori il 27/08 ("prossima sessione tra
+        17h").
+
+        Riempiendo anche le ore PRIMA dell'ancora, il config descrive una
+        giornata intera vera: oggi il bot salta le finestre gia' passate
+        (inside_working_hours le rimanda a domani, session_state.py:333) e
+        parte subito da quella sull'ancora; da domani lavora tutto il giorno.
+    """
+    windows: list[str] = []
+    band_start = dt.datetime.combine(anchor_dt.date(), EARLIEST_START)
+    gap_min = int(round(gap_h * 60))
+    # Stesso vincolo del forward: mai ridurre il gap sotto durata + pausa.
+    max_jitter = max(0, min(35, gap_min - duration_min - PAUSA_MINIMA_MIN))
+
+    cur = anchor_dt
+    prossimo_inizio = anchor_dt  # inizio della finestra subito successiva
+    while max_sessions is None or len(windows) < max_sessions:
+        jitter = random.randint(-max_jitter, max_jitter) if max_jitter else 0
+        cur = cur - dt.timedelta(hours=gap_h, minutes=jitter)
+        if cur < band_start:
+            break
+        end = cur + dt.timedelta(minutes=duration_min)
+        # Mai attaccarsi alla finestra successiva: fra la fine di questa e
+        # l'inizio di quella dopo deve restare PAUSA_MINIMA_MIN, lo stesso
+        # vincolo che rispetta build_windows andando in avanti.
+        if end + dt.timedelta(minutes=PAUSA_MINIMA_MIN) > prossimo_inizio:
+            continue
+        windows.append(f"{fmt(cur.time())}-{fmt(end.time())}")
+        prossimo_inizio = cur
+
+    windows.reverse()
+    return windows
+
+
+def sessioni_che_entrano(duration_min: int, gap_h: float) -> int:
+    """Quante sessioni entrano nella fascia 08:00-23:59 a questo ritmo.
+
+    Serve per il conteggio DINAMICO: invece di un numero fisso deciso a
+    tavolino, la giornata si riempie da sola in base a durata e distanza fra
+    le sessioni. Con i default (90 min, 3.75h) la fascia da 16 ore ne regge 5.
+    """
+    minuti_fascia = (
+        dt.datetime.combine(dt.date.today(), LATEST_END)
+        - dt.datetime.combine(dt.date.today(), EARLIEST_START)
+    ).total_seconds() / 60
+    gap_min = gap_h * 60
+    if gap_min <= 0:
+        return 1
+    return max(1, int((minuti_fascia - duration_min) // gap_min) + 1)
 
 
 def shrink_to_fit(
@@ -647,10 +726,25 @@ def generate_and_patch_windows(args, config_path: Path) -> list[str]:
         print("⚠️  Nessuna finestra generata. Rilancia piu' tardi.")
         sys.exit(0)
 
+    # Riempi anche le ore PRIMA del lancio: senza, l'ora in cui si e' premuto
+    # Run diventa per sempre l'inizio della giornata (vedi
+    # build_windows_backward). Le finestre gia' passate oggi il bot le salta
+    # da solo; da domani in poi descrivono la giornata intera.
+    passate = build_windows_backward(now, duration_min, gap_h)
+    if passate:
+        print(
+            f"ℹ️  Aggiunte {len(passate)} finestre nelle ore gia' passate di oggi "
+            f"({passate[0].split('-')[0]} ...): oggi il bot le salta, da domani "
+            "lavora tutto il giorno invece che solo dall'ora di lancio."
+        )
+        windows = passate + windows
+
     print("┌─────────────────────────────────────────────────")
-    print(f"│ Working-hours generate ({len(windows)}/{args.sessions} sessioni di {duration_min}min, gap ~{gap_h:.2f}h):")
+    print(f"│ Working-hours generate ({len(windows)} sessioni di {duration_min}min, gap ~{gap_h:.2f}h,")
+    print(f"│ fascia {EARLIEST_START.strftime('%H:%M')}-{LATEST_END.strftime('%H:%M')}):")
     for i, w in enumerate(windows, 1):
-        print(f"│   {i}. {w}")
+        marker = "  (oggi gia' passata)" if i <= len(passate) else ""
+        print(f"│   {i}. {w}{marker}")
     print("└─────────────────────────────────────────────────")
 
     patch_working_hours(config_path, windows)
@@ -701,7 +795,14 @@ def _total_sessions_from_config(config_path: Path) -> Optional[int]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=DEFAULT_CONFIG, help="Path al config.yml")
-    ap.add_argument("--sessions", type=int, default=4, help="Numero massimo di sessioni nella giornata")
+    ap.add_argument(
+        "--sessions",
+        type=int,
+        default=0,
+        help="Numero massimo di sessioni nella giornata. 0 (default) = DINAMICO: "
+             "quante ne entrano nella fascia oraria consentita al ritmo dato da "
+             "--duration-min e --gap-h.",
+    )
     ap.add_argument("--duration-min", type=int, default=90, help="Durata di ogni sessione (minuti)")
     ap.add_argument("--gap-h", type=float, default=3.75, help="Distanza inizio-inizio tra sessioni (ore)")
     ap.add_argument("--dry-run", action="store_true", help="Calcola e stampa senza lanciare il bot")
@@ -747,6 +848,19 @@ def main():
              "(es. rbcoach). Senza, il device deve essere gia' acceso.",
     )
     args = ap.parse_args()
+
+    # Conteggio DINAMICO delle sessioni: quante ne regge la fascia oraria a
+    # questo ritmo. Prima era fisso a 4 e non teneva conto ne' della durata ne'
+    # del gap ne' dell'ampiezza della fascia: allungando la fascia fino a
+    # mezzanotte, le ore in piu' sarebbero rimaste vuote.
+    if args.sessions <= 0:
+        args.sessions = sessioni_che_entrano(args.duration_min, args.gap_h)
+        print(
+            f"ℹ️  Sessioni calcolate dinamicamente: {args.sessions} da "
+            f"{args.duration_min} min nella fascia "
+            f"{EARLIEST_START.strftime('%H:%M')}-{LATEST_END.strftime('%H:%M')} "
+            f"(gap ~{args.gap_h:.2f}h)."
+        )
 
     config_path = Path(args.config)
     if not config_path.exists():

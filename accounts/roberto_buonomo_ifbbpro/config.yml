@@ -374,7 +374,7 @@ ai-sticker-prompt-hint: "Chi risponde e' Roberto Buonomo, atleta IFBB PRO italia
 # Stesse finestre di rb.coach: i due account lavorano in simultanea. Per
 # farli lavorare a turno c'e' config-alternato.yml.
 # ---------------------------------------------------------------------------
-working-hours: [20.34-22.04]   # generata dinamicamente da run-dynamic.py
+working-hours: [08.45-10.15, 12.30-14.00, 16.15-17.45, 20.00-21.30]   # giornata piena nella fascia 08:00-23:59; rigenerata a ogni lancio da run-dynamic.py
 time-delta: 0-0                             # ZERO di proposito: le finestre le calcola gia' run-dynamic.py dall'ora di lancio (con jitter fra una sessione e l'altra). Uno slittamento positivo qui sposterebbe in avanti la prima finestra e il bot, appena avviato, resterebbe fermo ad aspettare invece di partire subito
 repeat: 1-5                                 # OBBLIGATORIO per avere piu' di una sessione: senza, GramAddict esce dopo la prima. Pausa minima, poi il bot aspetta la finestra successiva
 total-sessions: -1                          # loop senza fine (rispetta le working-hours)
