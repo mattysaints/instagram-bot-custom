@@ -770,6 +770,27 @@ class ActionUnfollowFollowers(Plugin):
             return "unfollowed"
         return "error"
 
+    def _gia_non_seguito(self, device) -> bool:
+        """True se il profilo mostra ORA il pulsante "Follow", cioe' il segui
+        e' gia' stato tolto.
+
+        Serve perche' su alcuni profili il tap su "Following" toglie il segui
+        SUBITO, senza aprire il foglio di conferma. Il codice cercava il
+        foglio, non lo trovava e dichiarava fallimento: il 03/09 sono stati
+        36 unfollow realmente eseguiti e contati come ZERO, con uno zip di
+        crash salvato per ognuno. I sei dump di quel giorno mostrano tutti la
+        stessa cosa: pulsante "Follow" a schermo, e account privato.
+
+        Il regex e' ancorato in coda ("^Follow( back)?$") perche' un semplice
+        "^Follow" matcherebbe anche "Following", cioe' lo stato opposto.
+        """
+        bottone = device.find(
+            classNameMatches=ClassName.BUTTON_OR_TEXTVIEW_REGEX,
+            clickable=True,
+            textMatches="^Follow( back)?$",
+        )
+        return bottone.exists(Timeout.SHORT)
+
     def _do_unfollow_on_open_profile(self, device: DeviceFacade, username: str) -> bool:
         """
         Press the Following button on the currently-open profile, confirm.
@@ -810,6 +831,15 @@ class ActionUnfollowFollowers(Plugin):
             if confirm_unfollow_button.exists(Timeout.SHORT):
                 break
         if not confirm_unfollow_button or not confirm_unfollow_button.exists():
+            # Niente foglio di conferma: puo' voler dire che il segui e' gia'
+            # stato tolto dal tap precedente. Va verificato PRIMA di dichiarare
+            # fallimento, altrimenti si buttano via unfollow riusciti.
+            if self._gia_non_seguito(device):
+                logger.info(
+                    f"@{username}: unfollowed without the confirmation sheet."
+                )
+                UniversalActions.detect_block(device)
+                return True
             logger.error("Cannot confirm unfollow.")
             save_crash(device)
             return False
@@ -1139,6 +1169,15 @@ class ActionUnfollowFollowers(Plugin):
                     break
 
             if not confirm_unfollow_button or not confirm_unfollow_button.exists():
+                # come sopra: prima di dichiarare fallimento si verifica se il
+                # segui e' gia' stato tolto senza foglio di conferma
+                if self._gia_non_seguito(device):
+                    logger.info(
+                        f"@{username}: unfollowed without the confirmation sheet."
+                    )
+                    UniversalActions.detect_block(device)
+                    device.back()
+                    return True
                 logger.error("Cannot confirm unfollow.")
                 save_crash(device)
                 device.back()
