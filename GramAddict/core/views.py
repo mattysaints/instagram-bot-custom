@@ -2350,41 +2350,59 @@ class ProfileView(ActionBarView):
             resourceId=ResourceID.ROW_PROFILE_HEADER_IMAGEVIEW,
         )
 
+    def _open_follow_list(self, container_id: str, tab_text: str, nome: str) -> bool:
+        """Apre la lista follower/following dal contatore nell'header del profilo.
+
+        Il segnale di successo e' la comparsa della tab list, NON la scomparsa
+        del contatore che si e' cliccato. E' una differenza che e' costata una
+        sessione intera: navigateToFollowing usava click_retry(), che considera
+        riuscito il click solo quando l'elemento cliccato sparisce. Ma dietro la
+        lista il profilo resta nella gerarchia delle view, quindi il contatore
+        c'e' ancora e click_retry concludeva sempre "fallito", battendo per
+        giunta altri due click su una schermata che nel frattempo era cambiata.
+        Il 03/09 il risultato sono stati 0 unfollow su 38, con 65 minuti spesi
+        in "Failed to open the UI element!". navigateToFollowers, che usava un
+        click semplice, non aveva il problema.
+
+        Entrambe avevano anche un ramo senza return: se il contatore c'era ma la
+        tab non si apriva, la funzione finiva restituendo None invece di False.
+        """
+        for tentativo in (1, 2):
+            bottone = self.device.find(resourceIdMatches=container_id)
+            if not bottone.exists(Timeout.LONG):
+                logger.error(f"Can't find {nome} tab!")
+                return False
+            bottone.click()
+            tab = self.device.find(
+                resourceIdMatches=ResourceID.UNIFIED_FOLLOW_LIST_TAB_LAYOUT
+            ).child(textContains=tab_text)
+            if tab.exists(Timeout.LONG):
+                if not tab.get_property("selected"):
+                    tab.click()
+                return True
+            if tentativo == 1:
+                # il click puo' averci portato altrove (un profilo, un post):
+                # si torna indietro prima di riprovare, altrimenti il secondo
+                # tentativo parte da una schermata sbagliata
+                logger.debug(
+                    f"The {nome} list did not open: going back and retrying once."
+                )
+                self.device.back()
+                random_sleep(1, 2, modulable=False)
+        logger.warning(f"Could not open the {nome} list after 2 attempts.")
+        return False
+
     def navigateToFollowers(self):
         logger.info("Navigate to followers.")
-        followers_button = self.device.find(
-            resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER
+        return self._open_follow_list(
+            ResourceID.ROW_PROFILE_HEADER_FOLLOWERS_CONTAINER, "Followers", "followers"
         )
-        if followers_button.exists(Timeout.LONG):
-            followers_button.click()
-            followers_tab = self.device.find(
-                resourceIdMatches=ResourceID.UNIFIED_FOLLOW_LIST_TAB_LAYOUT
-            ).child(textContains="Followers")
-            if followers_tab.exists(Timeout.LONG):
-                if not followers_tab.get_property("selected"):
-                    followers_tab.click()
-                return True
-        else:
-            logger.error("Can't find followers tab!")
-            return False
 
     def navigateToFollowing(self):
         logger.info("Navigate to following.")
-        following_button = self.device.find(
-            resourceIdMatches=ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER
+        return self._open_follow_list(
+            ResourceID.ROW_PROFILE_HEADER_FOLLOWING_CONTAINER, "Following", "following"
         )
-        if following_button.exists(Timeout.LONG):
-            following_button.click_retry()
-            following_tab = self.device.find(
-                resourceIdMatches=ResourceID.UNIFIED_FOLLOW_LIST_TAB_LAYOUT
-            ).child(textContains="Following")
-            if following_tab.exists(Timeout.LONG):
-                if not following_tab.get_property("selected"):
-                    following_tab.click()
-                return True
-        else:
-            logger.error("Can't find following tab!")
-            return False
 
     def navigateToMutual(self):
         logger.info("Navigate to mutual friends.")

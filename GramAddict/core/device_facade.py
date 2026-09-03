@@ -162,6 +162,43 @@ class DeviceFacade:
             raise DeviceFacade.JsonRpcError(e)
         return DeviceFacade.View(view=view, device=self.deviceV2)
 
+    # Il dialogo di sistema "<app> isn't responding" appartiene al package
+    # 'android', non a Instagram: riaprire l'app non lo tocca nemmeno, resta
+    # sopra a tutto e ogni tentativo successivo lavora al buio.
+    ANR_BUTTONS = {
+        "wait": "android:id/aerr_wait",
+        "close": "android:id/aerr_close",
+        "restart": "android:id/aerr_restart",
+    }
+
+    def dismiss_anr(self, preferisci: str = "wait") -> Optional[str]:
+        """Chiude il dialogo "l'app non risponde", se c'e'.
+
+        Restituisce il nome del pulsante premuto ('wait', 'close', 'restart')
+        oppure None se il dialogo non c'era.
+
+        'wait' per primo: su un emulatore lento l'ANR e' quasi sempre
+        lentezza e l'app si riprende da sola, mentre chiuderla costa un
+        riavvio completo. Se il dialogo ricompare il chiamante passa a
+        'close' e riapre Instagram pulita.
+        """
+        ordine = [preferisci] + [
+            k for k in ("wait", "close", "restart") if k != preferisci
+        ]
+        for nome in ordine:
+            try:
+                bottone = self.find(resourceId=DeviceFacade.ANR_BUTTONS[nome])
+                if bottone.exists():
+                    logger.warning(
+                        f"System dialog: the app is not responding. "
+                        f"Pressing '{nome}'."
+                    )
+                    bottone.click()
+                    return nome
+            except Exception as e:
+                logger.debug(f"dismiss_anr: {nome} check failed: {e}")
+        return None
+
     def back(self, modulable: bool = True):
         logger.debug("Press back button.")
         self.deviceV2.press("back")

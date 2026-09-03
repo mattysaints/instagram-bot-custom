@@ -216,6 +216,9 @@ class ResourceID:
         self.LIST = "android:id/list"
         self.AERR_RESTART = "android:id/aerr_restart"
         self.AERR_CLOSE = "android:id/aerr_close"
+        # "Wait" mancava: e' il pulsante del dialogo ANR ("<app> isn't
+        # responding"), quello da premere per primo se l'app e' solo lenta.
+        self.AERR_WAIT = "android:id/aerr_wait"
         self.CRASH_POPUP = f"{self.AERR_RESTART}|{self.AERR_CLOSE}"
 
         # device specific
