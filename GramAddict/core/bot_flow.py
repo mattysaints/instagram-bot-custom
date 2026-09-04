@@ -1,5 +1,6 @@
 import logging
 import random
+import sys
 from datetime import datetime, timedelta
 from time import sleep
 
@@ -53,6 +54,34 @@ from GramAddict.core.utils import (
 )
 from GramAddict.core.views import AccountView, ProfileView, TabBarView, UniversalActions
 from GramAddict.core.views import load_config as load_views
+
+
+def _esci_per_setup_irrecuperabile(device, sessions, session_state, quanti: int) -> None:
+    """Esce dal processo dopo troppi fallimenti di setup consecutivi.
+
+    Non basta chiamare stop_bot: quella chiamata sta DENTRO il try del setup, e
+    stop_bot prima di uscire fa close_instagram -> app_stop, che su un device
+    morto alza. L'eccezione risalirebbe dritta nell'`except Exception` del
+    setup, che la tratterebbe come l'ennesimo fallimento e riprenderebbe il
+    ciclo: l'uscita verrebbe ingoiata proprio nel caso per cui esiste, cioe'
+    device irraggiungibile.
+
+    Qui la chiusura pulita e' un tentativo, non una condizione: se fallisce si
+    esce lo stesso. SystemExit non discende da Exception, quindi una volta
+    sollevata nessun `except Exception` la intercetta.
+    """
+    logger = logging.getLogger(__name__)
+    logger.error(
+        f"Setup fallito {quanti} volte di fila: esco, cosi' il supervisore "
+        "riavvia tutto (emulatore compreso) invece di continuare a girare a vuoto."
+    )
+    try:
+        stop_bot(device, sessions, session_state, was_sleeping=False)
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.warning(f"Chiusura pulita non riuscita ({e}): esco comunque.")
+        sys.exit(2)
 
 
 def _scarta_sessione_incompiuta(sessions, session_state) -> bool:
@@ -322,12 +351,9 @@ def start_bot(**kwargs):
                 _scarta_sessione_incompiuta(sessions, session_state)
                 setup_falliti += 1
                 if setup_falliti >= MAX_SETUP_FALLITI:
-                    logger.error(
-                        f"Setup fallito {setup_falliti} volte di fila: esco, "
-                        "cosi' il supervisore riavvia tutto (emulatore compreso) "
-                        "invece di continuare a girare a vuoto."
+                    _esci_per_setup_irrecuperabile(
+                        device, sessions, session_state, setup_falliti
                     )
-                    stop_bot(device, sessions, session_state, was_sleeping=False)
                 sleep(30)
                 continue
             profile_view = ProfileView(device)
@@ -380,12 +406,9 @@ def start_bot(**kwargs):
             _scarta_sessione_incompiuta(sessions, session_state)
             setup_falliti += 1
             if setup_falliti >= MAX_SETUP_FALLITI:
-                logger.error(
-                    f"Setup fallito {setup_falliti} volte di fila: esco, cosi' il "
-                    "supervisore riavvia tutto (emulatore compreso) invece di "
-                    "continuare a girare a vuoto."
+                _esci_per_setup_irrecuperabile(
+                    device, sessions, session_state, setup_falliti
                 )
-                stop_bot(device, sessions, session_state, was_sleeping=False)
             logger.info(
                 f"Setup phase failed ({setup_falliti}/{MAX_SETUP_FALLITI}), "
                 "retrying after 30s..."
