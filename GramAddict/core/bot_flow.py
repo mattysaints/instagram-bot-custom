@@ -232,6 +232,14 @@ def start_bot(**kwargs):
     telegram_reports_at_end = False
     followers_now = None
     following_now = None
+    # Quante volte di fila il setup e' fallito. Serve un tetto: il retry era
+    # infinito, e ogni giro con uiautomator che non parte costa 8-10 minuti.
+    # Il rilevatore di stallo del watchdog non puo' accorgersene, perche'
+    # guarda se il log AVANZA e questo ciclo scrive a ogni giro (l'errore, lo
+    # zip di crash, "retrying after 30s"). Un bot bloccato che parla non
+    # sembra bloccato.
+    setup_falliti = 0
+    MAX_SETUP_FALLITI = 5
 
     while True:
         set_time_delta(configs.args)
@@ -312,6 +320,14 @@ def start_bot(**kwargs):
                     "retrying session setup after 30s..."
                 )
                 _scarta_sessione_incompiuta(sessions, session_state)
+                setup_falliti += 1
+                if setup_falliti >= MAX_SETUP_FALLITI:
+                    logger.error(
+                        f"Setup fallito {setup_falliti} volte di fila: esco, "
+                        "cosi' il supervisore riavvia tutto (emulatore compreso) "
+                        "invece di continuare a girare a vuoto."
+                    )
+                    stop_bot(device, sessions, session_state, was_sleeping=False)
                 sleep(30)
                 continue
             profile_view = ProfileView(device)
@@ -361,9 +377,20 @@ def start_bot(**kwargs):
             # A break here would terminate the entire bot process.
             # Transient device errors (RemoteDisconnected, AdbTimeout) during
             # the setup phase should be recovered by restarting the loop.
-            logger.info("Setup phase failed, retrying after 30s...")
-            from time import sleep as _sleep
             _scarta_sessione_incompiuta(sessions, session_state)
+            setup_falliti += 1
+            if setup_falliti >= MAX_SETUP_FALLITI:
+                logger.error(
+                    f"Setup fallito {setup_falliti} volte di fila: esco, cosi' il "
+                    "supervisore riavvia tutto (emulatore compreso) invece di "
+                    "continuare a girare a vuoto."
+                )
+                stop_bot(device, sessions, session_state, was_sleeping=False)
+            logger.info(
+                f"Setup phase failed ({setup_falliti}/{MAX_SETUP_FALLITI}), "
+                "retrying after 30s..."
+            )
+            from time import sleep as _sleep
             _sleep(30)
             continue
 
@@ -412,6 +439,9 @@ def start_bot(**kwargs):
             if configs.args.telegram_reports:
                 telegram_reports_at_end = True
         print_limits = True
+        # Setup riuscito: il conteggio dei fallimenti riparte da zero, cosi'
+        # il tetto vale solo per fallimenti CONSECUTIVI.
+        setup_falliti = 0
         unfollow_jobs = [x for x in jobs_list if "unfollow" in x]
         logger.info(
             f"There is/are {len(jobs_list)-len(unfollow_jobs)} active-job(s) and {len(unfollow_jobs)} unfollow-job(s) scheduled for this session."
