@@ -569,7 +569,13 @@ class SearchView:
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=10,
+                # `input text` digita un carattere alla volta: su un emulatore
+                # carico 10s fissi non bastano per un nome lungo, e il log del
+                # 03/09 e' pieno di timeout su handle da 17-27 caratteri
+                # (fitactive_legnano, allenamentofunzionalemilano...). Il
+                # timeout ora cresce col testo. Quando la digitazione riesce
+                # un tetto piu' alto non costa nulla: si aspetta solo se serve.
+                timeout=max(15, len(text) * 0.8),
             )
             stdout = (res.stdout or b"").decode(errors="replace").strip()
             stderr = (res.stderr or b"").decode(errors="replace").strip()
@@ -650,41 +656,13 @@ class SearchView:
         except Exception as ex:
             logger.debug(f"_adb_keyevents: adb failed: {ex}")
 
-    def _kick_search(self):
-        """
-        After a PASTE-style set_text(), Instagram's search bar often does NOT trigger
-        the live search results because no actual keystroke event has been generated.
-        We force a real keyboard event via `adb shell input keyevent` so IG receives
-        an input change and populates the result list. We try multiple strategies
-        because different IG versions react differently.
-        """
-        import subprocess
-
-        try:
-            serial = self.device.deviceV2.serial
-        except Exception as e:
-            logger.debug(f"_kick_search: cannot read device serial: {e}")
-            return
-
-        def _adb(*args):
-            cmd = ["adb", "-s", serial, "shell", *args]
-            try:
-                subprocess.run(
-                    cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=5,
-                )
-            except Exception as ex:
-                logger.debug(f"_kick_search: adb failed for {cmd!r}: {ex}")
-
-        # Strategy 1: type a space then delete it -> this is real input event,
-        # IG always reacts to it and re-renders the result list.
-        logger.debug("_kick_search: sending space + backspace via adb input keyevent.")
-        _adb("input", "keyevent", "62")  # KEYCODE_SPACE
-        sleep(0.4)
-        _adb("input", "keyevent", "67")  # KEYCODE_DEL
-        sleep(0.4)
+    # _kick_search e' stato RIMOSSO. Mandava SPACE seguito da BACKSPACE per
+    # generare un evento di input dopo un PASTE, ma se lo SPACE non veniva
+    # registrato il BACKSPACE cancellava l'ultimo carattere vero del testo
+    # appena incollato (log del 03/09: atteso 'fitactive_legnano', trovato
+    # 'fitactive_legnan', su quasi ogni nome lungo). Al suo posto, in
+    # navigate_to_target, si incolla tutto tranne l'ultimo carattere e lo si
+    # digita: stesso evento di input, ma senza cancellare niente.
 
     def navigate_to_target(
         self, target: str, job: str, source_has_history: bool = False
@@ -715,13 +693,38 @@ class SearchView:
             logger.warning(
                 f"⌨️  adb-type fallita, fallback a set_text({mode_name})."
             )
-            search_edit_text.set_text(
-                target,
-                Mode.PASTE if args.dont_type else Mode.TYPE,
-            )
-            if args.dont_type:
-                logger.info("⌨️  Kick-search: invio SPACE+BACKSPACE per forzare live-filter.")
-                self._kick_search()
+            # Dopo un timeout di adb-type la digitazione puo' essere ANCORA
+            # in corso sul device (il timeout uccide il client adb locale, non
+            # il comando gia' partito sul telefono). Ripulire la barra prima di
+            # incollare evita che i due testi si sommino.
+            self._clear_search_text(search_edit_text)
+            if args.dont_type and len(target) > 1:
+                # Dopo un PASTE Instagram non aggiorna la lista dei risultati:
+                # serve un evento di input VERO. Prima si incollava tutto e si
+                # mandava SPACE+BACKSPACE, ma se lo SPACE non veniva registrato
+                # il BACKSPACE mangiava l'ULTIMO CARATTERE VERO. Nel log del
+                # 03/09 succedeva di continuo: atteso 'fitactive_legnano',
+                # trovato 'fitactive_legnan'.
+                # Ora si incolla tutto TRANNE l'ultimo carattere e lo si
+                # digita: l'evento di input c'e' lo stesso e non si cancella
+                # mai niente, quindi non si puo' piu' perdere un carattere.
+                search_edit_text.set_text(target[:-1], Mode.PASTE)
+                logger.info(
+                    "⌨️  Kick-search: digito l'ultimo carattere per forzare il live-filter."
+                )
+                if not self._adb_type_text(target[-1]):
+                    # se fallisce anche questo la barra resta corta di un
+                    # carattere: la rilettura qui sotto se ne accorge e
+                    # ridigita tutto da capo
+                    logger.warning(
+                        "⌨️  Kick-search: ultimo carattere non inviato, "
+                        "la verifica qui sotto rimediera'."
+                    )
+            else:
+                search_edit_text.set_text(
+                    target,
+                    Mode.PASTE if args.dont_type else Mode.TYPE,
+                )
         # Give IG some time to fetch search results
         random_sleep(2, 4, modulable=False)
         # Readback: verify what the searchbar actually contains right now.
