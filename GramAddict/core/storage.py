@@ -279,11 +279,33 @@ class Storage:
         # Save only the last session_id
         user["session_id"] = session_id
 
-        # Save only the last job_name and target
-        if not user.get("job_name"):
-            user["job_name"] = job_name
-        if not user.get("target"):
-            user["target"] = target
+        # La sorgente memorizzata deve essere quella del FOLLOW, non quella del
+        # primo incontro.
+        #
+        # Prima qui c'era `if not user.get("target")`, cioe' si teneva il PRIMO
+        # target in assoluto: l'opposto di quello che diceva il commento sopra
+        # ("save only the last"). Effetto visibile nel log del 03/09: follow
+        # fatti lavorando su @actionfit.liguria e registrati su
+        # @sportingmilano3, @actionfit.italia, @actionfit.cologno, perche' quel
+        # profilo era stato incrociato li' settimane prima. Non e' solo un log
+        # confuso: recompute_follow_back_rates legge lo STESSO campo, quindi il
+        # follow-back rate -- che pesa la scelta delle sorgenti -- veniva
+        # accreditato a sorgenti che non avevano fatto niente.
+        #
+        # Nemmeno "sempre l'ultimo" andrebbe bene: una visita SENZA follow
+        # riscriverebbe la provenienza di un follow avvenuto prima. Quindi:
+        # su un follow riuscito si scrive la sorgente corrente, altrimenti si
+        # lascia stare quello che c'e' gia'.
+        if followed:
+            if job_name:
+                user["job_name"] = job_name
+            if target:
+                user["target"] = target
+        else:
+            if not user.get("job_name"):
+                user["job_name"] = job_name
+            if not user.get("target"):
+                user["target"] = target
 
         # Track the follow against the source for follow-back-rate analytics.
         # Only on a NEW successful follow (not a re-add of an existing entry).

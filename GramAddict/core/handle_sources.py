@@ -1718,24 +1718,52 @@ def iterate_over_followers(
                     "Cannot find the list of followers. Trying to press back again. "
                     f"[{device.screen_summary(nodi)}]"
                 )
-                device.back()
-                list_view = device.find(
-                    resourceId=self.ResourceID.LIST,
-                    className=ClassName.LIST_VIEW,
-                )
-                # Dopo il back la lista puo' metterci qualche secondo a
-                # ricomparire, e il selettore puo' negarla anche quando c'e'
-                # (dj.lug, rb.coach 22/08: back dal profilo, lista a schermo,
-                # controllo istantaneo fallito, sorgente chiusa dopo 8
-                # profili). Si aspetta, e si guarda l'albero completo.
-                if not list_view.exists(Timeout.MEDIUM):
+                # UN SOLO back non basta: sullo stesso emulatore i tap si
+                # perdono di continuo (vedi i timeout di adb nel log del
+                # 03/09), e un indietro non registrato faceva buttare via
+                # l'INTERA sorgente, cioe' decine di profili gia' filtrati.
+                # Se ne provano fino a tre, controllando dopo ognuno.
+                lista_ricomparsa = False
+                for tentativo in (1, 2, 3):
+                    device.back()
+                    list_view = device.find(
+                        resourceId=self.ResourceID.LIST,
+                        className=ClassName.LIST_VIEW,
+                    )
+                    # Dopo il back la lista puo' metterci qualche secondo a
+                    # ricomparire, e il selettore puo' negarla anche quando
+                    # c'e' (dj.lug, rb.coach 22/08: back dal profilo, lista a
+                    # schermo, controllo istantaneo fallito, sorgente chiusa
+                    # dopo 8 profili). Si aspetta, e si guarda l'albero
+                    # completo.
+                    if list_view.exists(Timeout.MEDIUM):
+                        lista_ricomparsa = True
+                        break
                     if _list_in_dump(device, self.ResourceID, device.nodes_from_dump()) is not None:
                         logger.warning(
                             "[recover] List back on screen (seen in the hierarchy "
                             "dump): resuming the iteration."
                         )
                         random_sleep(2, 3, modulable=False)
-                        continue
+                        lista_ricomparsa = True
+                        break
+                    # Se siamo usciti da Instagram, altri back peggiorano:
+                    # ci porterebbero fuori dall'app invece che indietro.
+                    try:
+                        corrente = device.deviceV2.app_current().get("package")
+                        if corrente != device.app_id:
+                            logger.warning(
+                                "[recover] Instagram non e' piu' in primo piano "
+                                f"(ora c'e' {corrente}): smetto di premere indietro."
+                            )
+                            break
+                    except Exception as e:
+                        logger.debug(f"[recover] app_current non leggibile: {e}")
+                    logger.debug(
+                        f"[recover] lista ancora assente dopo il back #{tentativo}."
+                    )
+                if lista_ricomparsa:
+                    continue
 
             # Se la lista NON c'e' nemmeno dopo il back (tipico quando le storie
             # hanno spostato la view), NON scrollare una lista morta: era la
