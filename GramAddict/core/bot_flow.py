@@ -333,6 +333,10 @@ def start_bot(**kwargs):
 
             UniversalActions.close_keyboard(device)
         else:
+            # si esce dal while: si atterra dritti su print_full_report, che
+            # e' proprio chi stampa l'orfana con la durata che cresce a ogni
+            # riepilogo. Va scartata anche qui, non solo sui `continue`.
+            _scarta_sessione_incompiuta(sessions, session_state)
             break
         try:
             # close_keyboard() above can press BACK; on a slow emulator IG may
@@ -369,6 +373,7 @@ def start_bot(**kwargs):
                     )
                     save_crash(device)
                     device.back()
+                    _scarta_sessione_incompiuta(sessions, session_state)
                     break
             account_view.refresh_account()
             (

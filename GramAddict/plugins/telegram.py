@@ -36,7 +36,9 @@ def telegram_bot_send_text(bot_api_token, bot_chat_ID, text):
         parse_mode = "markdown"
         params = {"text": text, "chat_id": bot_chat_ID, "parse_mode": parse_mode}
         url = f"https://api.telegram.org/bot{bot_api_token}/{method}"
-        return requests.get(url, params=params).json()
+        # senza timeout, un'API Telegram che accetta la connessione e non
+        # risponde tiene fermo il bot a fine sessione a tempo indefinito
+        return requests.get(url, params=params, timeout=15).json()
     except Exception as e:
         logger.error(f"Error sending Telegram message: {e}")
         return None

@@ -47,16 +47,37 @@ def load_config(config: Config):
 
 
 def update_available():
-    response = requests.get("https://pypi.python.org/pypi/gramaddict/json")
-    if response.ok:
-        latest_version = response.json()["info"]["version"]
+    """Controlla su PyPI se esiste una versione piu' recente.
 
-        current_version = parse_version(__version__)
-        latest_version = parse_version(latest_version)
+    Sapere di un aggiornamento non vale MAI quanto far partire il bot, quindi
+    qui si fallisce in silenzio. Prima non era cosi': la richiesta non aveva
+    timeout e nessuno dei due chiamanti la proteggeva, con due conseguenze
+    concrete sul mini PC che gira h24:
+      - all'avvio (bot_flow) dopo un riavvio per mancanza di corrente la rete
+        spesso non e' ancora pronta: la ConnectionError usciva da qui e
+        uccideva il bot PRIMA di aprire Instagram, e il watchdog contava un
+        crash con backoff esponenziale;
+      - dentro save_crash: il gestore dei crash andava a sua volta in
+        eccezione, sostituendo l'errore vero con una ConnectionError e
+        facendo perdere il dump, cioe' proprio la cosa che serviva per
+        capire il problema.
+    Senza timeout, poi, una connessione che accetta e non risponde bloccava
+    tutto a tempo indefinito.
+    """
+    try:
+        response = requests.get(
+            "https://pypi.python.org/pypi/gramaddict/json", timeout=10
+        )
+        if response.ok:
+            latest_version = response.json()["info"]["version"]
 
-        return current_version < latest_version, latest_version
-    else:
-        return False, None
+            current_version = parse_version(__version__)
+            latest_version = parse_version(latest_version)
+
+            return current_version < latest_version, latest_version
+    except Exception as e:
+        logger.debug(f"Controllo aggiornamenti non riuscito, tiro dritto: {e}")
+    return False, None
 
 
 def check_if_updated(crash=False):

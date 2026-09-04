@@ -744,6 +744,26 @@ class SearchView:
                 logger.warning(
                     f"⌨️  Searchbar MISMATCH: atteso {target!r} ma trovato {seen!r}."
                 )
+                # Caso frequentissimo col kick-search: la barra contiene
+                # l'INIZIO del target, perche' l'ultimo carattere mandato via
+                # ADB non e' ancora arrivato quando rileggiamo. Svuotare e
+                # ridigitare tutto qui e' sbagliato due volte: butta via testo
+                # corretto, e il clear+retype e' proprio l'operazione che ogni
+                # tanto lascia la barra in uno stato peggiore. Si aggiunge solo
+                # quello che manca.
+                seen_n, target_n = seen.strip().lower(), target.strip().lower()
+                if seen_n and target_n.startswith(seen_n):
+                    mancante = target.strip()[len(seen.strip()):]
+                    logger.info(
+                        f"⌨️  La barra ha solo l'inizio: aggiungo {mancante!r} "
+                        "invece di riscrivere da capo."
+                    )
+                    if not self._adb_type_text(mancante):
+                        current.set_text(
+                            target, Mode.PASTE if args.dont_type else Mode.TYPE
+                        )
+                    random_sleep(2, 4, modulable=False)
+                    continue
                 if tentativo == 2:
                     break
                 logger.info("⌨️  Riprovo: svuoto la barra e ridigito.")

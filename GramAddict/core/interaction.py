@@ -383,9 +383,28 @@ def interact_with_user(
                     f"Could not {reason} media. Posts count: {profile_data.posts_count}."
                 )
             logger.info("Back to profile.")
-            while not post_grid_view._get_post_view().exists():
+            # Questo era un `while` SENZA limite: si premeva indietro finche'
+            # la griglia dei post non ricompariva. Ma exists() qui e' senza
+            # timeout, quindi durante una transizione risponde False anche
+            # quando la schermata giusta sta arrivando: bastava un momento
+            # storto per continuare a premere indietro fino a USCIRE da
+            # Instagram, e da li' il primo find() alzava AppHasCrashed.
+            # Cinque tentativi coprono qualunque profondita' reale (post ->
+            # commenti -> profilo); oltre, il problema non e' la profondita'.
+            tornato_alla_griglia = False
+            for _ in range(5):
+                if post_grid_view._get_post_view().exists():
+                    tornato_alla_griglia = True
+                    break
                 logger.debug("We are in the wrong place...")
                 device.back()
+            if not tornato_alla_griglia:
+                logger.warning(
+                    "Non sono riuscito a tornare alla griglia dei post dopo 5 "
+                    "tentativi: lascio stare questo profilo invece di premere "
+                    "indietro finche' esco da Instagram."
+                )
+                break
             device.back()
             # Job blogger in modalita' commento: il like serve solo ad aprire
             # il post, quello che conta e' il commento. Se e' andato, basta

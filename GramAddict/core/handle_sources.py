@@ -796,7 +796,20 @@ def handle_likers(
                     if element_opened:
                         opened = True
                         logger.info("Back to likers list.")
-                        _back_to_list(device, self.ResourceID)
+                        # _back_to_list sa gia' dire se NON e' tornato alla
+                        # lista, ma il valore veniva buttato via: si continuava
+                        # a ciclare su `item` presi da uno schermo che non c'e'
+                        # piu', toccando coordinate a caso su quello che e'
+                        # rimasto davanti (il profilo). Meglio abbandonare lo
+                        # schermo: il while esterno rifa' _getUserContainer(),
+                        # che se siamo altrove torna None e chiude pulito.
+                        if not _back_to_list(device, self.ResourceID):
+                            logger.warning(
+                                "Non sono tornato alla lista dei likers: "
+                                "rifaccio il punto invece di iterare righe che "
+                                "non sono piu' a schermo."
+                            )
+                            break
 
             except IndexError:
                 logger.info(
@@ -1414,6 +1427,15 @@ def iterate_over_followers(
     # blacklisted). These do not count toward the hot-zone "already interacted"
     # detection — they are structurally unavoidable and will always be there.
     screen_permanent_skip_count = 0
+    # Quante volte di fila si e' dovuto "recuperare" la lista con uno swipe a
+    # mano. Serve un tetto: quel ramo faceva `continue` senza contatore, e se a
+    # schermo resta qualcosa che espone un id/list ma NON e' la lista follower
+    # (la schermata di ricerca, per dire) il ciclo gira all'infinito a ~3
+    # secondi per giro, senza interagire con nessuno. E' il candidato migliore
+    # per le ore a zero interazioni: il log continua a scorrere, quindi nemmeno
+    # il rilevatore di stallo del watchdog se ne accorge.
+    recuperi_swipe = 0
+    MAX_RECUPERI_SWIPE = 8
 
     while True:
         logger.info("Iterate over visible followers.")
@@ -1559,7 +1581,13 @@ def iterate_over_followers(
                             return
                     if element_opened:
                         logger.info("Back to followers list")
-                        _back_to_list(device, self.ResourceID)
+                        if not _back_to_list(device, self.ResourceID):
+                            logger.warning(
+                                "Non sono tornato alla lista dei follower: "
+                                "rifaccio il punto invece di iterare righe che "
+                                "non sono piu' a schermo."
+                            )
+                            break
 
         except IndexError:
             logger.info(
@@ -1696,7 +1724,11 @@ def iterate_over_followers(
             # stessa cosa: la lista "sparisce" per un attimo quando Instagram
             # carica altre righe; un controllo istantaneo la dava per persa e
             # chiudeva la sorgente dopo UN profilo (12 volte in un pomeriggio)
-            if not list_view.exists(Timeout.MEDIUM):
+            if list_view.exists(Timeout.MEDIUM):
+                # lista vista dal selettore: il recupero e' riuscito, si
+                # riparte da zero
+                recuperi_swipe = 0
+            else:
                 # Il selettore nega la lista, ma l'albero completo la riporta?
                 # E' il caso visto in smoke: nessun back da fare, la lista e'
                 # li'. Si scrolla a mano dentro i suoi bounds e si rilegge la
@@ -1710,6 +1742,16 @@ def iterate_over_followers(
                         "[recover] List not seen by the selector but present in the "
                         f"hierarchy dump at {b}: swiping manually instead of pressing back."
                     )
+                    recuperi_swipe += 1
+                    if recuperi_swipe > MAX_RECUPERI_SWIPE:
+                        logger.warning(
+                            f"[recover] {recuperi_swipe} recuperi a vuoto di fila su "
+                            "questa sorgente: quello che vedo non e' la lista "
+                            "follower. Chiudo la sorgente invece di continuare a "
+                            "scorrere il nulla.",
+                            extra={"color": f"{Fore.YELLOW}"},
+                        )
+                        return
                     x = (b["left"] + b["right"]) // 2
                     device.swipe_points(x, b["bottom"] - 120, x, b["top"] + 120)
                     random_sleep(2, 3, modulable=False)
