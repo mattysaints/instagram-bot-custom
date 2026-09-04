@@ -55,6 +55,36 @@ from GramAddict.core.views import AccountView, ProfileView, TabBarView, Universa
 from GramAddict.core.views import load_config as load_views
 
 
+def _scarta_sessione_incompiuta(sessions, session_state) -> bool:
+    """Toglie dalla lista una sessione che non e' mai partita davvero.
+
+    La sessione viene appesa a `sessions` PRIMA che il setup sia riuscito,
+    perche' serve gia' durante il setup (stop_bot, wait_for_next_session la
+    vogliono). Se pero' il setup fallisce si fa `continue`, ne nasce una
+    nuova, e quella abbandonata resta nella lista per sempre con finishTime
+    a None.
+
+    Il danno lo fa il report: print_full_report calcola
+    `session.finishTime or datetime.now()`, quindi a una sessione mai chiusa
+    assegna una durata che CRESCE a ogni stampa. Nel log del 03/09 la stessa
+    sessione #6 risultava prima di 3h12 e poco dopo di 4h57, sempre con zero
+    interazioni: non erano ore di lavoro perse, erano ore che non sono mai
+    esistite. Con due orfane su dieci sessioni il riepilogo diventa
+    inutilizzabile per capire come sta andando il bot.
+
+    Restituisce True se ha scartato qualcosa.
+    """
+    if sessions and sessions[-1] is session_state and session_state.finishTime is None:
+        sessions.pop()
+        # in questo modulo `logger` non e' un globale: ogni funzione se lo
+        # prende da sola (vedi _ensure_ig_foreground)
+        logging.getLogger(__name__).debug(
+            "Sessione mai avviata scartata dal riepilogo."
+        )
+        return True
+    return False
+
+
 def _ensure_ig_foreground(device, configs, max_attempts: int = 4) -> bool:
     """Guarantee Instagram is in the foreground before we touch its UI.
 
@@ -281,6 +311,7 @@ def start_bot(**kwargs):
                     "Instagram won't stay in foreground at startup; "
                     "retrying session setup after 30s..."
                 )
+                _scarta_sessione_incompiuta(sessions, session_state)
                 sleep(30)
                 continue
             profile_view = ProfileView(device)
@@ -317,6 +348,7 @@ def start_bot(**kwargs):
             segna_login_richiesto(configs.args.username or "account")
             from time import sleep as _sleep
 
+            _scarta_sessione_incompiuta(sessions, session_state)
             _sleep(300)
             continue
         except Exception as e:
@@ -331,6 +363,7 @@ def start_bot(**kwargs):
             # the setup phase should be recovered by restarting the loop.
             logger.info("Setup phase failed, retrying after 30s...")
             from time import sleep as _sleep
+            _scarta_sessione_incompiuta(sessions, session_state)
             _sleep(30)
             continue
 
