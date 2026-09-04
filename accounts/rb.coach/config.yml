@@ -80,7 +80,7 @@ follow-min-engagement: 1
 action-throttle-enabled: true
 action-throttle-follow-min: 30-70          # ~50-120s tra 2 follow
 action-throttle-like-min: 10-22            # ~10-22s tra 2 like
-action-throttle-unfollow-min: 25-50
+action-throttle-unfollow-min: 40-60
 action-throttle-comment-min: 300-420       # 5-7 min tra 2 commenti -> max ~8-12/h
 action-throttle-pm-min: 999999             # DM OFF su questa config
 
@@ -252,8 +252,8 @@ min-following: 50                          # non scendere sotto questo numero di
 # ~31 like/h e ~13 follow/h, cioe' sempre sotto meta' del consentito.
 # Si alza il volume restando bassi sul RITMO, che e' la dimensione su cui
 # scattano i blocchi: e' il picco orario a contare, non il totale del giorno.
-total-likes-limit: 36-42
-total-follows-limit: 15-18
+total-likes-limit: 28-32
+total-follows-limit: 26-30
 total-unfollows-limit: 0-0                 # unfollow gestito da config-unfollow.yml
 total-watches-limit: 0-0
 # E' il limite che CHIUDE la sessione (bot_flow.py:432) e va diviso fra due
@@ -264,7 +264,7 @@ total-watches-limit: 0-0
 # giornaliero vero resta daily-follows-cap/daily-likes-cap.
 total-successful-interactions-limit: 38-46
 total-interactions-limit: 999
-total-comments-limit: 5-7
+total-comments-limit: 11-14
 total-pm-limit: 0-0
 total-scraped-limit: 200-300               # NON 0: con 0 il bot esce subito
 
@@ -278,10 +278,10 @@ total-scraped-limit: 200-300               # NON 0: con 0 il bot esce subito
 # considerati sicuri, 80 follow contro 150-200.
 # Se arriva un action-block, il primo numero da riabbassare e' il PICCO
 # ORARIO (total-likes-limit per finestra), non questi tetti.
-daily-follows-cap: 80
-daily-likes-cap: 190
+daily-follows-cap: 150
+daily-likes-cap: 165
 daily-unfollows-cap: 60
-daily-comments-cap: 40
+daily-comments-cap: 80
 daily-pm-cap: 0
 
 ## Watch-stories OFF: guardare le storie durante le interazioni non porta

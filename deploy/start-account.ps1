@@ -32,8 +32,17 @@ param(
     [Parameter(Mandatory = $true)][string]$Avd,
     [Parameter(Mandatory = $true)][string]$Serial,
     [int]$BootTimeoutSec = 300,
-    # Quante sessioni pianificare nella giornata a partire dall'ora di lancio.
-    [int]$Sessioni = 4,
+    # Quante finestre di attivita' pianificare nella giornata.
+    # Portato da 4 a 5 il 04/09: con 4 finestre da 90 min il bot lavorava 6 ore
+    # su 16 disponibili (fascia 08:00-23:59), e i ritmi misurati erano a un
+    # terzo dei limiti che Instagram tollera. Aggiungere tempo e' l'unica leva
+    # che alza davvero i totali, perche' i tetti per sessione di follow e like
+    # non venivano MAI raggiunti: il collo di bottiglia e' il tempo per
+    # profilo, non il config.
+    # 5 finestre richiedono (5-1)*2h + 1.5h = 9.5h, quindi entrano purche' il
+    # bot parta entro le 14:30. Con 6 ne servirebbero 11.5 e un avvio nel
+    # pomeriggio le farebbe comprimere.
+    [int]$Sessioni = 5,
     # Emulatore senza finestra: risparmia CPU e memoria, ed e' quello che
     # serve su una macchina che gira h24 senza nessuno davanti. Il bot non
     # perde niente, perche' lavora via ADB e non guarda lo schermo; anche gli

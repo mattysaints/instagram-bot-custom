@@ -59,7 +59,7 @@ follow-min-engagement: 1
 action-throttle-enabled: true
 action-throttle-follow-min: 30-70
 action-throttle-like-min: 10-22
-action-throttle-unfollow-min: 25-50
+action-throttle-unfollow-min: 40-60
 action-throttle-comment-min: 300-420
 action-throttle-pm-min: 999999             # DM OFF
 
@@ -267,8 +267,8 @@ min-following: 50
 # Questo account ha 4 finestre invece di 5, quindi a parita' di limite per
 # sessione il totale del giorno resta piu' basso di @rb.coach: e' voluto,
 # sono due account con due strategie diverse.
-total-likes-limit: 36-42
-total-follows-limit: 15-18
+total-likes-limit: 28-32
+total-follows-limit: 26-30
 total-unfollows-limit: 0-0
 total-watches-limit: 0-0
 # E' il limite che CHIUDE la sessione (bot_flow.py:432) e va diviso fra due
@@ -279,7 +279,7 @@ total-watches-limit: 0-0
 # giornaliero vero resta daily-follows-cap/daily-likes-cap.
 total-successful-interactions-limit: 38-46
 total-interactions-limit: 999
-total-comments-limit: 5-7
+total-comments-limit: 11-14
 total-pm-limit: 0-0
 total-scraped-limit: 200-300
 
@@ -293,10 +293,10 @@ total-scraped-limit: 200-300
 # considerati sicuri, 65 follow contro 150-200.
 # Se arriva un action-block, il primo numero da riabbassare e' il PICCO
 # ORARIO (total-likes-limit per finestra), non questi tetti.
-daily-follows-cap: 65
-daily-likes-cap: 155
+daily-follows-cap: 150
+daily-likes-cap: 160
 daily-unfollows-cap: 50
-daily-comments-cap: 30
+daily-comments-cap: 70
 daily-pm-cap: 0
 
 ## Watch-stories OFF: guardare le storie durante le interazioni non porta
