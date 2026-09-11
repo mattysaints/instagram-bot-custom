@@ -114,7 +114,9 @@ def run(
         else:
             comment = ai_comment.polish_comment(comment)
             row["comment_raw"] = comment
-            ok, why = ai_comment.comment_is_acceptable(comment, author_name, caption=caption)
+            ok, why = ai_comment.comment_is_acceptable(
+                comment, author_name, caption=caption, language=language
+            )
             if ok:
                 row["decision"] = "OK"
                 row["comment_final"] = comment

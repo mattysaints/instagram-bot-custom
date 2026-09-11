@@ -353,6 +353,7 @@ def comment_is_acceptable(
     author_name: Optional[str] = None,
     min_words: int = _COMMENT_MIN_WORDS,
     caption: Optional[str] = None,
+    language: str = "Italian",
 ) -> tuple:
     """Controlli sull'output che il guardrail dello Space non fa.
 
@@ -381,7 +382,10 @@ def comment_is_acceptable(
         return False, "contiene un @handle"
     if "?" in text:
         return False, "contiene una domanda"
-    if _looks_english(text):
+    # il controllo lingua vale solo se la lingua richiesta e' l'italiano: con
+    # ai-comments-language: auto (account che commentano anche sotto post
+    # stranieri) un commento in inglese e' quello giusto
+    if (language or "Italian").strip().lower() == "italian" and _looks_english(text):
         return False, "lingua sbagliata (inglese)"
     if _DEICTIC_OPENER_RE.match(text):
         return False, "attacco 'Quel/Quella' (tic da bot)"
@@ -547,7 +551,9 @@ def generate_comment(
     # inferenze visive, copia della caption, commenti rivolti a chi scrive.
     # Scartare = il chiamante SALTA il commento (vedi last_rejection_reason).
     author_name = getattr(args, "ai_comments_author_name", None) or None
-    ok, why = comment_is_acceptable(comment, author_name, caption=caption)
+    ok, why = comment_is_acceptable(
+        comment, author_name, caption=caption, language=language
+    )
     if not ok:
         _last_rejection = why
         logger.warning(f"[ai-comment] output scartato ({why}): {comment!r}")
