@@ -190,6 +190,11 @@ def test_scarta_inglese_e_domande():
     # parole inglesi prese in prestito dentro una frase italiana passano
     ok, _ = comment_is_acceptable("Impressionante il tuo 225lb snatch, speriamo in altri record presto.")
     assert ok
+    # con language auto/English il commento inglese e' quello giusto
+    ok, _ = comment_is_acceptable("Lifting 300 kg in a single day is intense.", language="auto")
+    assert ok
+    ok, _ = comment_is_acceptable("Lifting 300 kg in a single day is intense.", language="English")
+    assert ok
 
 
 def test_prima_persona_solo_se_autoreferenziale():
