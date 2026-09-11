@@ -993,8 +993,15 @@ def main():
                   "Avvia l'emulatore (o collega il telefono con USB-debug autorizzato) e riprova.")
             sys.exit(2)
         if resolved_serial != device_serial:
-            # l'emulatore e' su un'altra porta: allineo il config, altrimenti il
-            # bot (che legge 'device:' da li') non troverebbe nulla.
+            # l'emulatore e' su un'altra porta: il lock preso sopra vale per il
+            # serial vecchio. Lo rilascio e lo riprendo su quello nuovo, cosi' se
+            # li' sta gia' girando un altro account (Roberto ne ha due) ci si
+            # ferma invece di pestargli i piedi.
+            if device_serial:
+                _libera_device(device_serial)
+            prendi_device(resolved_serial, config_path, forza=args.forza_device)
+            # e allineo il config, altrimenti il bot (che legge 'device:' da
+            # li') non troverebbe nulla.
             patch_device(config_path, resolved_serial)
             print(f"✅ Config allineata: device: {resolved_serial}")
 
