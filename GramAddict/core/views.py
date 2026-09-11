@@ -1555,7 +1555,11 @@ class AccountView:
         profile_view = ProfileView(self.device)
         profile_view.click_on_avatar()
         if profile_view.getFollowingCount() is None:
+            # Il secondo click da solo non bastava: si tornava subito ai
+            # controlli su un profilo ancora in caricamento. Ora si aspetta
+            # che compaia il contenuto prima di proseguire.
             profile_view.click_on_avatar()
+            profile_view.attendi_caricamento()
 
     def changeToUsername(self, username: str):
         action_bar = ProfileView._getActionBarTitleBtn(self)
@@ -2086,6 +2090,39 @@ class ProfileView(ActionBarView):
         super().__init__(device)
         self.device = device
         self.is_own_profile = is_own_profile
+
+    def attendi_caricamento(self, tentativi: int = 12) -> bool:
+        """Aspetta che il profilo sia davvero popolato, non solo aperto.
+
+        open_instagram aspetta la barra delle schede, che pero' e' disegnata
+        quasi subito: il 06/09 il log diceva "Instagram UI ready after 1s" e
+        il profilo era ancora vuoto. Su un emulatore a 2 core un account
+        pesante (51K follower, dashboard professionale, canale broadcast,
+        highlights) impiega molto piu' tempo a riempirsi, e i controlli che
+        vengono dopo - contatori, lingua, username nella action bar -
+        fallivano tutti in fila su una schermata vuota, chiudendo la sessione
+        con zero interazioni. L'account leggero sullo stesso PC partiva senza
+        problemi nello stesso minuto: non e' un guasto, e' lentezza.
+
+        Si aspettano i contatori, cioe' il contenuto che serve davvero.
+        """
+        contatori = case_insensitive_re(
+            [
+                ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_FOLLOWERS_COUNT,
+                ResourceID.ROW_PROFILE_HEADER_TEXTVIEW_FOLLOWING_COUNT,
+            ]
+        )
+        for n in range(1, tentativi + 1):
+            if self.device.find(resourceIdMatches=contatori).exists(Timeout.SHORT):
+                if n > 1:
+                    logger.debug(f"Profilo popolato dopo {n} controlli.")
+                return True
+            sleep(3)
+        logger.warning(
+            f"Il profilo non si e' popolato dopo {tentativi} controlli: "
+            "i passi successivi potrebbero non trovare quello che cercano."
+        )
+        return False
 
     def getFirstPostAgeDays(self) -> Optional[int]:
         """

@@ -3,10 +3,10 @@ import string
 from datetime import datetime
 from enum import Enum, auto
 from inspect import stack
-from os import getcwd, listdir
+from os import getcwd, listdir, name as os_name
 from random import randint, uniform
 from re import compile as re_compile, search
-from subprocess import PIPE, run
+from subprocess import DEVNULL, PIPE, run
 from time import sleep
 from typing import Optional
 
@@ -611,6 +611,103 @@ class DeviceFacade:
                     DeviceFacade._heal_connection(self.deviceV2, tries=1)
                 attempts += 1
 
+    # Errori che dicono "il server adb non risponde", non "il device ha un
+    # problema". Solo per questi ha senso riavviare il server: negli altri
+    # casi lo si spegnerebbe sotto i piedi all'altro account per niente.
+    _SERVER_ADB_KO = re_compile(
+        r"(?i)connect to adb server failed|cannot connect to daemon|"
+        r"adbconnectionerror|10061|failed to start daemon|"
+        r"could not read ok from adb server"
+    )
+
+    @staticmethod
+    def _adb(*args, timeout: int = 30) -> int:
+        """Chiama adb ignorandone l'output. Niente text=True: su Windows
+        italiano adb risponde in codepage 850 e decodificarlo come UTF-8
+        solleva UnicodeDecodeError (byte 0x95)."""
+        try:
+            return run(
+                ["adb", *args], stdout=DEVNULL, stderr=DEVNULL, timeout=timeout
+            ).returncode
+        except Exception as e:
+            logger.debug(f"[device] adb {' '.join(args)} non eseguito: {e}")
+            return -1
+
+    @staticmethod
+    def _device_visibile(serial: Optional[str]) -> bool:
+        try:
+            esito = run(["adb", "devices"], stdout=PIPE, stderr=DEVNULL, timeout=30)
+        except Exception:
+            return False
+        elenco = (esito.stdout or b"").decode("utf-8", "replace")
+        if not serial:
+            # senza serial ci si accontenta di un device qualsiasi in stato "device"
+            return any(
+                r.strip().endswith("device") and "\t" in r
+                for r in elenco.splitlines()[1:]
+            )
+        return any(
+            r.startswith(serial) and r.strip().endswith("device")
+            for r in elenco.splitlines()
+        )
+
+    @staticmethod
+    def _riavvia_server_adb(serial: Optional[str]) -> bool:
+        """Rimette in piedi il server adb quando e' lui il problema.
+
+        Il 02/09 e il 05/09 il server e' rimasto vivo come processo ma sordo:
+        teneva la porta 5037 senza rispondere. In quello stato `kill-server`
+        non riesce nemmeno a connettersi per chiudersi, e ogni comando adb
+        prova a forkare un server nuovo che fallisce e resta appeso: il 06/09
+        si sono trovati 109 processi adb, un centinaio dei quali generati
+        proprio dai tentativi di riconnessione di ieri sera. L'healing
+        precedente si limitava a risondare e non poteva funzionare.
+
+        ATTENZIONE: il server adb e' condiviso fra i due account. Riavviarlo
+        interrompe per qualche secondo anche l'altro bot, che pero' ha lo
+        stesso healing e si riprende da solo. E' un disturbo breve contro la
+        morte certa della sessione.
+        """
+        logger.warning("[device] il server adb non risponde: lo riavvio.")
+
+        DeviceFacade._adb("kill-server", timeout=20)
+        sleep(1)
+        DeviceFacade._adb("start-server", timeout=45)
+        sleep(3)
+        if DeviceFacade._device_visibile(serial):
+            logger.info("[device] server adb riavviato, device di nuovo visibile.")
+            return True
+
+        # Il riavvio pulito non e' bastato: il processo sordo tiene ancora la
+        # 5037 e va tolto di mezzo dal sistema operativo. Si colpisce solo
+        # adb.exe per nome: emulatori e qemu non si toccano MAI, ci mettono
+        # minuti a ripartire.
+        logger.warning("[device] kill-server non e' bastato, tolgo i processi adb.")
+        if os_name == "nt":
+            try:
+                run(
+                    ["taskkill", "/F", "/IM", "adb.exe"],
+                    stdout=DEVNULL,
+                    stderr=DEVNULL,
+                    timeout=30,
+                )
+            except Exception as e:
+                logger.debug(f"[device] taskkill adb.exe non eseguito: {e}")
+        else:
+            try:
+                run(["pkill", "-f", "adb"], stdout=DEVNULL, stderr=DEVNULL, timeout=30)
+            except Exception as e:
+                logger.debug(f"[device] pkill adb non eseguito: {e}")
+        sleep(2)
+        DeviceFacade._adb("start-server", timeout=45)
+        sleep(4)
+
+        if DeviceFacade._device_visibile(serial):
+            logger.info("[device] server adb ricreato, device di nuovo visibile.")
+            return True
+        logger.error("[device] il device non torna visibile nemmeno dopo il riavvio.")
+        return False
+
     @staticmethod
     def _heal_connection(deviceV2, tries: int = 4, base_delay: float = 4.0) -> bool:
         """Try to bring the atx-agent / adb link back after a connection drop.
@@ -623,6 +720,7 @@ class DeviceFacade:
         """
         if deviceV2 is None:
             return False
+        server_riavviato = False
         for attempt in range(1, tries + 1):
             delay = base_delay * attempt
             logger.warning(
@@ -640,6 +738,17 @@ class DeviceFacade:
                 logger.warning(
                     f"[device] healing probe failed ({type(e).__name__}: {e})."
                 )
+                # Se a non rispondere e' il server adb, risondare non servira'
+                # mai: va rimesso in piedi lui. Una volta sola per ciclo,
+                # altrimenti si ricasca nella cascata di processi adb che
+                # questo codice deve evitare.
+                if not server_riavviato and DeviceFacade._SERVER_ADB_KO.search(
+                    f"{type(e).__name__}: {e}"
+                ):
+                    server_riavviato = True
+                    DeviceFacade._riavvia_server_adb(
+                        getattr(deviceV2, "serial", None)
+                    )
         logger.error("[device] could not re-establish connection after retries.")
         return False
 
