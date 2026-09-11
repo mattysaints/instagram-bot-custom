@@ -212,7 +212,7 @@ def main() -> int:
     source_stats_path = Path(args.source_stats) if args.source_stats else account_dir / "source_stats.json"
     explored_path = Path(args.explored) if args.explored else account_dir / "explored_segments.json"
 
-    yaml_text = config_path.read_text()
+    yaml_text = config_path.read_text(encoding="utf-8")
     original_line, usernames, line_idx = extract_blogger_list(yaml_text)
     if not usernames:
         print("⚠️  Lista vuota, niente da rotare.")
@@ -223,7 +223,7 @@ def main() -> int:
     source_stats: dict = {}
     if source_stats_path.exists():
         try:
-            source_stats = json.loads(source_stats_path.read_text()).get("sources", {})
+            source_stats = json.loads(source_stats_path.read_text(encoding="utf-8")).get("sources", {})
             print(f"✅ source_stats.json letto ({len(source_stats)} entries).")
         except Exception as e:
             print(f"⚠️  source_stats.json non leggibile: {e}")
@@ -233,7 +233,7 @@ def main() -> int:
     explored_segments: dict = {}
     if explored_path.exists():
         try:
-            explored_segments = json.loads(explored_path.read_text()).get("sources", {})
+            explored_segments = json.loads(explored_path.read_text(encoding="utf-8")).get("sources", {})
             n_bf = len(explored_segments.get("blogger-followers", {}))
             print(f"✅ explored_segments.json letto ({n_bf} blogger-followers tracked).")
         except Exception as e:
@@ -307,7 +307,7 @@ def main() -> int:
     print(f"\n💾 Backup creato: {backup.name}")
 
     new_text = write_new_list(yaml_text, line_idx, original_line, new_order)
-    config_path.write_text(new_text)
+    config_path.write_text(new_text, encoding="utf-8")
     print(f"✅ {config_path.name} aggiornato con il nuovo ordine.")
     print(f"   I primi 10-12 verranno lavorati nella prossima sessione (truncate-sources).")
     return 0
