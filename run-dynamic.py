@@ -155,6 +155,25 @@ def patch_working_hours(config_path: Path, windows: list[str]) -> None:
     config_path.write_text(text)
 
 
+def patch_device(config_path: Path, serial: str) -> None:
+    """Sostituisce la riga 'device: ...' nel file YAML.
+
+    Serve quando l'emulatore riparte su un'altra porta: Android assegna
+    emulator-5554 alla prima istanza, 5556 alla seconda, 5558 alla terza...
+    Se il config resta puntato alla porta vecchia, il bot non trova il device e
+    aborta anche se l'emulatore e' regolarmente acceso.
+    """
+    text = config_path.read_text()
+    pattern = re.compile(r"^(\s*device\s*:\s*)([^\s#]+)(.*)$", re.MULTILINE)
+
+    def _replace(m):
+        return f"{m.group(1)}{serial}{m.group(3)}"
+
+    new_text, n = pattern.subn(_replace, text, count=1)
+    if n:
+        config_path.write_text(new_text)
+
+
 def _read_device_from_config(config_path: Path) -> Optional[str]:
     """Estrae il valore della chiave 'device:' dal config YAML (parsing
     minimale: niente PyYAML dependency). Ritorna None se non trovato.
@@ -210,11 +229,20 @@ def _adb_boot_completed(serial: str) -> bool:
         return False
 
 
-def wait_for_adb_device(serial: Optional[str], timeout_s: int = ADB_WAIT_TIMEOUT_S) -> bool:
-    """Polla `adb devices` finche' il serial non risulta 'device' E ha
-    completato il boot. Ritorna True se pronto, False su timeout / unauth.
+def wait_for_adb_device(
+    serial: Optional[str], timeout_s: int = ADB_WAIT_TIMEOUT_S
+) -> Optional[str]:
+    """Aspetta che un device ADB sia utilizzabile e restituisce il suo serial.
 
-    Se serial e' None, accetta qualsiasi device pronto.
+    Ritorna:
+      - il serial da usare (puo' DIFFERIRE da quello richiesto: vedi sotto)
+      - None su timeout o device non autorizzato
+
+    Se il serial richiesto non c'e' ma esiste UN SOLO altro device pronto, usiamo
+    quello: l'emulatore cambia porta a ogni istanza (5554 -> 5556 -> 5558...) e
+    prima bastava questo per abortire il lancio con l'emulatore regolarmente
+    acceso. Con piu' di un device pronto NON indoviniamo: li elenchiamo e
+    lasciamo scegliere, cosi' non si finisce a botteggiare sul telefono sbagliato.
     """
     target = serial or "<any>"
     deadline = time.monotonic() + timeout_s
@@ -226,35 +254,75 @@ def wait_for_adb_device(serial: Optional[str], timeout_s: int = ADB_WAIT_TIMEOUT
             print(f"⏳ ADB device '{target}' state: {state}")
             last_state = state
         if state == "device":
-            # serial reale (anche se l'utente non l'ha specificato)
             real_serial = serial or _first_ready_serial()
             if real_serial and _adb_boot_completed(real_serial):
                 print(f"✅ ADB device '{real_serial}' pronto (boot completato).")
-                return True
+                return real_serial
             if not announced_wait:
                 print("⏳ Device 'device' ma boot non ancora completato, aspetto...")
                 announced_wait = True
         elif state == "unauthorized":
             print("❌ Device 'unauthorized': autorizza il debug USB sul telefono e riprova.")
-            return False
+            return None
+        elif serial is not None:
+            # Il serial del config non c'e': magari l'emulatore e' acceso su
+            # un'altra porta.
+            others = [s for s in _ready_serials() if s != serial]
+            # Adottiamo un altro serial SOLO se e' lo stesso tipo di device: un
+            # emulatore che ha cambiato porta e' la cosa che vogliamo aggiustare.
+            # Se il config dice emulatore e c'e' collegato solo il telefono
+            # fisico (o viceversa) NON botteggiamo li' per iniziativa nostra.
+            same_kind = [
+                s
+                for s in others
+                if s.startswith("emulator-") == serial.startswith("emulator-")
+            ]
+            if len(same_kind) == 1:
+                print(
+                    f"ℹ️  '{serial}' non risponde, ma c'e' un solo device dello stesso "
+                    f"tipo pronto: '{same_kind[0]}' (l'emulatore cambia porta a ogni "
+                    f"istanza). Lo uso e aggiorno il config."
+                )
+                return same_kind[0]
+            if others and not same_kind:
+                print(
+                    f"❌ '{serial}' non risponde. Pronti solo: {', '.join(others)} "
+                    f"— tipo di device diverso da quello in config, non lo cambio "
+                    f"io. Avvia l'emulatore giusto o correggi 'device:' nel config."
+                )
+                return None
+            if len(same_kind) > 1:
+                print(
+                    f"❌ '{serial}' non risponde e ci sono {len(same_kind)} device pronti "
+                    f"({', '.join(same_kind)}): non indovino quale usare. "
+                    f"Correggi 'device:' nel config o stacca quelli di troppo."
+                )
+                return None
         time.sleep(ADB_POLL_INTERVAL_S)
     print(f"❌ Timeout {timeout_s}s: ADB device '{target}' non e' pronto. "
           f"Verifica con `adb devices` e avvia l'emulatore prima di rilanciare.")
-    return False
+    return None
 
 
-def _first_ready_serial() -> Optional[str]:
+def _ready_serials() -> list[str]:
+    """Serial di tutti i device in stato 'device' E con boot completato."""
     try:
         out = subprocess.run(
             ["adb", "devices"], capture_output=True, text=True, timeout=10
         ).stdout
     except Exception:
-        return None
+        return []
+    ready = []
     for line in out.splitlines()[1:]:
         parts = line.strip().split()
-        if len(parts) >= 2 and parts[1] == "device":
-            return parts[0]
-    return None
+        if len(parts) >= 2 and parts[1] == "device" and _adb_boot_completed(parts[0]):
+            ready.append(parts[0])
+    return ready
+
+
+def _first_ready_serial() -> Optional[str]:
+    serials = _ready_serials()
+    return serials[0] if serials else None
 
 
 def main():
@@ -402,10 +470,18 @@ def main():
             print(f"🔌 Verifico che ADB device '{device_serial}' sia pronto...")
         else:
             print("🔌 Nessun 'device:' in config; verifico che almeno un device ADB sia pronto...")
-        if not wait_for_adb_device(device_serial, timeout_s=args.adb_wait_timeout):
+        resolved_serial = wait_for_adb_device(
+            device_serial, timeout_s=args.adb_wait_timeout
+        )
+        if not resolved_serial:
             print("❌ Abort: device ADB non pronto entro il timeout. "
                   "Avvia l'emulatore (o collega il telefono con USB-debug autorizzato) e riprova.")
             sys.exit(2)
+        if resolved_serial != device_serial:
+            # l'emulatore e' su un'altra porta: allineo il config, altrimenti il
+            # bot (che legge 'device:' da li') non troverebbe nulla.
+            patch_device(config_path, resolved_serial)
+            print(f"✅ Config allineata: device: {resolved_serial}")
 
     # Lancia il bot
     cmd = [sys.executable, "run.py", "--config", str(config_path)]
