@@ -40,6 +40,7 @@ from GramAddict.core.views import (
     ProfileView,
     UniversalActions,
     case_insensitive_re,
+    safe_bounds,
 )
 
 logger = logging.getLogger(__name__)
@@ -641,13 +642,26 @@ def _comment(
         universal_actions._swipe_points(
             direction=Direction.DOWN, delta_y=randint(150, 250)
         )
-        tab_bar = device.find(
-            resourceId=ResourceID.TAB_BAR,
+        # Questi due get_bounds() erano senza rete: se il post non e' piu' a
+        # schermo (scrollato, Reel, schermata cambiata) uiautomator2 alza
+        # UiObjectNotFound e il job moriva. Era la PRIMA causa di crash nei log:
+        # 40 crash fatali, ognuno con IG chiusa e riaperta e +1 su
+        # total-crashes-limit. Lo swipe qui sotto e' solo un aggiustamento per
+        # non pescare il pulsante commenti del post precedente: se non riusciamo
+        # a misurare, lo saltiamo e proseguiamo.
+        tab_bar_bounds = safe_bounds(
+            device.find(resourceId=ResourceID.TAB_BAR), "tab bar"
         )
-        media = device.find(
-            resourceIdMatches=ResourceID.MEDIA_CONTAINER,
+        media_bounds = safe_bounds(
+            device.find(resourceIdMatches=ResourceID.MEDIA_CONTAINER),
+            "media container",
         )
-        if int(tab_bar.get_bounds()["top"]) - int(media.get_bounds()["bottom"]) < 150:
+        if tab_bar_bounds is None or media_bounds is None:
+            logger.debug(
+                "_comment: geometria del post non leggibile, salto lo swipe di "
+                "aggiustamento e provo comunque a cercare il pulsante commenti."
+            )
+        elif int(tab_bar_bounds["top"]) - int(media_bounds["bottom"]) < 150:
             universal_actions._swipe_points(
                 direction=Direction.DOWN, delta_y=randint(150, 250)
             )
