@@ -328,6 +328,31 @@ class CoreArguments(Plugin):
                 "help": "if AI generation fails, fall back to comments_list.txt (default: on). Set to false to skip the comment entirely on AI failure.",
                 "action": "store_true",
             },
+            # Il modello NON vede la foto: riceve solo la caption. Sui log storici il
+            # 46% delle chiamate AI partiva con caption vuota o di sole emoji e il
+            # modello inventava dettagli fisici ("la simmetria del petto" sotto a
+            # "☃️☃️"). Di default, senza abbastanza testo, il commento si SALTA
+            # (il file di fallback e' anch'esso gergo fitness generico, quindi
+            # non e' una scelta migliore).
+            {
+                "arg": "--ai-comments-allow-no-caption",
+                "help": "call the AI (or the fallback file) even when the caption has fewer than --ai-comments-min-caption-words real words. Default: off -> the comment is skipped, the like still happens.",
+                "action": "store_true",
+            },
+            {
+                "arg": "--ai-comments-min-caption-words",
+                "nargs": None,
+                "help": "minimum number of real words (emoji/hashtag-only tokens do not count) a caption must have before asking the AI for a comment (default: 3)",
+                "metavar": "3",
+                "default": "3",
+            },
+            {
+                "arg": "--ai-comments-author-name",
+                "nargs": None,
+                "help": "first name of the account owner (who WRITES the comments). AI outputs that address or name them are discarded (the model sometimes confuses author and recipient).",
+                "metavar": "Mattia",
+                "default": None,
+            },
             # -------------------------------------------------------------------------
             {
                 "arg": "--end-if-likes-limit-reached",

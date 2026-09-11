@@ -678,7 +678,7 @@ def _comment(
                 # rischieremmo di confonderla con un commento di altri.
                 # Tutto try/except: se la caption non c'e' (post senza
                 # didascalia, o resourceId cambiato in nuove versioni IG),
-                # passiamo stringa vuota e l'AI commentera' "sul media".
+                # resta stringa vuota e il gate qui sotto salta il commento.
                 post_caption = ""
                 if ai_comment.is_enabled(args):
                     try:
@@ -686,14 +686,13 @@ def _comment(
                             resourceId=ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT,
                         )
                         if caption_view.exists():
-                            cap_text = caption_view.get_text() or ""
-                            # In IG la caption e' tipicamente "username  caption-text"
-                            # se l'username e' all'inizio, lo strippiamo.
-                            if target_username and cap_text.lower().startswith(
-                                target_username.lower()
-                            ):
-                                cap_text = cap_text[len(target_username):].strip()
-                            post_caption = cap_text.strip()
+                            cap_text = caption_view.get_text(error=False) or ""
+                            # In IG la caption e' "username  caption-text": via
+                            # l'handle (anche se e' un collab/repost con un altro
+                            # autore) e via il "… more" delle caption troncate.
+                            post_caption = ai_comment.clean_caption(
+                                cap_text, target_username
+                            )
                             if post_caption:
                                 logger.info(
                                     f"[ai-comment] caption captured ({len(post_caption)} chars): "
@@ -701,6 +700,19 @@ def _comment(
                                 )
                     except Exception as e:
                         logger.debug(f"[ai-comment] caption extraction skipped: {e}")
+
+                    # Il modello NON vede la foto. Senza abbastanza testo qualunque
+                    # commento "specifico" e' inventato (nei log: "la simmetria del
+                    # petto e' notevole" sotto a "☃️☃️"), e il file di fallback e'
+                    # anch'esso gergo fitness generico. Meglio il solo like.
+                    min_words = ai_comment.min_caption_words(args)
+                    skip_reason = ai_comment.caption_skip_reason(post_caption, min_words)
+                    if skip_reason and not getattr(args, "ai_comments_allow_no_caption", False):
+                        logger.info(
+                            f"[ai-comment] caption {post_caption[:50]!r}: {skip_reason} -> "
+                            f"salto il commento, resta il like."
+                        )
+                        return False
 
                 logger.info("Open comments of post.")
                 # Re-check existence: between the first check and the click
@@ -733,18 +745,33 @@ def _comment(
                                 f"[ai-comment] generated: '{comment}'",
                                 extra={"color": f"{Fore.MAGENTA}"},
                             )
+                        elif ai_comment.last_rejection_reason():
+                            # Avevamo una caption e il modello ha prodotto qualcosa
+                            # di scartabile: il file di fallback (gergo fitness
+                            # generico) non sarebbe meglio. Solo like.
+                            logger.info(
+                                "[ai-comment] output scartato "
+                                f"({ai_comment.last_rejection_reason()}): salto il commento."
+                            )
+                            UniversalActions.close_keyboard(device)
+                            device.back()
+                            return False
                         else:
                             logger.info(
-                                "[ai-comment] generation failed/blocked; falling back to comments_list.txt"
+                                "[ai-comment] lo Space non ha risposto (rete/rate-limit/tutti i "
+                                "modelli falliti)."
                             )
                     if comment is None:
-                        # rispetta l'opt-out hard del fallback al file
+                        # Con ai-comments-fallback-to-file: false (default per questo
+                        # account) NON si pubblica mai un commento fisso dal txt: non
+                        # conosce il post e sotto una foto qualunque e' fuori contesto.
                         if (
                             ai_comment.is_enabled(args)
                             and getattr(args, "ai_comments_fallback_to_file", True) is False
                         ):
                             logger.info(
-                                "[ai-comment] fallback-to-file disabled; skipping comment."
+                                "[ai-comment] nessun commento AI e fallback al file disattivato: "
+                                "salto il commento, resta il like."
                             )
                             UniversalActions.close_keyboard(device)
                             device.back()
