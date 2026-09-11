@@ -194,6 +194,16 @@ _ADULT_MARKERS = re.compile(
     r"|disponibil[ei]\W{0,3}h\s?24|\bh24\b)",
     re.IGNORECASE,
 )
+# post pubblicitari (vendita di percorsi, codici sconto, call-to-action in DM):
+# commentarli significa fare pubblicita' a qualcun altro, sul profilo di un
+# coach a un concorrente. Il bot li ha commentati ("Sfrutta il codice ROB15").
+_AD_MARKERS = re.compile(
+    r"(\b(scrivimi|scrivetemi|contattami|prenota|iscriviti|iscrizioni aperte|"
+    r"link in bio|codice sconto|coupon|promo|shop|acquista|ordina ora|"
+    r"posti disponibili|ultimi \d+ posti|swipe up)\b"
+    r"|\bcodice\s+[A-Z0-9]{3,}\b|\bsconto\b|\bin dm\b|\bdm\b\s*(📩|per|e ti)|\bwhatsapp\b)",
+    re.IGNORECASE,
+)
 _LATIN_LETTER_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ]")
 _ANY_LETTER_RE = re.compile(r"[^\W\d_]", re.UNICODE)
 # solo i casi AUTOREFERENZIALI: 'ti abbraccio e penso a te' su un post di malattia
@@ -290,11 +300,15 @@ def caption_skip_reason(caption: Optional[str], min_words: int = 3) -> Optional[
       cucire complimenti da bot;
     - alfabeto prevalentemente non latino (cirillico, arabo): il modello ne
       indovina il senso e in italiano esce una frase a caso;
-    - temi adult/escort: meglio il solo like.
+    - temi adult/escort: meglio il solo like;
+    - post pubblicitari (percorsi in vendita, codici sconto, "scrivimi in DM"):
+      commentarli e' fare pubblicita' a qualcun altro.
     """
     text = caption or ""
     if _ADULT_MARKERS.search(text):
         return "tema adult/escort"
+    if _AD_MARKERS.search(text):
+        return "post pubblicitario (vendita/sconto/DM)"
     letters = _ANY_LETTER_RE.findall(text)
     if letters and len(_LATIN_LETTER_RE.findall(text)) < len(letters) * 0.6:
         return "alfabeto non latino"
