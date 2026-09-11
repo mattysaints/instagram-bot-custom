@@ -7,7 +7,7 @@ from os import path
 from atomicwrites import atomic_write
 from colorama import Fore
 
-from GramAddict.core.device_facade import Direction, Timeout
+from GramAddict.core.device_facade import DeviceFacade, Direction, Timeout
 from GramAddict.core.navigation import (
     nav_to_blogger,
     nav_to_feed,
@@ -24,6 +24,7 @@ from GramAddict.core.utils import (
     random_sleep,
 )
 from GramAddict.core.views import (
+    NAV_FAIL_TYPING,
     FollowingView,
     LikeMode,
     OpenedPostView,
@@ -34,6 +35,7 @@ from GramAddict.core.views import (
     TabBarView,
     UniversalActions,
     case_insensitive_re,
+    last_nav_failure,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,16 @@ def _record_nav_result(storage, job, source, ok: bool) -> None:
         if ok:
             stats.register_nav_success(job, source)
         else:
+            if last_nav_failure() == NAV_FAIL_TYPING:
+                # La searchbar non ha ricevuto il testo (glitch adb/IME): la
+                # sorgente non c'entra, non le facciamo pagare uno strike di
+                # quarantena. Storicamente erano 14 strike immeritati su handle
+                # vivi (vitastrong_ita, il.pump.quotidiano, ...).
+                logger.warning(
+                    f"[source-stats] '{source}': navigazione fallita per digitazione "
+                    "persa, NON conto lo strike di quarantena."
+                )
+                return
             tripped = stats.register_nav_failure(job, source)
             if tripped:
                 logger.warning(
@@ -650,8 +662,23 @@ def handle_likers(
             and profile_filter.is_num_likers_in_range(number_of_likers)
             and number_of_likers != 1
         ):
-            logger.info(f"👍 Post di {target!r}: {number_of_likers} likers — apro lista.")
-            PostsViewList(device).open_likers_container()
+            # -1 = IG non mostra il numero ("... e altri"), non e' un conteggio
+            # negativo: e' il sentinella di "sconosciuto, ma piu' di 1".
+            likers_label = (
+                "numero sconosciuto di" if number_of_likers == -1 else f"{number_of_likers}"
+            )
+            logger.info(f"👍 Post di {target!r}: {likers_label} likers — apro lista.")
+            try:
+                PostsViewList(device).open_likers_container()
+            except DeviceFacade.AppHasCrashed:
+                raise
+            except DeviceFacade.JsonRpcError as e:
+                # I click dentro open_likers_container leggono i bounds prima di
+                # toccare: se l'elemento sparisce sollevano. Proseguiamo: la
+                # lista non si aprira' e il ramo qui sotto fa la recovery.
+                logger.warning(
+                    f"⚠️  Apertura likers fallita per elemento sparito ({e})."
+                )
         else:
             if not has_likers:
                 logger.info(f"⏭️  Post di {target!r}: nessun likers visibile — skip post.")
@@ -667,6 +694,22 @@ def handle_likers(
         likes_list_view = OpenedPostView(device)._getListViewLikers()
         if likes_list_view is None:
             logger.warning(f"⚠️  Lista likers non caricata per post di {target!r}. Passo al post successivo.")
+            # Il click su "likers" e' stato fatto: possiamo essere finiti su una
+            # schermata a meta' (bottom sheet vuoto). Torniamo sulla lista dei
+            # post prima di scrollare, come fa il ramo che i likers li itera.
+            # Se il feed non si ritrova, ABBANDONIAMO la sorgente: senza questa
+            # uscita il while esterno continuerebbe a scrollare a vuoto per
+            # sempre (nessuna delle guardie esistenti scatta fuori dal feed:
+            # nr_same_post e consecutive_errors si azzerano a ogni giro).
+            if not PostsViewList(device)._ensure_on_posts_list():
+                logger.error(
+                    f"❌ handle_likers: lista post persa su {target!r}. Abbandono sorgente."
+                )
+                try:
+                    device.back()
+                except Exception:
+                    pass
+                return False
             PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
             continue
         prev_screen_iterated_likers = []
@@ -733,7 +776,14 @@ def handle_likers(
                 break
             try:
                 for item in user_container:
-                    cur_row_height = item.get_height()
+                    try:
+                        cur_row_height = item.get_height()
+                    except DeviceFacade.AppHasCrashed:
+                        raise
+                    except Exception:
+                        # riga riciclata dalla lista mentre la leggevamo
+                        logger.debug("Could not get item height, skipping item.")
+                        continue
                     if cur_row_height < row_height:
                         continue
                     element_opened = False
@@ -745,7 +795,10 @@ def handle_likers(
                         )
                         break
 
-                    username = username_view.get_text()
+                    username = username_view.get_text(error=False)
+                    if not username:
+                        logger.debug("Riga senza username leggibile, la salto.")
+                        continue
                     screen_iterated_likers.append(username)
                     posts_end_detector.notify_username_iterated(username)
                     can_interact = False
@@ -811,7 +864,12 @@ def handle_likers(
                             )
                             break
 
-            except IndexError:
+            except DeviceFacade.AppHasCrashed:
+                raise
+            except (IndexError, DeviceFacade.JsonRpcError):
+                # JsonRpcError = la schermata si e' mossa sotto di noi (riga
+                # riciclata, sheet chiusa). Stessa recovery del fine-schermata:
+                # si rilegge la lista al giro dopo, senza bruciare un crash.
                 logger.info(
                     "Cannot get next item: probably reached end of the screen.",
                     extra={"color": f"{Fore.GREEN}"},
@@ -840,13 +898,35 @@ def handle_likers(
                     "Reached fling limit. Fling to see other likers.",
                     extra={"color": f"{Fore.GREEN}"},
                 )
-                likes_list_view.fling(Direction.DOWN)
+                try:
+                    likes_list_view.fling(Direction.DOWN)
+                except DeviceFacade.AppHasCrashed:
+                    raise
+                except DeviceFacade.JsonRpcError as e:
+                    logger.warning(
+                        f"⚠️  Lista likers sparita durante il fling ({e}). Passo al post successivo."
+                    )
+                    device.back()
+                    PostsViewList(device)._ensure_on_posts_list()
+                    PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                    break
             else:
                 logger.info(
                     "Scroll to see other likers.",
                     extra={"color": f"{Fore.GREEN}"},
                 )
-                likes_list_view.scroll(Direction.DOWN)
+                try:
+                    likes_list_view.scroll(Direction.DOWN)
+                except DeviceFacade.AppHasCrashed:
+                    raise
+                except DeviceFacade.JsonRpcError as e:
+                    logger.warning(
+                        f"⚠️  Lista likers sparita durante lo scroll ({e}). Passo al post successivo."
+                    )
+                    device.back()
+                    PostsViewList(device)._ensure_on_posts_list()
+                    PostsViewList(device).swipe_to_fit_posts(SwipeTo.NEXT_POST)
+                    break
 
             prev_screen_iterated_likers.clear()
             prev_screen_iterated_likers += screen_iterated_likers
@@ -1497,7 +1577,10 @@ def iterate_over_followers(
                     )
                     continue
 
-                username = user_name_view.get_text()
+                username = user_name_view.get_text(error=False)
+                if not username:
+                    logger.debug("Riga senza username leggibile, la salto.")
+                    continue
                 screen_iterated_followers.append(username)
                 scroll_end_detector.notify_username_iterated(username)
 
@@ -1589,7 +1672,11 @@ def iterate_over_followers(
                             )
                             break
 
-        except IndexError:
+        except DeviceFacade.AppHasCrashed:
+            raise
+        except (IndexError, DeviceFacade.JsonRpcError):
+            # JsonRpcError = riga riciclata dalla lista mentre la leggevamo:
+            # chiudiamo la schermata e la rileggiamo, senza bruciare un crash.
             logger.info(
                 "Cannot get next item: probably reached end of the screen.",
                 extra={"color": f"{Fore.GREEN}"},

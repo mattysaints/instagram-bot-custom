@@ -41,6 +41,7 @@ from GramAddict.core.views import (
     ProfileView,
     UniversalActions,
     case_insensitive_re,
+    safe_bounds,
 )
 
 logger = logging.getLogger(__name__)

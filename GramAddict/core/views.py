@@ -71,6 +71,118 @@ def adb_input_text_stderr_is_failure(stderr: str) -> bool:
     )
 
 
+# Caratteri che IG appiccica ai titoli/righe e che NON fanno parte dell'handle:
+# spazi, zero-width, nbsp, il lucchetto degli account privati (che a volte arriva
+# decodificato come due spazi), il bullet dei separatori.
+_USERNAME_TRIM_CODEPOINTS = (
+    0x20, 0x09, 0x0D, 0x0A,  # spazio, tab, CR, LF
+    0x00A0,  # nbsp
+    0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0xFEFF,  # zero-width / bidi marks
+    0x1F512,  # lucchetto degli account privati
+    0x2022, 0x00B7,  # bullet / middle dot
+)
+_USERNAME_TRIM_CHARS = "".join(chr(c) for c in _USERNAME_TRIM_CODEPOINTS)
+
+
+def safe_bounds(obj, what: str = "elemento", ui_timeout=None):
+    """``get_bounds()`` che NON solleva.
+
+    Quando l'elemento non e' piu' nella UI (post scrollato via, schermata
+    cambiata, Reel/ads con container diverso) uiautomator2 alza UiObjectNotFound
+    -> DeviceFacade.JsonRpcError. Fuori da un try quell'errore risale fino a
+    run_safely e costa un crash intero (app chiusa e riaperta, +1 su
+    total-crashes-limit). Qui diventa None e decide il chiamante.
+    ``DeviceFacade.AppHasCrashed`` viene invece ri-sollevata: quello e' un crash
+    vero e deve arrivare al recupero crash.
+    """
+    try:
+        # ignore_bug=True: uiautomator2 a volte risponde exists=False mentre
+        # l'elemento e' nell'albero (bug #689, gia' noto a device_facade). In quel
+        # caso torna la stringa "BUG!" (truthy) e proseguiamo a leggere i bounds
+        # veri, come faceva il codice originale che chiamava get_bounds() diretto.
+        if not obj.exists(ui_timeout, ignore_bug=True):
+            logger.debug(f"safe_bounds: {what} non presente.")
+            return None
+        return obj.get_bounds()
+    except DeviceFacade.AppHasCrashed:
+        raise
+    except DeviceFacade.JsonRpcError as e:
+        logger.debug(f"safe_bounds: {what} sparito mentre leggevo i bounds: {e}")
+        return None
+
+
+def exact_ci_re(text: str) -> str:
+    """Regex per un match ESATTO e case-insensitive del testo dato.
+
+    ``UiSelector.textMatches`` usa ``Pattern.matches`` (full match), quindi non
+    servono ancore. ``re.escape`` invece e' obbligatorio: senza, il '.' di
+    'il.pump.quotidiano' sarebbe un jolly e potrebbe matchare un altro handle.
+    Serve perche' ``text=``/``textStartsWith=`` sul device sono case-SENSITIVE:
+    un handle scritto in config con una maiuscola non matcherebbe la riga IG
+    (sempre minuscola) e la sorgente sembrerebbe morta.
+    """
+    return f"(?i){re.escape(text)}"
+
+
+def is_account_target(job: str) -> bool:
+    """True se il job cerca un ACCOUNT (non un hashtag, non un luogo).
+
+    Stessa logica di ``SearchView._switch_to_target_tag``: tutto quello che non
+    e' hashtag/place finisce nel tab ACCOUNTS.
+    """
+    job_lower = (job or "").lower()
+    return "hashtag" not in job_lower and "place" not in job_lower
+
+
+def normalize_ig_username(text: Optional[str]) -> str:
+    """Normalizza il testo di una riga di ricerca (o del titolo di un profilo)
+    per confrontarlo con un handle IG: via spazi/zero-width/lucchetto, via la
+    '@' iniziale, case-insensitive."""
+    if not text:
+        return ""
+    cleaned = text.strip(_USERNAME_TRIM_CHARS)
+    if cleaned.startswith("@"):
+        cleaned = cleaned[1:]
+    return cleaned.strip(_USERNAME_TRIM_CHARS).casefold()
+
+
+# Perche' l'ultima navigate_to_target e' fallita. Serve a NON addebitare alla
+# sorgente (quarantena nav di source_stats) i fallimenti che sono colpa del
+# device: se il testo non arriva nella searchbar, la sorgente non c'entra nulla.
+# Nei log storici erano 14 strike immeritati su handle vivi (vitastrong_ita,
+# il.pump.quotidiano, giusepperomanocoach, ...) su 3 che bastano a quarantenare.
+NAV_FAIL_TYPING = "typing"
+NAV_FAIL_NOT_FOUND = "not-found"
+NAV_FAIL_WRONG_ACCOUNT = "wrong-account"
+_last_nav_failure: Optional[str] = None
+
+
+def last_nav_failure() -> Optional[str]:
+    """Motivo dell'ultimo fallimento di ``SearchView.navigate_to_target``
+    (None se l'ultima navigazione e' andata a buon fine)."""
+    return _last_nav_failure
+
+
+def _set_last_nav_failure(reason: Optional[str]) -> None:
+    global _last_nav_failure
+    _last_nav_failure = reason
+
+
+def search_row_is_target(row_text: Optional[str], target: str) -> bool:
+    """True solo se la riga di ricerca appartiene ESATTAMENTE al target.
+
+    Serve a non aprire mai un account diverso quando l'handle configurato non
+    esiste su IG: la ricerca in quel caso mostra comunque profili col nome che
+    INIZIA per quelle lettere (es. cercando 'bodybuilding_italia_community' IG
+    proponeva 'bodybuilding_italia_community_') e il vecchio fallback
+    ``textStartsWith`` cliccava la prima riga utile.
+    """
+    normalized_target = normalize_ig_username(target)
+    if not normalized_target:
+        return False
+    return normalize_ig_username(row_text) == normalized_target
+
+
 class TabBarTabs(Enum):
     HOME = auto()
     SEARCH = auto()
@@ -664,11 +776,68 @@ class SearchView:
     # navigate_to_target, si incolla tutto tranne l'ultimo carattere e lo si
     # digita: stesso evento di input, ma senza cancellare niente.
 
+    def _verify_opened_profile(self, target: str, job: str) -> bool:
+        """Dopo il click su una riga di ricerca, controlla di essere davvero sul
+        profilo cercato.
+
+        Rete di sicurezza contro l'apertura di un account simile: se il titolo
+        del profilo e' un altro handle, torniamo indietro e dichiariamo la
+        navigazione fallita (cosi' la quarantena nav conta il tentativo).
+        Se il titolo non e' leggibile NON blocchiamo nulla: meglio permissivi
+        che rompere la navigazione su layout IG diversi.
+        """
+        if not is_account_target(job):
+            return True
+
+        def _read_title():
+            try:
+                return ProfileView(self.device, is_own_profile=False).getUsername()
+            except DeviceFacade.AppHasCrashed:
+                # Un crash dell'app deve finire nel recupero crash, non passare
+                # per "identita' verificata".
+                raise
+            except Exception as e:
+                logger.debug(f"_verify_opened_profile: getUsername fallita: {e}")
+                return None
+
+        opened = _read_title()
+        if not opened:
+            logger.debug(
+                f"_verify_opened_profile: titolo profilo illeggibile, "
+                f"non verifico @{target}."
+            )
+            return True
+        if search_row_is_target(opened, target):
+            return True
+        # Il falso negativo realistico e' un titolo ANCORA VECCHIO (la schermata
+        # precedente non e' stata sostituita): rileggo una volta prima di
+        # bocciare, altrimenti 3 letture stantie quarantenano una sorgente sana.
+        sleep(1)  # attesa tecnica di ridisegno, non pacing "umano"
+        second = _read_title()
+        if second and search_row_is_target(second, target):
+            logger.debug(
+                f"_verify_opened_profile: titolo aggiornato alla seconda lettura "
+                f"({opened!r} -> {second!r}), @{target} confermato."
+            )
+            return True
+        opened = second or opened
+        logger.warning(
+            f"🚫 @{target}: aperto per errore il profilo @{normalize_ig_username(opened)}. "
+            f"Torno indietro e salto la sorgente (handle inesistente o rinominato?)."
+        )
+        _set_last_nav_failure(NAV_FAIL_WRONG_ACCOUNT)
+        try:
+            self.device.back()
+        except Exception as e:
+            logger.debug(f"_verify_opened_profile: back() fallita: {e}")
+        return False
+
     def navigate_to_target(
         self, target: str, job: str, source_has_history: bool = False
     ) -> bool:
         target = emoji.emojize(target, use_aliases=True)
         logger.info(f"Navigate to {target}")
+        _set_last_nav_failure(None)
         search_edit_text = self._getSearchEditText()
         if search_edit_text is not None:
             logger.info("⌨️  Searchbar trovata, clicco per dare focus.")
@@ -678,6 +847,7 @@ class SearchView:
             self._clear_search_text(search_edit_text)
         else:
             logger.warning("⌨️  Nessuna searchbar visibile: impossibile digitare.")
+            _set_last_nav_failure(NAV_FAIL_TYPING)
             return False
         # NOTE: original implementation had an early _check_current_view here to
         # detect if the target is already in the search history. We skip it on
@@ -732,6 +902,7 @@ class SearchView:
         # tipica e' testo vecchio rimasto nella barra, e senza il secondo
         # tentativo la sorgente verrebbe contata come "nessun risultato" e
         # finirebbe in quarantena pur essendo sana.
+        typing_ok = True  # diventa False se l'ultima rilettura e' un MISMATCH
         for tentativo in (1, 2):
             try:
                 current = self._getSearchEditText()
@@ -740,10 +911,12 @@ class SearchView:
                 seen = current.get_text() or ""
                 if seen.strip().lower() == target.strip().lower():
                     logger.info(f"⌨️  Searchbar OK: contiene {seen!r}.")
+                    typing_ok = True
                     break
                 logger.warning(
                     f"⌨️  Searchbar MISMATCH: atteso {target!r} ma trovato {seen!r}."
                 )
+                typing_ok = False
                 # Caso frequentissimo col kick-search: la barra contiene
                 # l'INIZIO del target, perche' l'ultimo carattere mandato via
                 # ADB non e' ancora arrivato quando rileggiamo. Svuotare e
@@ -779,7 +952,7 @@ class SearchView:
                 break
         if self._check_current_view(target, job):
             logger.info(f"{target} is in top view.")
-            return True
+            return self._verify_opened_profile(target, job)
         # Diagnostic: dump what rows are visible right now
         try:
             visible_rows = self.device.find(
@@ -805,7 +978,7 @@ class SearchView:
             random_sleep(5, 8, modulable=False)
             if self._check_current_view(target, job):
                 logger.info(f"{target} is in top view (dopo attesa lunga).")
-                return True
+                return self._verify_opened_profile(target, job)
         # Even more diagnostics: read what the EditText actually contains so we
         # know whether typing hit the right widget at all.
         try:
@@ -837,7 +1010,8 @@ class SearchView:
         self._switch_to_target_tag(job)
         random_sleep(2, 4, modulable=False)
         if self._check_current_view(target, job, in_place_tab=True):
-            return True
+            return self._verify_opened_profile(target, job)
+        _set_last_nav_failure(NAV_FAIL_NOT_FOUND if typing_ok else NAV_FAIL_TYPING)
         return False
 
     def _switch_to_target_tag(self, job: str):
@@ -853,6 +1027,72 @@ class SearchView:
             logger.info(f"Switching to {tab.name}")
             obj.click()
 
+    def _pick_exact_row(self, target: str, strategy_label: str, **find_kwargs):
+        """Fra le righe trovate da ``find_kwargs``, restituisce SOLO quella il cui
+        testo e' esattamente l'handle cercato (confronto normalizzato).
+
+        Un ``textStartsWith`` puo' matchare piu' righe: le scorriamo e teniamo
+        quella giusta invece di cliccare la prima (che, se l'handle configurato
+        non esiste, e' un ALTRO account col nome che inizia per quelle lettere).
+        Restituisce ``(view, testo_scartato)``: il testo scartato serve solo per
+        il log quando nessun candidato combacia.
+        """
+        rows = self.device.find(**find_kwargs)
+        if not rows.exists():
+            return None, None
+        try:
+            n_rows = rows.count_items()
+        except DeviceFacade.AppHasCrashed:
+            raise
+        except Exception as e:
+            logger.debug(f"_pick_exact_row: count_items failed: {e}")
+            n_rows = 1
+        first_wrong = None
+        # Cap prudenziale: le righe di ricerca visibili sono poche, non serve
+        # scorrere una lista infinita se il layout cambia.
+        for index in range(min(max(n_rows, 1), 8)):
+            try:
+                # find() dentro il try: legge view.count e puo' sollevare JsonRpcError.
+                candidate = (
+                    rows if n_rows <= 1 else self.device.find(index=index, **find_kwargs)
+                )
+                if not candidate.exists():
+                    continue
+                row_text = candidate.get_text(error=False)
+            except DeviceFacade.AppHasCrashed:
+                # Un crash dell'app deve arrivare al recupero crash, non essere
+                # letto come "riga non trovata".
+                raise
+            except Exception as e:
+                logger.debug(f"_pick_exact_row: get_text on row {index} failed: {e}")
+                continue
+            if search_row_is_target(row_text, target):
+                # Rileggo subito prima di cliccare: fra get_text e click IG puo'
+                # ridisegnare la lista e il selector (lazy) risolverebbe un'altra
+                # riga -> e' l'ultimo residuo possibile di "click sulla riga sbagliata".
+                try:
+                    confirm_text = candidate.get_text(error=False)
+                except DeviceFacade.AppHasCrashed:
+                    raise
+                except Exception as e:
+                    logger.debug(f"_pick_exact_row: riletture riga {index} fallita: {e}")
+                    continue
+                if not search_row_is_target(confirm_text, target):
+                    logger.debug(
+                        f"_pick_exact_row: riga {index} cambiata sotto di noi "
+                        f"({row_text!r} -> {confirm_text!r}), non clicco."
+                    )
+                    if first_wrong is None:
+                        first_wrong = confirm_text
+                    continue
+                logger.debug(
+                    f"_pick_exact_row: {strategy_label} riga {index} = {row_text!r} -> match esatto."
+                )
+                return candidate, None
+            if first_wrong is None:
+                first_wrong = row_text
+        return None, first_wrong
+
     def _check_current_view(
         self, target: str, job: str, in_place_tab: bool = False
     ) -> bool:
@@ -861,42 +1101,82 @@ class SearchView:
                 return False
             else:
                 obj = self._getPlaceRow()
-        else:
-            # First try strict text match (original behavior)
-            obj = self.device.find(
-                text=target,
-                resourceIdMatches=ResourceID.SEARCH_ROW_ITEM,
+            if obj.exists():
+                logger.debug(f"_check_current_view: found {target!r}, clicking.")
+                obj.click()
+                return True
+            logger.debug(f"_check_current_view: {target!r} not found in current view.")
+            return False
+
+        # Account/hashtag: cerchiamo la riga con piu' strategie (l'exact match a
+        # volte fallisce solo perche' la lista si sta ancora ridisegnando), ma
+        # clicchiamo SOLO se il testo della riga e' ESATTAMENTE il target.
+        # Senza questo gate, un handle inesistente faceva aprire il primo
+        # risultato della ricerca (il caso reale: 'bodybuilding_italia_community'
+        # apriva 'bodybuilding_italia_community_' per 18 sessioni di fila).
+        strategies = (
+            (
+                "exact SEARCH_ROW_ITEM",
+                {"text": target, "resourceIdMatches": ResourceID.SEARCH_ROW_ITEM},
+            ),
+            (
+                "startsWith SEARCH_ROW_ITEM",
+                {
+                    "textStartsWith": target,
+                    "resourceIdMatches": ResourceID.SEARCH_ROW_ITEM,
+                },
+            ),
+            (
+                "exact ROW_SEARCH_USER_USERNAME",
+                {
+                    "text": target,
+                    "resourceIdMatches": case_insensitive_re(
+                        ResourceID.ROW_SEARCH_USER_USERNAME
+                    ),
+                },
+            ),
+            (
+                "startsWith ROW_SEARCH_USER_USERNAME",
+                {
+                    "textStartsWith": target,
+                    "resourceIdMatches": case_insensitive_re(
+                        ResourceID.ROW_SEARCH_USER_USERNAME
+                    ),
+                },
+            ),
+            # Ultima sonda: match esatto ma case-insensitive (le 4 sopra sono
+            # case-sensitive lato device). Puramente additiva, e il click resta
+            # comunque filtrato da _pick_exact_row.
+            (
+                "regex esatta case-insensitive",
+                {
+                    "textMatches": exact_ci_re(target),
+                    "resourceIdMatches": ResourceID.SEARCH_ROW_ITEM,
+                },
+            ),
+        )
+        wrong_rows = []
+        for label, find_kwargs in strategies:
+            obj, wrong_text = self._pick_exact_row(target, label, **find_kwargs)
+            if obj is not None:
+                logger.debug(f"_check_current_view: found {target!r} ({label}), clicking.")
+                obj.click()
+                return True
+            if wrong_text:
+                wrong_rows.append(wrong_text)
+            logger.debug(
+                f"_check_current_view: nessun match esatto per {target!r} con '{label}'."
             )
-            if not obj.exists():
-                logger.debug(
-                    f"_check_current_view: no exact SEARCH_ROW_ITEM match for {target!r}, "
-                    "trying textStartsWith fallback."
-                )
-                obj = self.device.find(
-                    textStartsWith=target,
-                    resourceIdMatches=ResourceID.SEARCH_ROW_ITEM,
-                )
-            if not obj.exists():
-                logger.debug(
-                    f"_check_current_view: still no match, trying ROW_SEARCH_USER_USERNAME."
-                )
-                obj = self.device.find(
-                    text=target,
-                    resourceIdMatches=case_insensitive_re(
-                        ResourceID.ROW_SEARCH_USER_USERNAME
-                    ),
-                )
-            if not obj.exists():
-                obj = self.device.find(
-                    textStartsWith=target,
-                    resourceIdMatches=case_insensitive_re(
-                        ResourceID.ROW_SEARCH_USER_USERNAME
-                    ),
-                )
-        if obj.exists():
-            logger.debug(f"_check_current_view: found {target!r}, clicking.")
-            obj.click()
-            return True
+        if wrong_rows:
+            # Questo e' il caso "handle sbagliato/inesistente": IG propone account
+            # simili. Non li apriamo: la navigazione fallisce e la quarantena
+            # nav (source_stats) conta il tentativo a vuoto.
+            unici = list(dict.fromkeys(wrong_rows))[:3]
+            logger.warning(
+                f"🚫 @{target}: nessuna riga di ricerca corrisponde ESATTAMENTE all'handle. "
+                f"IG proponeva {unici} -> NON apro un account diverso. "
+                f"Controlla che l'handle esista ancora su instagram.com/{target}"
+            )
         logger.debug(f"_check_current_view: {target!r} not found in current view.")
         return False
 
@@ -905,6 +1185,77 @@ class PostsViewList:
     def __init__(self, device: DeviceFacade):
         self.device = device
         self.has_tags = False
+
+    def _safe_bounds(self, obj, what: str):
+        """``get_bounds()`` che NON solleva.
+
+        Se l'elemento non e' piu' nella UI (post scrollato via, dialog dei likers
+        rimasto aperto, Reel/ads con container diverso) uiautomator2 alza
+        UiObjectNotFound -> DeviceFacade.JsonRpcError. Prima quell'errore usciva
+        da swipe_to_fit_posts e faceva crashare il job: 7 crash nei log storici,
+        ognuno con chiusura+riapertura di IG e +1 su total-crashes-limit.
+        Ritorna None e lascia decidere al chiamante.
+        """
+        return safe_bounds(obj, what)
+
+    def _blind_scroll_down(self, reason: str) -> None:
+        """Scroll di ripiego quando la geometria del post non e' leggibile.
+
+        Meglio uno scroll approssimativo che un'eccezione: il chiamante ha gia'
+        le sue guardie (post ripetuto / troppi errori consecutivi) per uscire
+        dalla sorgente se la lista non avanza davvero.
+        """
+        try:
+            info = self.device.get_info()
+            width, height = info["displayWidth"], info["displayHeight"]
+        except Exception as e:
+            logger.debug(f"_blind_scroll_down: get_info fallita: {e}")
+            return
+        logger.info(
+            f"↕️  Scroll di ripiego ({reason}): geometria del post non leggibile."
+        )
+        self.device.swipe_points(width / 2, height * 0.7, width / 2, height * 0.35)
+
+    def _on_posts_list(self) -> bool:
+        """True se a schermo c'e' ancora la lista dei post (media container o gap
+        view leggibili)."""
+        for rid, what in (
+            (ResourceID.MEDIA_CONTAINER, "media container"),
+            (ResourceID.GAP_VIEW_AND_FOOTER_SPACE, "gap view"),
+        ):
+            # Timeout.SHORT e non il probe a 0s: qui un falso negativo fa premere
+            # back() e ci allontana davvero dal feed. Sul caso normale (elemento
+            # presente) il costo resta zero.
+            if safe_bounds(
+                self.device.find(resourceIdMatches=rid), what, Timeout.SHORT
+            ):
+                return True
+        return False
+
+    def _ensure_on_posts_list(self, max_backs: int = 2) -> bool:
+        """Riporta la UI sulla lista dei post, se ce ne siamo allontanati.
+
+        Serve quando l'apertura dei likers e' andata a META': il click e' stato
+        fatto ma la lista non si e' caricata, quindi restiamo su una schermata
+        senza media container e lo scroll al post successivo non ha senso (era
+        proprio la sequenza che portava al crash: likers non caricati ->
+        swipe_to_fit_posts -> get_bounds su un container inesistente).
+        Il ramo che itera i likers con successo fa gia' il suo device.back().
+        """
+        for attempt in range(max_backs + 1):
+            if self._on_posts_list():
+                return True
+            if attempt == max_backs:
+                break
+            logger.info("↩️  Non siamo piu' sulla lista dei post: torno indietro.")
+            try:
+                self.device.back()
+            except DeviceFacade.JsonRpcError as e:
+                logger.debug(f"_ensure_on_posts_list: back() fallita: {e}")
+                break
+            sleep(1)
+        logger.warning("⚠️  Lista dei post non ritrovata: il chiamante decidera' come uscire.")
+        return False
 
     def swipe_to_fit_posts(self, swipe: SwipeTo):
         """calculate the right swipe amount necessary to swipe to next post in hashtag post view
@@ -916,12 +1267,21 @@ class PostsViewList:
 
         # move type: half photo
         if swipe == SwipeTo.HALF_PHOTO:
-            zoomable_view_container = self.device.find(
-                resourceIdMatches=containers_content
-            ).get_bounds()["bottom"]
-            ac_exists, _, ac_bottom = PostsViewList(
-                self.device
-            )._get_action_bar_position()
+            media_bounds = self._safe_bounds(
+                self.device.find(resourceIdMatches=containers_content),
+                "media container",
+            )
+            if media_bounds is None:
+                self._blind_scroll_down("media container assente")
+                return False
+            zoomable_view_container = media_bounds["bottom"]
+            try:
+                ac_exists, _, ac_bottom = PostsViewList(
+                    self.device
+                )._get_action_bar_position()
+            except DeviceFacade.JsonRpcError as e:
+                logger.debug(f"swipe_to_fit_posts: action bar non leggibile: {e}")
+                ac_exists, ac_bottom = False, 0
             if ac_exists and zoomable_view_container < ac_bottom:
                 zoomable_view_container += ac_bottom
             self.device.swipe_points(
@@ -930,6 +1290,7 @@ class PostsViewList:
                 displayWidth / 2,
                 zoomable_view_container * 0.5,
             )
+            return True
         elif swipe == SwipeTo.NEXT_POST:
             logger.info(
                 "Scroll down to see next post.", extra={"color": f"{Fore.GREEN}"}
@@ -937,19 +1298,23 @@ class PostsViewList:
             gap_view_obj = self.device.find(index=-1, resourceIdMatches=containers_gap)
             obj1 = None
             for _ in range(3):
-                if not gap_view_obj.exists():
+                gap_bounds = self._safe_bounds(gap_view_obj, "gap view")
+                if gap_bounds is None:
                     logger.debug("Can't find the gap obj, scroll down a little more.")
                     PostsViewList(self.device).swipe_to_fit_posts(SwipeTo.HALF_PHOTO)
                     gap_view_obj = self.device.find(resourceIdMatches=containers_gap)
-                    if not gap_view_obj.exists():
+                    gap_bounds = self._safe_bounds(gap_view_obj, "gap view")
+                    if gap_bounds is None:
                         continue
                     else:
                         break
                 else:
-                    media = self.device.find(resourceIdMatches=containers_content)
-                    if (
-                        gap_view_obj.get_bounds()["bottom"]
-                        < media.get_bounds()["bottom"]
+                    media_bounds = self._safe_bounds(
+                        self.device.find(resourceIdMatches=containers_content),
+                        "media container",
+                    )
+                    if media_bounds is not None and (
+                        gap_bounds["bottom"] < media_bounds["bottom"]
                     ):
                         PostsViewList(self.device).swipe_to_fit_posts(
                             SwipeTo.HALF_PHOTO
@@ -961,25 +1326,32 @@ class PostsViewList:
                             PostsViewList(self.device).swipe_to_fit_posts(
                                 SwipeTo.HALF_PHOTO
                             )
-                            footer_obj = self.device.find(
-                                resourceIdMatches=ResourceID.FOOTER_SPACE
+                            footer_bounds = self._safe_bounds(
+                                self.device.find(
+                                    resourceIdMatches=ResourceID.FOOTER_SPACE
+                                ),
+                                "footer space",
                             )
-                            if footer_obj.exists():
-                                obj1 = footer_obj.get_bounds()["bottom"]
+                            if footer_bounds is not None:
+                                obj1 = footer_bounds["bottom"]
                                 break
                     break
             if obj1 is None:
-                obj1 = gap_view_obj.get_bounds()["bottom"]
-            containers_content = self.device.find(resourceIdMatches=containers_content)
-
-            obj2 = (
-                (
-                    containers_content.get_bounds()["bottom"]
-                    + containers_content.get_bounds()["top"]
-                )
-                * 1
-                / 3
+                gap_bounds = self._safe_bounds(gap_view_obj, "gap view")
+                if gap_bounds is None:
+                    # Niente gap e niente footer: non sappiamo di quanto scrollare.
+                    self._blind_scroll_down("gap view assente")
+                    return False
+                obj1 = gap_bounds["bottom"]
+            media_bounds = self._safe_bounds(
+                self.device.find(resourceIdMatches=containers_content),
+                "media container",
             )
+            if media_bounds is None:
+                self._blind_scroll_down("media container assente")
+                return False
+
+            obj2 = (media_bounds["bottom"] + media_bounds["top"]) * 1 / 3
 
             self.device.swipe_points(
                 displayWidth / 2,
@@ -1093,15 +1465,34 @@ class PostsViewList:
                 return
             if " Liked by" in likes_text:
                 post_liked_by_a_following = True
-            elif likes_view.child().count_items() < 2:
-                likes_view.click()
-                return
+            else:
+                # count_items() legge la UI: se la riga sparisce mentre la
+                # contiamo non deve morire il job (stessa classe di crash di
+                # swipe_to_fit_posts, un passo prima nella sequenza).
+                try:
+                    if likes_view.child().count_items() < 2:
+                        likes_view.click()
+                        return
+                except DeviceFacade.AppHasCrashed:
+                    raise
+                except DeviceFacade.JsonRpcError as e:
+                    logger.debug(
+                        f"open_likers_container: count_items fallita ({e}), click diretto."
+                    )
+                    likes_view.click()
+                    return
             if likes_view.child().exists():
                 if post_liked_by_a_following:
                     likes_view.child().click()
                     return
-                foil = likes_view.get_bounds()
-                hole = likes_view.child().get_bounds()
+                foil = self._safe_bounds(likes_view, "riga likes")
+                hole = self._safe_bounds(likes_view.child(), "avatar nella riga likes")
+                if foil is None or hole is None:
+                    logger.debug(
+                        "open_likers_container: bounds non leggibili, click diretto."
+                    )
+                    likes_view.click(Location.RIGHT)
+                    return
                 try:
                     sq1 = Square(
                         foil["left"],
