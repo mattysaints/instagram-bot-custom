@@ -695,8 +695,10 @@ def _comment(
                             )
                             if post_caption:
                                 logger.info(
+                                    # 220 char: quanto basta per giudicare dal log se il
+                                    # commento e' inerente (con 60 non si poteva)
                                     f"[ai-comment] caption captured ({len(post_caption)} chars): "
-                                    f"{post_caption[:60]}{'...' if len(post_caption) > 60 else ''}"
+                                    f"{post_caption[:220]}{'...' if len(post_caption) > 220 else ''}"
                                 )
                     except Exception as e:
                         logger.debug(f"[ai-comment] caption extraction skipped: {e}")
