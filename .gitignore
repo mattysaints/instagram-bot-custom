@@ -34,3 +34,5 @@ crashes
 # devono finire nel repo
 deploy/telegram_control.yml
 logs/deploy/
+# casi del banco di prova dei commenti AI: sono test fixture, non stato del bot
+!tools/ai_comment_bench_cases.json
