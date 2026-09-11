@@ -92,7 +92,9 @@ _autoload_env_local()
 _DEFAULT_SPACE_URL = "https://mattysaints-instagram-bot.hf.space"
 _GENERATE_PATH = "/api/generate"
 
-_REQUEST_TIMEOUT_S = 15  # lo Space chiama un LLM esterno, un po' piu' generoso di Gemini diretto
+_REQUEST_TIMEOUT_S = 25  # lo Space risponde in <1s quando va bene; il caso lento e' un
+                         # cold start del container HF o Groq che tarda. Il bot ha il box
+                         # commenti aperto e puo' aspettare qualche secondo in piu'.
 
 # ---------------------------------------------------------------------------
 # Circuit breaker: se la rete e' DOWN (DNS bloccato, connessione rifiutata,
