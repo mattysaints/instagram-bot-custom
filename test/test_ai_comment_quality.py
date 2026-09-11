@@ -95,6 +95,18 @@ def test_soli_hashtag_generici_si_saltano():
     assert caption_is_usable("Domenica ad Arezzo #gym #love")
 
 
+def test_post_pubblicitari_si_saltano():
+    for c in [
+        "Ultimi 3 posti per il percorso online di ottobre. Scrivimi METODO in DM 📩",
+        "Nuova whey al pistacchio disponibile, codice ROB15 per lo sconto 💚",
+        "Iscrizioni aperte per il corso di settembre, link in bio",
+    ]:
+        assert caption_skip_reason(c) == "post pubblicitario (vendita/sconto/DM)", c
+    # parlare di un prezzo o di un negozio in un racconto non e' pubblicita'
+    assert caption_is_usable("Pizza del sabato sera dentro le calorie, 800 kcal e zero sensi di colpa")
+    assert caption_is_usable("Nuovi orari da lunedì: apertura alle 6 e chiusura alle 23, vi aspettiamo in Corso Buenos Aires")
+
+
 def test_temi_adult_si_saltano():
     assert caption_skip_reason("Sempre disponibile 🔥💋H24🔥 #uominibelli") == "tema adult/escort"
     assert caption_skip_reason("Link in bio, onlyfans aperto") == "tema adult/escort"
