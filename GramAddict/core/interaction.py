@@ -202,6 +202,8 @@ def interact_with_user(
         skip_stickers=_blogger_comment_only(args, current_mode),
     )
     swipe_amount = 0
+    # True se un post aperto promuoveva integratori: il profilo non si segue
+    promo_integratori_visto = False
 
     if number_of_watched >= 1:
         interacted = True
@@ -309,8 +311,26 @@ def interact_with_user(
                 # apre e' un post saltato, non un crash da mettere in uno zip.
                 logger.info("Post non aperto: passo al successivo.")
                 continue
-            already_liked, _ = opened_post_view._is_post_liked()
-            if already_liked:
+            # Post che promuove integratori: niente like ne' commento, e il
+            # profilo non verra' seguito (vedi il gate del follow piu' sotto).
+            # Si legge la caption PRIMA di toccare qualunque cosa: dopo il like
+            # sarebbe tardi.
+            motivo_integratori = _post_promuove_integratori(
+                device, profile_filter, username
+            )
+            if motivo_integratori:
+                promo_integratori_visto = True
+                already_liked = False
+                logger.info(
+                    f"[integratori] il post di @{username} promuove integratori "
+                    f"({motivo_integratori}): niente like ne' commento.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+            else:
+                already_liked, _ = opened_post_view._is_post_liked()
+            if motivo_integratori:
+                pass  # niente like ne' commento: gia' spiegato nel log qui sopra
+            elif already_liked:
                 logger.info("Post already liked!")
             elif opened_post_view and already_liked is not None:
                 if media_type in (MediaType.REEL, MediaType.IGTV, MediaType.VIDEO):
@@ -361,6 +381,7 @@ def interact_with_user(
                             session_state,
                             media_type,
                             target_username=username,
+                            profile_filter=profile_filter,
                         )
                         if comment_done is True:
                             number_of_commented += 1
@@ -368,6 +389,8 @@ def interact_with_user(
                             comment_attempted = True
                         elif comment_done == "limited":
                             comments_limited = True
+                        elif comment_done == "integratori":
+                            promo_integratori_visto = True
                     else:
                         logger.info(
                             f"You've already did {max_comments_pro_user} {'comment' if max_comments_pro_user<=1 else 'comments'} for this user!"
@@ -378,7 +401,9 @@ def interact_with_user(
             if like_succeed or comment_done is True:
                 interacted = True
 
-            if not opened_post_view or (not like_succeed and not already_liked):
+            if not motivo_integratori and (
+                not opened_post_view or (not like_succeed and not already_liked)
+            ):
                 reason = "open" if not opened_post_view else "like"
                 logger.info(
                     f"Could not {reason} media. Posts count: {profile_data.posts_count}."
@@ -440,7 +465,16 @@ def interact_with_user(
         # private/empty accounts are handled earlier and governed by the
         # follow_private_or_empty filter, since engaging them is impossible.
         do_follow = True
-        if getattr(args, "follow_only_if_engaged", False):
+        if promo_integratori_visto:
+            # Chi pubblica promozioni di integratori non si segue: la regola
+            # vale per la pagina del brand e per chi gli fa da vetrina.
+            do_follow = False
+            logger.info(
+                f"[integratori] @{username} promuove integratori nei post: "
+                "niente follow.",
+                extra={"color": f"{Fore.CYAN}"},
+            )
+        elif getattr(args, "follow_only_if_engaged", False):
             engagement = (
                 number_of_liked
                 + number_of_commented
@@ -740,6 +774,57 @@ def _clean_caption(testo: str) -> str:
     return t
 
 
+def _leggi_caption_post(device: DeviceFacade, target_username: Optional[str]) -> Tuple[str, str]:
+    """Caption GREZZA del post aperto e etichetta sotto al nome dell'autore
+    ("Partnership retribuita con X", "Sponsorizzato"), senza toccare lo
+    schermo. Prima il selettore, poi l'albero completo (nodes_from_dump):
+    sull'emulatore il selettore a volte nega elementi che ci sono.
+
+    Grezza di proposito: le @menzioni restano, perche' un brand di integratori
+    nella caption e' quasi sempre un tag ("@yamamoto_italia"). Si toglie solo
+    l'handle del poster incollato davanti e il "... more" di IG.
+    Stringhe vuote se non c'e' niente da leggere: chi chiama non scarta nulla
+    al buio, sceglie il like come sempre.
+    """
+    caption = ""
+    label = ""
+    try:
+        caption_view = device.find(resourceId=ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT)
+        if caption_view.exists():
+            caption = caption_view.get_text(error=False) or ""
+        label_view = device.find(resourceId=ResourceID.SECONDARY_LABEL)
+        if label_view.exists():
+            label = label_view.get_text(error=False) or ""
+        if not caption:
+            # l'etichetta e' facoltativa (molti post non ce l'hanno): il dump
+            # completo, che costa ~1 s, si fa solo se manca la caption
+            nodi = device.nodes_from_dump()
+            if nodi:
+                caption = device.text_from_dump(
+                    ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT, nodi
+                )
+                label = label or device.text_from_dump(ResourceID.SECONDARY_LABEL, nodi)
+    except Exception as e:
+        logger.debug(f"[integratori] caption non letta: {e}")
+    caption = ai_comment.clean_caption(caption, target_username)
+    return caption, " ".join((label or "").split())
+
+
+def _post_promuove_integratori(
+    device: DeviceFacade, profile_filter, target_username: Optional[str]
+) -> Optional[str]:
+    """Motivo per cui il post aperto promuove integratori, None se non li
+    promuove o se il filtro (skip_supplement_posts in filters.yml) e' spento.
+    Non legge nulla dallo schermo quando il filtro e' spento."""
+    if profile_filter is None or not profile_filter.skips_supplement_posts():
+        return None
+    caption, label = _leggi_caption_post(device, target_username)
+    if not caption and not label:
+        logger.debug("[integratori] caption non visibile: il post passa.")
+        return None
+    return profile_filter.supplement_post_reason(caption, label)
+
+
 def _caption_utilizzabile(testo: str) -> bool:
     """False quando la didascalia e' scritta in un alfabeto diverso dal
     nostro (arabo, cirillico, cinese...).
@@ -848,6 +933,7 @@ def _comment(
     session_state: SessionState,
     media_type: MediaType,
     target_username: Optional[str] = None,
+    profile_filter=None,
 ) -> Optional[bool]:
     if not session_state.check_limit(
         limit_type=session_state.Limit.COMMENTS, output=False
@@ -880,6 +966,22 @@ def _comment(
                 resourceId=ResourceID.ROW_FEED_BUTTON_COMMENT,
             )
             if comment_button.exists():
+                # Rete di sicurezza del filtro integratori: il controllo
+                # principale sta in interact_with_user, prima del like, ma li'
+                # la caption puo' non essere ancora a schermo (media alto).
+                # Qui, dopo lo swipe, lo e' quasi sempre.
+                motivo_integratori = _post_promuove_integratori(
+                    device, profile_filter, target_username
+                )
+                if motivo_integratori:
+                    logger.info(
+                        f"[integratori] il post promuove integratori ({motivo_integratori}): "
+                        "salto il commento.",
+                        extra={"color": f"{Fore.CYAN}"},
+                    )
+                    # stringa e non False: il chiamante deve sapere che il
+                    # profilo promuove integratori, per non seguirlo
+                    return "integratori"
                 # Best-effort: estrai la caption del post PRIMA di aprire la
                 # comment thread. Una volta dentro la comment view la caption
                 # in cima e' una riga "ROW_COMMENT_*", non piu' la

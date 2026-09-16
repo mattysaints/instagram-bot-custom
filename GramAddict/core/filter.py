@@ -17,6 +17,10 @@ from langdetect import detect
 from GramAddict.core.config import get_time_last_save
 from GramAddict.core.device_facade import Timeout
 from GramAddict.core.resources import ResourceID as resources
+from GramAddict.core.supplements import (
+    supplement_page_reason,
+    supplement_promo_reason,
+)
 from GramAddict.core.utils import random_sleep
 from GramAddict.core.views import FollowStatus, ProfileView
 
@@ -55,6 +59,12 @@ FIELD_SKIP_USERNAME_LONGER_THAN = "skip_username_longer_than"
 FIELD_SKIP_USERNAME_DIGIT_RATIO = "skip_username_digit_ratio_above"
 FIELD_MUTUAL_FRIENDS = "mutual_friends"
 FIELD_LAST_POST_MAX_AGE_DAYS = "last_post_max_age_days"
+# Integratori (richiesta di Roberto, 16/09/2026): niente follow/like/commento
+# a pagine di integratori ne' a post che li promuovono. Vedi core/supplements.py.
+FIELD_SKIP_SUPPLEMENT_PAGES = "skip_supplement_pages"
+FIELD_SKIP_SUPPLEMENT_POSTS = "skip_supplement_posts"
+FIELD_SUPPLEMENT_WORDS = "supplement_words"
+FIELD_SUPPLEMENT_BRANDS = "supplement_brands"
 
 IGNORE_CHARSETS = ["MATHEMATICAL"]
 
@@ -93,6 +103,7 @@ class SkipReason(Enum):
     LT_MUTUAL = auto()
     BIOGRAPHY_IS_EMPTY = auto()
     LAST_POST_TOO_OLD = auto()
+    SUPPLEMENT_PAGE = auto()
 
 
 class Profile(object):
@@ -107,6 +118,7 @@ class Profile(object):
         biography,
         link_in_bio,
         fullname,
+        business_category="",
     ):
         self.datetime = str(datetime.now())
         self.followers = 0
@@ -120,6 +132,9 @@ class Profile(object):
         self.biography = biography
         self.link_in_bio = link_in_bio
         self.fullname = fullname
+        # testo della categoria business ("Personal trainer",
+        # "Vitamins/Supplements"...), vuoto se il profilo non ce l'ha
+        self.business_category = business_category or ""
         self.potency_ratio = None
 
     def set_followers_and_following(
@@ -302,6 +317,9 @@ class Filter:
             )
             field_skip_if_private = self.conditions.get(FIELD_SKIP_PRIVATE, False)
             field_skip_if_public = self.conditions.get(FIELD_SKIP_PUBLIC, False)
+            field_skip_supplement_pages = self.conditions.get(
+                FIELD_SKIP_SUPPLEMENT_PAGES, False
+            )
 
         profile_data = self.get_all_data(device)
         if profile_data.is_restricted:
@@ -350,6 +368,28 @@ class Filter:
             return profile_data, self.return_check_profile(
                 username, profile_data, SkipReason.FOLLOW_YOU
             )
+        # Pagina di integratori (brand, shop, promoter): si salta per intero,
+        # privata o pubblica che sia. Va PRIMA dei filtri numerici. Il job
+        # blogger (big scelti a mano dal cliente) lo sospende insieme alla
+        # blacklist della bio: plugins/interact_blogger.py.
+        if field_skip_supplement_pages:
+            motivo = supplement_page_reason(
+                username,
+                profile_data.fullname,
+                profile_data.biography,
+                profile_data.business_category,
+                extra_words=self.conditions.get(FIELD_SUPPLEMENT_WORDS),
+                extra_brands=self.conditions.get(FIELD_SUPPLEMENT_BRANDS),
+            )
+            if motivo:
+                logger.info(
+                    f"@{username} e' una pagina di integratori ({motivo}), skip.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return profile_data, self.return_check_profile(
+                    username, profile_data, SkipReason.SUPPLEMENT_PAGE
+                )
+
         logger.debug(
             f"This account is {'private' if profile_data.is_private else 'public'}."
         )
@@ -657,6 +697,28 @@ class Filter:
             field_follow_private_or_empty
         )
 
+    def skips_supplement_posts(self) -> bool:
+        """True se filters.yml chiede di non toccare i post che promuovono
+        integratori (skip_supplement_posts)."""
+        if self.conditions is None:
+            return False
+        return bool(self.conditions.get(FIELD_SKIP_SUPPLEMENT_POSTS, False))
+
+    def supplement_post_reason(
+        self, caption: Optional[str], header_label: Optional[str] = None
+    ) -> Optional[str]:
+        """Perche' il post promuove integratori, None se non li promuove o se
+        il filtro e' spento. Su un post cosi' non si mette like, non si
+        commenta e il profilo non si segue (core/interaction.py)."""
+        if not self.skips_supplement_posts():
+            return None
+        return supplement_promo_reason(
+            caption,
+            header_label,
+            extra_words=self.conditions.get(FIELD_SUPPLEMENT_WORDS),
+            extra_brands=self.conditions.get(FIELD_SUPPLEMENT_BRANDS),
+        )
+
     def can_pm_to_private_or_empty(self) -> bool:
         if self.conditions is None:
             return False
@@ -743,6 +805,7 @@ class Filter:
                 biography=self._get_profile_biography(device, profileView),
                 link_in_bio=self._get_link_in_bio(device, profileView),
                 fullname=self._get_fullname(device, profileView),
+                business_category=self._get_business_category(device),
             )
             followers, following = self._get_followers_and_followings(device)
             profile.set_followers_and_following(followers, following)
@@ -790,6 +853,19 @@ class Filter:
             resourceId=ResourceID.PROFILE_HEADER_BUSINESS_CATEGORY,
         )
         return business_category_view.exists()
+
+    @staticmethod
+    def _get_business_category(device) -> str:
+        """Testo della categoria business, "" se assente o illeggibile.
+        Serve al filtro integratori: "Vitamins/Supplements" e' il segnale
+        piu' netto che esista di una pagina di integratori."""
+        try:
+            view = device.find(resourceId=ResourceID.PROFILE_HEADER_BUSINESS_CATEGORY)
+            if view.exists():
+                return (view.get_text(error=False) or "").strip()
+        except Exception as e:
+            logger.debug(f"business category not readable: {e}")
+        return ""
 
     @staticmethod
     def _is_private_account(device, profileView: ProfileView = None) -> Optional[bool]:

@@ -54,6 +54,12 @@ _POTENCY_NEUTRAL = {
     "mandatory_words": [],
     "skip_business": False,
     "skip_if_link_in_bio": False,
+    # Stesso motivo per il filtro "pagina di integratori": un big scelto a
+    # mano con "@rawnutrition | code CBUM" in bio non e' una pagina da
+    # scartare, e' cbum. Resta invece ATTIVO skip_supplement_posts: sotto
+    # al post in cui vende il pre-workout non si commenta, si passa al
+    # post successivo (core/interaction.py).
+    "skip_supplement_pages": False,
 }
 
 

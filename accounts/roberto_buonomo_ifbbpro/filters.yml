@@ -71,6 +71,25 @@ blacklist_words: [onlyfans, onlyf, escort, sex, "link in bio", telegram, vendita
 # biography_language: [it]                      # NON attivare: qui il pubblico e' anche estero
 
 ##############################################################################
+# Integratori (richiesta di Roberto, 16/09/2026)
+# Nessun follow, like o commento a PAGINE di integratori (brand, shop,
+# promoter: yamamoto, prozis, "XYZ Supplements", categoria business
+# "Vitamins/Supplements", bio con "codice sconto" + marchio...) ne' ai POST
+# che li promuovono (caption con prodotto/marchio + codice, sconto, link,
+# @brand, "partnership retribuita"...). Sul post promozionale si salta il
+# like e il commento, e il profilo NON viene seguito.
+# Il riconoscimento e' in GramAddict/core/supplements.py (liste di parole e
+# marchi, criterio a due segnali). Sul job `blogger` (big scelti a mano)
+# vale solo la regola sui POST: la pagina non si scarta, il post promozionale
+# si salta e si passa al successivo. Nel log: "[integratori] ..." e
+# "e' una pagina di integratori".
+##############################################################################
+skip_supplement_pages: true
+skip_supplement_posts: true
+# supplement_words: [glucosamina, "protein\s+cookie"]   # parole di prodotto in piu' (regex ok)
+# supplement_brands: [nomebrand]                          # marchi in piu' oltre a quelli in supplements.py
+
+##############################################################################
 # Filtri commenti
 # Servono DUE flag a true insieme: comment_<media-type> + comment_<job-name>.
 ##############################################################################
