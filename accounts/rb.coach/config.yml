@@ -162,6 +162,8 @@ blogger-followers: [20hourspalestre, actionfit.carate, actionfit.cerromaggiore, 
 # solo job `blogger`: con max_followers a 4000 un account da 300k verrebbe
 # scartato e non commenteremmo nulla.
 blogger-comment-only: true
+# skip_following_before_bot in filters.yml resta attivo anche sul job blogger:
+# i vecchi seguiti sono protetti, l'eccezione vale solo per i follow del bot.
 
 # Ogni profilo toccato finisce in interacted_users.json e senza questo viene
 # saltato PER SEMPRE ("already interacted ... Skip."). Sul job blogger vorrebbe

@@ -12,6 +12,8 @@ skip_if_public: false
 skip_business: true
 skip_non_business: false
 skip_following: true
+# If enabled, skip pre-bot/manual/unknown following but allow documented bot follows.
+skip_following_before_bot: false
 skip_follower: true
 skip_if_link_in_bio: true
 follow_private_or_empty: false

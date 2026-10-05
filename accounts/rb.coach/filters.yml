@@ -40,7 +40,9 @@ skip_if_private: false
 skip_if_public: false
 skip_business: false                       # molti utenti normali hanno l'account creator per le statistiche: escluderli taglierebbe clienti veri
 skip_non_business: false
-skip_following: true                       # non rifare chi gia' segui
+skip_following: true
+# Protegge i vecchi seguiti; solo i follow documentati del bot possono ricevere commenti.
+skip_following_before_bot: true
 skip_follower: true                        # chi ti segue gia' non va ri-ingaggiato
 skip_if_link_in_bio: false
 follow_private_or_empty: true              # coerente con skip_if_private: senza questo i privati verrebbero aperti e poi scartati lo stesso ("follow_private_or_empty is disabled in filters. Skip.")

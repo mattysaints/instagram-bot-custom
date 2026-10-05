@@ -52,6 +52,7 @@ ACCOUNTS = "accounts"
 REPORTS = "reports"
 FILENAME_HISTORY_FILTER_USERS = "history_filters_users.json"
 FILENAME_INTERACTED_USERS = "interacted_users.json"
+FILENAME_FOLLOWING_ORIGINS = "following_origins.json"
 OLD_FILTER = "filter.json"
 FILTER = "filters.yml"
 USER_LAST_INTERACTION = "last_interaction"
@@ -75,6 +76,33 @@ class Storage:
             os.makedirs(self.account_path)
         self.interacted_users = {}
         self.history_filter_users = {}
+        self.following_origins = {}
+        self.following_origins_valid = True
+        self.following_origins_path = os.path.join(
+            self.account_path, FILENAME_FOLLOWING_ORIGINS
+        )
+        if os.path.isfile(self.following_origins_path):
+            try:
+                with open(self.following_origins_path, encoding="utf-8") as file:
+                    origins = json.load(file)
+                if not isinstance(origins, dict) or any(
+                    not isinstance(name, str) or not name.strip()
+                    or origin not in ("preexisting", "after_bot", "not_following")
+                    for name, origin in origins.items()
+                ):
+                    raise ValueError("invalid following origins")
+                for name, origin in origins.items():
+                    name = self._normalize_username(name)
+                    if not name:
+                        raise ValueError("invalid username")
+                    if self.following_origins.get(name) != "preexisting":
+                        self.following_origins[name] = origin
+            except (OSError, ValueError, TypeError):
+                self.following_origins_valid = False
+                logger.error(
+                    "Cannot read following_origins.json: protected-following "
+                    "policy will skip profiles until the file is repaired."
+                )
 
         self.interacted_users_path = os.path.join(
             self.account_path, FILENAME_INTERACTED_USERS
@@ -187,6 +215,62 @@ class Storage:
         else:
             return FollowingStatus[user[USER_FOLLOWING_STATUS].upper()]
 
+    @staticmethod
+    def _normalize_username(username):
+        return username.strip().lstrip("@").casefold()
+
+    def was_followed_by_bot(self, username):
+        """Use explicit successful follow evidence, never a mere visit."""
+        name = self._normalize_username(username)
+        user = self.interacted_users.get(username)
+        if user is None:
+            user = self.interacted_users.get(name)
+        if user is None:
+            user = next(
+                (record for key, record in self.interacted_users.items()
+                 if self._normalize_username(key) == name), {}
+            )
+        return isinstance(user, dict) and (
+            user.get("followed_by_bot") is True
+            or user.get("followed") is True
+            or user.get(USER_FOLLOWING_STATUS) in ("followed", "requested")
+        )
+
+    def following_origin(self, username):
+        """Permanent pre-bot protection takes precedence over later follows."""
+        if not self.following_origins_valid:
+            return "unknown"
+        origin = self.following_origins.get(self._normalize_username(username))
+        if origin == "preexisting":
+            return origin
+        if self.was_followed_by_bot(username):
+            return "after_bot"
+        return origin
+
+    def observe_following(self, username, is_following):
+        """Classify only reliable profile observations, scoped to this account.
+
+        A first encounter already followed is protected unless a successful
+        bot follow is documented. A manual follow never grants an exception.
+        """
+        origin = self.following_origin(username)
+        if origin in ("unknown", "preexisting", "after_bot"):
+            return origin
+        if is_following:
+            new_origin = "preexisting"
+        else:
+            new_origin = "not_following"
+        if new_origin != origin:
+            self.following_origins[self._normalize_username(username)] = new_origin
+            if not _resilient_write(
+                self.following_origins_path,
+                json.dumps(self.following_origins, indent=4, sort_keys=True),
+            ):
+                self.following_origins_valid = False
+                logger.error("Cannot persist following origins: skipping protected profiles.")
+                return "unknown"
+        return new_origin
+
     def was_unfollowed_before(self, username) -> bool:
         """
         Return True when we previously unfollowed this user (either via the
@@ -261,7 +345,12 @@ class Storage:
         job_name=None,
         target=None,
     ):
+        # Preserve legacy follow evidence before the last-action fields below
+        # are replaced by a later like/comment-only visit.
+        followed_by_bot = self.was_followed_by_bot(username) or bool(followed)
         user = self.interacted_users.get(username, {})
+        if followed_by_bot:
+            user["followed_by_bot"] = True
         user[USER_LAST_INTERACTION] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
         if followed:
@@ -274,7 +363,9 @@ class Storage:
         elif scraped:
             user[USER_FOLLOWING_STATUS] = FollowingStatus.SCRAPED.name.casefold()
         else:
-            user[USER_FOLLOWING_STATUS] = FollowingStatus.NONE.name.casefold()
+            # A return visit must not erase the relationship used by the
+            # unfollow queue and the no-refollow guard.
+            user.setdefault(USER_FOLLOWING_STATUS, FollowingStatus.NONE.name.casefold())
 
         # Save only the last session_id
         user["session_id"] = session_id

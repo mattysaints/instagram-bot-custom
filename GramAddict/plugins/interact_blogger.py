@@ -40,6 +40,8 @@ _SIZE_FIELDS = (
 # segue (li conosce, il commento del bot e' riconoscibile), c'e'
 # --blogger-skip-following: rimette skip_following a true per il solo job
 # blogger e quei big vengono aperti e saltati con "You follow @..., skip".
+# skip_following_before_bot non viene sospeso: protegge sempre i vecchi
+# seguiti e consente l'eccezione solo ai follow documentati del bot.
 _POTENCY_NEUTRAL = {
     "min_potency_ratio": 0,
     "max_potency_ratio": 999,
@@ -69,7 +71,8 @@ def _size_filters_suspended(profile_filter, keep_skip_following=False):
 
     Con keep_skip_following=True (--blogger-skip-following) skip_following
     resta attivo: i big che l'account segue gia' vengono saltati invece che
-    commentati.
+    commentati. Con skip_following_before_bot attivo restano ammessi i
+    follow documentati del bot; la protezione dei vecchi seguiti resta sempre.
     """
     conditions = getattr(profile_filter, "conditions", None)
     if not conditions:

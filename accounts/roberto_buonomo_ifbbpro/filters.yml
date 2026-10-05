@@ -25,6 +25,8 @@ skip_if_public: false
 skip_business: false                       # qui i business/creator sono il target, non un problema
 skip_non_business: false
 skip_following: true
+# Protegge i vecchi seguiti; solo i follow documentati del bot possono ricevere commenti.
+skip_following_before_bot: true
 skip_follower: true
 skip_if_link_in_bio: false                 # il link in bio e' la norma per atleti e coach
 follow_private_or_empty: false

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 FIELD_SKIP_BUSINESS = "skip_business"
 FIELD_SKIP_NON_BUSINESS = "skip_non_business"
 FIELD_SKIP_FOLLOWING = "skip_following"
+FIELD_SKIP_FOLLOWING_BEFORE_BOT = "skip_following_before_bot"
 FIELD_SKIP_FOLLOWER = "skip_follower"
 FIELD_SKIP_IF_LINK_IN_BIO = "skip_if_link_in_bio"
 FIELD_SKIP_PRIVATE = "skip_if_private"
@@ -80,6 +81,7 @@ def load_config(config):
 
 class SkipReason(Enum):
     YOU_FOLLOW = auto()
+    FOLLOWING_BEFORE_BOT = auto()
     FOLLOW_YOU = auto()
     IS_PRIVATE = auto()
     IS_PUBLIC = auto()
@@ -285,6 +287,17 @@ class Filter:
             logger.debug(f"pre_filter_username failed: {e}")
         return None
 
+    def protects_pre_bot_following(self):
+        return bool((self.conditions or {}).get(FIELD_SKIP_FOLLOWING_BEFORE_BOT, False))
+
+    def can_comment_user(self, username):
+        """Final comment gate, also used when blogger suspends other filters."""
+        if not self.protects_pre_bot_following():
+            return True
+        if not username or self.storage is None:
+            return False
+        return self.storage.following_origin(username) in ("after_bot", "not_following")
+
     def check_profile(self, device, username):
         """
         This method assumes being on someone's profile already.
@@ -345,9 +358,26 @@ class Filter:
         if self.conditions is None:
             logger.debug("filters.yml not loaded!")
             return profile_data, False
+        protect_old_following = self.protects_pre_bot_following()
+        following_origin = None
+        if protect_old_following:
+            following_origin = (
+                self.storage.observe_following(
+                    username, profile_data.follow_button_text == FollowStatus.FOLLOWING
+                ) if self.storage is not None else "unknown"
+            )
+            if following_origin in ("preexisting", "unknown"):
+                logger.info(
+                    f"@{username}: seguito prima del bot o origine non verificabile, skip.",
+                    extra={"color": f"{Fore.CYAN}"},
+                )
+                return profile_data, self.return_check_profile(
+                    username, profile_data, SkipReason.FOLLOWING_BEFORE_BOT
+                )
         if (
             field_skip_following
             and profile_data.follow_button_text == FollowStatus.FOLLOWING
+            and not (protect_old_following and following_origin == "after_bot")
         ):
             logger.info(
                 f"You follow @{username}, skip.",

@@ -935,6 +935,9 @@ def _comment(
     target_username: Optional[str] = None,
     profile_filter=None,
 ) -> Optional[bool]:
+    if profile_filter is not None and not profile_filter.can_comment_user(target_username):
+        logger.info(f"@{target_username}: commento escluso dalla protezione pre-bot.")
+        return False
     if not session_state.check_limit(
         limit_type=session_state.Limit.COMMENTS, output=False
     ):

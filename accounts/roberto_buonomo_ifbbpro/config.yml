@@ -110,8 +110,8 @@ action-throttle-pm-min: 999999             # DM OFF
 #      continuano come prima, sparisce solo il commento sotto ai loro post.
 #   2) johnjewett3 e kuba_sylvester_cielen sono usciti anche loro: li segue
 #      gia' (il job li apriva e li saltava con "You follow @..., skip").
-#   3) blogger-skip-following (sotto) fa da rete di sicurezza: se un big di
-#      questa lista risulta gia' seguito, viene saltato e non commentato.
+#   3) skip_following_before_bot in filters.yml protegge i vecchi seguiti:
+#      l'eccezione ai commenti vale solo per i follow documentati del bot.
 #
 # La lista e' fatta di DUE blocchi, entrambi profili che Roberto NON segue:
 #
@@ -166,9 +166,9 @@ blogger: [cbum, ramondinopro, urs_kalecinski, wesleyvissers, terrence_ruffin, de
 #   andrea_rossi_fit, elisa_fontana_fit
 
 # Rete di sicurezza per la regola qui sopra: sul job blogger il filtro
-# skip_following resta ATTIVO anche in modalita' comment-only. Se Roberto
-# segue gia' uno di questi big (o se ne aggiungiamo uno che segue), il bot
-# lo apre e lo salta ("You follow @..., skip") invece di commentarlo.
+# skip_following resta ATTIVO anche in modalita' comment-only. La politica
+# skip_following_before_bot di filters.yml consente solo i follow del bot:
+# i seguiti precedenti, manuali o senza prova restano esclusi dai commenti.
 blogger-skip-following: true
 
 # Finestra di ri-commento per il SOLO job blogger (ore). Sovrascrive
