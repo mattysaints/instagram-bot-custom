@@ -14,6 +14,8 @@ skip_non_business: false
 skip_following: true
 # If enabled, skip pre-bot/manual/unknown following but allow documented bot follows.
 skip_following_before_bot: false
+# User-confirmed pre-bot follows: always protected, even if UI/history is wrong.
+pre_bot_following: []
 skip_follower: true
 skip_if_link_in_bio: true
 follow_private_or_empty: false

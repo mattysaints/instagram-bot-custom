@@ -200,12 +200,137 @@ def test_missing_storage_or_target_does_not_allow_comments():
     assert not f.can_comment_user(None)
 
 
+@pytest.mark.parametrize("record", [
+    {"following_status": "followed"},
+    {"followed": True},
+    {"followed_by_bot": True},
+    {"following_status": "none", "followed": False, "liked": 14, "commented": 12,
+     "job_name": "blogger", "target": "valentinotozzi"},
+])
+@pytest.mark.parametrize("status", [FollowStatus.FOLLOWING, FollowStatus.FOLLOW])
+def test_user_confirmed_old_following_overrides_history_and_button(storage, monkeypatch, record, status):
+    # User confirmed valentinotozzi was already followed before using the bot.
+    # Historical bookkeeping or a misread button must not overrule that fact.
+    storage.interacted_users["valentinotozzi"] = record
+    storage._remember_following_origin("valentinotozzi", "not_following")
+    f = make_filter(storage, pre_bot_following=["@ValentinoTozzi"])
+    with _size_filters_suspended(f):
+        assert check_profile(f, monkeypatch, status, "valentinotozzi")
+        assert not f.can_comment_user("valentinotozzi")
+    assert Storage("rb.coach").following_origin("valentinotozzi") == "preexisting"
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("Following", FollowStatus.FOLLOWING),
+    ("Following ", FollowStatus.FOLLOWING),
+    ("Following\n", FollowStatus.FOLLOWING),
+    ("Requested ", FollowStatus.FOLLOWING),
+    ("Follow back ", FollowStatus.FOLLOW_BACK),
+    ("Follow", FollowStatus.FOLLOW),
+    ("Following valentinotozzi", FollowStatus.NONE),
+    ("Follow something", FollowStatus.NONE),
+])
+def test_real_follow_button_reader_never_turns_unknown_following_into_follow(text, expected):
+    from GramAddict.core.views import ProfileView
+
+    class Button:
+        def exists(self, *args):
+            return True
+
+        def get_text(self):
+            return text
+
+    class Device:
+        def find(self, **kwargs):
+            return Button()
+
+    view = ProfileView.__new__(ProfileView)
+    view.device = Device()
+    _, status = view.getFollowButton()
+    assert status is expected
+
+
+def test_confirmed_old_following_blocks_comment_even_with_filters_suspended(storage):
+    from GramAddict.core.interaction import _comment
+
+    storage._remember_following_origin("valentinotozzi", "not_following")
+    f = make_filter(storage, pre_bot_following=["valentinotozzi"], skip_following_before_bot=False)
+    assert _comment(None, "rb.coach", 100, None, None, None,
+                    target_username="valentinotozzi", profile_filter=f) is False
+
+
+@pytest.mark.parametrize("header, expected", [
+    ('<node resource-id="com.instagram.android:id/profile_header_container">'
+     '<node text="Following " clickable="true" class="android.widget.Button"/>'
+     '</node>', FollowStatus.FOLLOWING),
+    ('<node resource-id="com.instagram.android:id/profile_header_container">'
+     '<node text="Follow" clickable="true" class="android.widget.Button"/>'
+     '</node>', FollowStatus.FOLLOW),
+    ('<node resource-id="com.instagram.android:id/profile_header_container">'
+     '<node text="Following something" clickable="true" class="android.widget.Button"/>'
+     '</node>', FollowStatus.NONE),
+    ('', FollowStatus.NONE),
+    ('<node resource-id="com.instagram.android:id/profile_header_container">'
+     '<node text="Following" clickable="true" class="android.widget.Button"/>'
+     '<node text="Follow" clickable="true" class="android.widget.Button"/>'
+     '</node>', FollowStatus.NONE),
+    ('<node resource-id="com.instagram.android:id/profile_header_container">'
+     '<node resource-id="com.instagram.android:id/row_profile_header_following_container"'
+     ' text="Following" clickable="true"/>'
+     '<node text="Follow" clickable="true" class="android.widget.Button"/>'
+     '<node resource-id="com.instagram.android:id/recommended_users">'
+     '<node text="Following" clickable="true" class="android.widget.Button"/>'
+     '</node></node>', FollowStatus.FOLLOW),
+    ('<node resource-id="com.instagram.android:id/profile_header_container">'
+     '<node text="Segui già" clickable="true" class="android.widget.Button"/>'
+     '</node>', FollowStatus.FOLLOWING),
+])
+def test_strict_profile_reader_ignores_follow_buttons_in_suggestions(header, expected):
+    from types import SimpleNamespace
+    from GramAddict.core.views import ProfileView
+
+    xml = ('<hierarchy><node resource-id="com.instagram.android:id/recommended_users">'
+           '<node text="Follow" clickable="true" class="android.widget.Button"/>'
+           '</node>' + header + '</hierarchy>')
+    view = ProfileView.__new__(ProfileView)
+    view.device = SimpleNamespace(deviceV2=SimpleNamespace(dump_hierarchy=lambda **kwargs: xml))
+    _, status = view.getFollowButton(strict=True)
+    assert status is expected
+
+
+def test_strict_profile_reader_rejects_broken_snapshot():
+    from types import SimpleNamespace
+    from GramAddict.core.views import ProfileView
+
+    view = ProfileView.__new__(ProfileView)
+    view.device = SimpleNamespace(deviceV2=SimpleNamespace(dump_hierarchy=lambda **kwargs: "<broken"))
+    _, status = view.getFollowButton(strict=True)
+    assert status is FollowStatus.NONE
+
+
+@pytest.mark.parametrize("policy", [True, False])
+def test_protected_filter_uses_strict_profile_reader(storage, policy):
+    from types import SimpleNamespace
+
+    calls = []
+
+    def button(strict=False):
+        calls.append(strict)
+        return None, FollowStatus.FOLLOWING
+
+    f = make_filter(storage, skip_following_before_bot=policy)
+    assert f._get_follow_button_text(None, SimpleNamespace(getFollowButton=button)) is FollowStatus.FOLLOWING
+    assert calls == [policy]
+
+
 @pytest.mark.parametrize("account", ["rb.coach", "roberto_buonomo_ifbbpro"])
 def test_roberto_configs_enable_policy_and_preserve_source_exclusions(account):
     root = Path(__file__).resolve().parents[1]
     folder = root / "accounts" / account
     filters = yaml.safe_load((folder / "filters.yml").read_text(encoding="utf-8"))
     assert filters["skip_following_before_bot"] is True
+    if account == "rb.coach":
+        assert "valentinotozzi" in filters["pre_bot_following"]
     for filename in ("config.yml", "config-alternato.yml"):
         config = yaml.safe_load((folder / filename).read_text(encoding="utf-8"))
         assert config["blogger-followers-no-comment"] is True

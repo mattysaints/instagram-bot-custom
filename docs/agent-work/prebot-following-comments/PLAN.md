@@ -103,3 +103,42 @@ la verifica usa Python 3.14 di sistema con pytest e il site-packages del
 virtualenv tramite PYTHONPATH, senza installazioni. `git diff --check` passato.
 Nessun run Instagram o deploy effettuato. La regola entra in
 funzione dal prossimo avvio del bot con questo codice e questi filtri.
+
+## Correzione dopo la segnalazione del 05/10/2026
+
+Il cliente segnala l'apertura dei post di `valentinotozzi`, gia' seguito
+prima del bot. I dati della macchina che esegue il bot mostrano
+`following_status: none`, `followed: false`, 14 like, 12 commenti e origine
+`not_following`; `skip_following_before_bot` e' attivo. Non e' quindi la prova
+di un follow del bot a spiegare l'accesso: il profilo e' stato letto come non
+seguito. Il frammento di log non include il testo effettivo del pulsante, per
+cui il formato preciso che ha provocato la lettura non e' confermato.
+
+Riproduzione locale: `getFollowButton` trasformava `Following `, `Following`
+con newline e qualsiasi testo sconosciuto con prefisso `Follow` in `FOLLOW`.
+Ora normalizza gli spazi e restituisce `NONE` per testi non riconosciuti,
+facendo saltare il profilo invece di presumere che non sia seguito.
+
+La lista per account `pre_bot_following` contiene i vecchi seguiti confermati
+dal cliente e prevale sulle letture e sui record precedenti. Per `rb.coach`
+contiene `valentinotozzi`, quindi vale sia per config normale sia alternato.
+Il controllo salva la protezione permanente e blocca anche il gate finale del
+commento. La correzione del pulsante vale per entrambi gli account.
+
+I log `[following-policy]` mostrano pulsante e origine a ogni verifica,
+senza registrare informazioni private. La prima riproduzione falliva in
+12 casi su 14; dopo la correzione sono passati 125 test su filtri, commenti,
+ricerca e navigazione, seguiti da ulteriori test con il record fornito dal
+cliente e il gate finale.
+
+Su ulteriore richiesta del cliente, per entrambi gli account protetti la
+lettura dello stato usa esclusivamente il sottoalbero dell'intestazione del
+profilo nel dump completo. Esclude suggerimenti e contatori dei seguiti e
+non ripiega sui pulsanti Follow generici. Stati in conflitto, testi ignoti,
+intestazione mancante o dump fallito restituiscono NONE: niente apertura dei
+post o commenti. Questo puo' aumentare gli scarti se la versione di Instagram
+non espone un'intestazione riconoscibile; la prudenza e' intenzionale.
+I test verificano anche che entrambi i filtri attivino la lettura rigorosa.
+Verifica finale: 138 test superati sui cinque moduli coinvolti e
+`git diff --check` passato.
+Nessuna verifica su device di produzione eseguita.

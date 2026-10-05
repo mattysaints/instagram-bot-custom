@@ -7,6 +7,7 @@ from enum import Enum, auto
 from random import choice, randint, uniform
 from time import sleep
 from typing import Optional, Tuple
+from xml.etree import ElementTree
 
 import emoji
 from colorama import Fore, Style
@@ -2925,7 +2926,65 @@ class ProfileView(ActionBarView):
             self.device.back()
         raise DeviceFacade.JsonRpcError("Profile tab not found after 6 tries")
 
-    def getFollowButton(self):
+    @staticmethod
+    def _follow_button_status(text):
+        text = (text or "").strip().casefold()
+        if text in ("following", "requested", "segui già", "segui gia", "richiesta inviata"):
+            return FollowStatus.FOLLOWING
+        if text in ("follow back", "segui anche tu"):
+            return FollowStatus.FOLLOW_BACK
+        if text in ("follow", "segui"):
+            return FollowStatus.FOLLOW
+        return FollowStatus.NONE
+
+    def _profile_follow_status(self):
+        """Read only profile-header buttons; suggestions never grant access.
+
+        Missing header, ambiguous states or an unreadable hierarchy mean
+        unknown, so the protected-following filter will skip the profile.
+        """
+        try:
+            root = ElementTree.fromstring(self.device.deviceV2.dump_hierarchy(compressed=False))
+        except Exception as error:
+            logger.warning(f"Cannot verify profile follow button ({type(error).__name__}), skip.")
+            return FollowStatus.NONE
+
+        statuses = set()
+
+        def read(node, in_header=False):
+            resource_id = node.get("resource-id", "").casefold()
+            if any(word in resource_id for word in ("recommended", "suggested", "netego")):
+                return
+            # Counts/links to the following list are not the follow button.
+            if resource_id.rsplit("/", 1)[-1] in (
+                "row_profile_header_followers_container",
+                "row_profile_header_container_followers",
+                "row_profile_header_following_container",
+                "row_profile_header_container_following",
+                "row_profile_header_textview_followers_count",
+                "row_profile_header_textview_following_count",
+            ):
+                return
+            in_header = in_header or "profile_header" in resource_id
+            if in_header and node.get("clickable") == "true":
+                text = node.get("text", "").strip().casefold()
+                status = self._follow_button_status(text)
+                if status is not FollowStatus.NONE or any(
+                    word in text for word in ("follow", "segui", "richiesta")
+                ):
+                    statuses.add(status)
+            for child in node:
+                read(child, in_header)
+
+        read(root)
+        if len(statuses) == 1 and FollowStatus.NONE not in statuses:
+            return statuses.pop()
+        logger.warning("Profile follow state missing or ambiguous in header, skip.")
+        return FollowStatus.NONE
+
+    def getFollowButton(self, strict=False):
+        if strict:
+            return None, self._profile_follow_status()
         button_regex = f"{ClassName.BUTTON}|{ClassName.TEXT_VIEW}"
         following_regex_all = "^following|^requested|^follow back|^follow"
         following_or_follow_back_button = self.device.find(
@@ -2934,13 +2993,12 @@ class ProfileView(ActionBarView):
             textMatches=case_insensitive_re(following_regex_all),
         )
         if following_or_follow_back_button.exists(Timeout.MEDIUM):
-            button_text = following_or_follow_back_button.get_text().casefold()
-            if button_text in ["following", "requested"]:
-                button_status = FollowStatus.FOLLOWING
-            elif button_text == "follow back":
-                button_status = FollowStatus.FOLLOW_BACK
-            else:
-                button_status = FollowStatus.FOLLOW
+            button_text = following_or_follow_back_button.get_text().strip().casefold()
+            button_status = self._follow_button_status(button_text)
+            if button_status is FollowStatus.NONE:
+                logger.warning(
+                    f"Unrecognized follow button text {button_text!r}: skip this profile."
+                )
             return following_or_follow_back_button, button_status
         else:
             logger.warning(

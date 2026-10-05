@@ -261,15 +261,27 @@ class Storage:
         else:
             new_origin = "not_following"
         if new_origin != origin:
-            self.following_origins[self._normalize_username(username)] = new_origin
-            if not _resilient_write(
-                self.following_origins_path,
-                json.dumps(self.following_origins, indent=4, sort_keys=True),
-            ):
-                self.following_origins_valid = False
-                logger.error("Cannot persist following origins: skipping protected profiles.")
-                return "unknown"
+            return self._remember_following_origin(username, new_origin)
         return new_origin
+
+    def protect_pre_bot_following(self, username):
+        """User-confirmed old follows override mistaken UI/history evidence."""
+        if not self.following_origins_valid:
+            return "unknown"
+        if self.following_origin(username) == "preexisting":
+            return "preexisting"
+        return self._remember_following_origin(username, "preexisting")
+
+    def _remember_following_origin(self, username, origin):
+        self.following_origins[self._normalize_username(username)] = origin
+        if not _resilient_write(
+            self.following_origins_path,
+            json.dumps(self.following_origins, indent=4, sort_keys=True),
+        ):
+            self.following_origins_valid = False
+            logger.error("Cannot persist following origins: skipping protected profiles.")
+            return "unknown"
+        return origin
 
     def was_unfollowed_before(self, username) -> bool:
         """

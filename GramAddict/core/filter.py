@@ -22,7 +22,7 @@ from GramAddict.core.supplements import (
     supplement_promo_reason,
 )
 from GramAddict.core.utils import random_sleep
-from GramAddict.core.views import FollowStatus, ProfileView
+from GramAddict.core.views import FollowStatus, ProfileView, normalize_ig_username
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ FIELD_SKIP_BUSINESS = "skip_business"
 FIELD_SKIP_NON_BUSINESS = "skip_non_business"
 FIELD_SKIP_FOLLOWING = "skip_following"
 FIELD_SKIP_FOLLOWING_BEFORE_BOT = "skip_following_before_bot"
+FIELD_PRE_BOT_FOLLOWING = "pre_bot_following"
 FIELD_SKIP_FOLLOWER = "skip_follower"
 FIELD_SKIP_IF_LINK_IN_BIO = "skip_if_link_in_bio"
 FIELD_SKIP_PRIVATE = "skip_if_private"
@@ -290,8 +291,16 @@ class Filter:
     def protects_pre_bot_following(self):
         return bool((self.conditions or {}).get(FIELD_SKIP_FOLLOWING_BEFORE_BOT, False))
 
+    def is_confirmed_pre_bot_following(self, username):
+        old_following = (self.conditions or {}).get(FIELD_PRE_BOT_FOLLOWING, []) or []
+        return bool(username) and normalize_ig_username(username) in (
+            normalize_ig_username(name) for name in old_following
+        )
+
     def can_comment_user(self, username):
         """Final comment gate, also used when blogger suspends other filters."""
+        if self.is_confirmed_pre_bot_following(username):
+            return False
         if not self.protects_pre_bot_following():
             return True
         if not username or self.storage is None:
@@ -360,11 +369,22 @@ class Filter:
             return profile_data, False
         protect_old_following = self.protects_pre_bot_following()
         following_origin = None
+        if self.is_confirmed_pre_bot_following(username):
+            if self.storage is not None:
+                self.storage.protect_pre_bot_following(username)
+            logger.info(f"@{username}: seguito prima del bot, confermato dal cliente, skip.")
+            return profile_data, self.return_check_profile(
+                username, profile_data, SkipReason.FOLLOWING_BEFORE_BOT
+            )
         if protect_old_following:
             following_origin = (
                 self.storage.observe_following(
                     username, profile_data.follow_button_text == FollowStatus.FOLLOWING
                 ) if self.storage is not None else "unknown"
+            )
+            logger.info(
+                f"[following-policy] @{username}: button={profile_data.follow_button_text.name}, "
+                f"origin={following_origin}."
             )
             if following_origin in ("preexisting", "unknown"):
                 logger.info(
@@ -972,10 +992,9 @@ class Filter:
 
         return posts_count
 
-    @staticmethod
-    def _get_follow_button_text(device, profileView: ProfileView = None) -> str:
+    def _get_follow_button_text(self, device, profileView: ProfileView = None) -> str:
         profileView = ProfileView(device) if profileView is None else profileView
-        _, text = profileView.getFollowButton()
+        _, text = profileView.getFollowButton(strict=self.protects_pre_bot_following())
         return text
 
     @staticmethod
