@@ -88,6 +88,10 @@ blacklist_words: [onlyfans, onlyf, escort, sex, "link in bio", telegram, vendita
 ##############################################################################
 skip_supplement_pages: true
 skip_supplement_posts: true
+skip_brand_promotions: true
+require_comment_caption_text: true
+# I profili trovati tramite luogo devono mostrare interesse fitness nel profilo.
+require_fitness_for_place_likers: true
 # supplement_words: [glucosamina, "protein\s+cookie"]   # parole di prodotto in piu' (regex ok)
 # supplement_brands: [nomebrand]                          # marchi in piu' oltre a quelli in supplements.py
 

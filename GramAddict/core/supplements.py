@@ -167,6 +167,15 @@ _BRAND_RE = re.compile(
     r"(?<![\w])(?:" + "|".join(_BRAND_PATTERNS) + r")",
     re.IGNORECASE,
 )
+# Marchi sportivi riconoscibili dal testo. L'elenco non può coprire ogni marchio.
+_SPORTS_BRAND_RE = re.compile(
+    r"(?<![^\W_])(?:nike|adidas|reebok|gymshark|asics|hoka|technogym|tecnogym|panatta|"
+    rf"under{_SEP}armou?r|new{_SEP}balance|vanquish{_SEP}fitness|ryderwear|"
+    rf"squat{_SEP}wolf|better{_SEP}bodies|young{_SEP}la|nobull|eleiko|"
+    rf"life{_SEP}fitness|hammer{_SEP}strength|rogue{_SEP}fitness|gym80)"
+    r"(?:italia|italy|official|originals|running|training|women|men|pro|football|basketball|sportswear)?(?![^\W_])",
+    re.IGNORECASE,
+)
 # @handle che "parla" da brand: @xyz_nutrition, @supps.italia, @proteinworks.
 # "nutritionist"/"nutrizionista" sono persone, non marchi.
 _BRAND_HANDLE_RE = re.compile(
@@ -263,6 +272,11 @@ _NAME_BRANDISH_RE = re.compile(
 _PARTNERSHIP_LABEL_RE = re.compile(
     r"partnership|sponsor", re.IGNORECASE
 )
+_COMMERCIAL_POST_RE = re.compile(
+    r"(?i)(?:#(?:ad|adv|advertising|sponsored|gifted)\b|"
+    r"\b(?:sponsorizzat\w*|sponsored|partnership|collab|collaborazion\w*|"
+    r"collaboration|gifted|codice\s+(?:sconto|promo)|discount\s+code)\b)"
+)
 
 # Categoria business del profilo ("Vitamins/Supplements", "Vitamine/Integratori",
 # "Health/Beauty" no: troppo larga).
@@ -331,6 +345,7 @@ def supplement_page_reason(
     business_category: Optional[str] = None,
     extra_words: Optional[Iterable[str]] = None,
     extra_brands: Optional[Iterable[str]] = None,
+    exclude_brand_promotions: bool = False,
 ) -> Optional[str]:
     """Perche' il profilo e' una pagina di integratori (None = non lo e').
 
@@ -360,6 +375,10 @@ def supplement_page_reason(
         # "net_integratori" e "tsunami.nutrition" come parole intere
         flat = re.sub(r"[._]", " ", text) if label == "username" else text
         for candidate in (text, flat):
+            if exclude_brand_promotions:
+                sports_brand = _SPORTS_BRAND_RE.search(candidate)
+                if sports_brand:
+                    return f"{label} '{text}' (marchio '{sports_brand.group(0)}')"
             found = _signals(candidate, extra_p, extra_b)
             hit = found.get("prodotto") or found.get("brand")
             if not hit and "promo" in found:
@@ -382,6 +401,7 @@ def supplement_promo_reason(
     header_label: Optional[str] = None,
     extra_words: Optional[Iterable[str]] = None,
     extra_brands: Optional[Iterable[str]] = None,
+    exclude_brand_promotions: bool = False,
 ) -> Optional[str]:
     """Perche' il post promuove integratori (None = non li promuove).
 
@@ -392,12 +412,25 @@ def supplement_promo_reason(
     prozis.com" si'.
     """
     text = _norm(caption)
+    label = _norm(header_label)
+    if exclude_brand_promotions:
+        if label and _PARTNERSHIP_LABEL_RE.search(label):
+            return "etichetta di partnership"
+        if _COMMERCIAL_POST_RE.search(text):
+            return "promozione commerciale"
+        if re.search(r"(?<![\w.])@[\w.]+", text) and _PROMO_RE.search(text):
+            return "menzione con segnale commerciale"
+        sports_brand = _SPORTS_BRAND_RE.search(text)
+        if sports_brand:
+            return f"marchio '{sports_brand.group(0)}'"
+        found = _signals(text, _compile_extra(extra_words), _compile_extra(extra_brands))
+        if "prodotto" in found or "brand" in found:
+            return _describe(found)
     if not text:
         return None
     extra_p = _compile_extra(extra_words)
     extra_b = _compile_extra(extra_brands)
     found = _signals(text, extra_p, extra_b)
-    label = _norm(header_label)
     if label and _PARTNERSHIP_LABEL_RE.search(label) and "promo" not in found:
         found["promo"] = f"etichetta '{label}'"
     if len(found) >= 2:

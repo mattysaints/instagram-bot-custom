@@ -95,6 +95,13 @@ def test_soli_hashtag_generici_si_saltano():
     assert caption_is_usable("Domenica ad Arezzo #gym #love")
 
 
+def test_account_roberto_richiede_didascalia_e_non_soli_hashtag():
+    assert caption_skip_reason("#Ottobrata #arezzo #domeniche #Italia", require_caption_text=True)
+    assert caption_skip_reason("#Ottobrata #arezzo #domeniche #Italia") is None
+    assert caption_skip_reason("Bellissimo#allenamento#bodybuilding#fitness", require_caption_text=True)
+    assert caption_skip_reason("Allenamento gambe intenso #fitness", require_caption_text=True) is None
+
+
 def test_post_pubblicitari_si_saltano():
     for c in [
         "Ultimi 3 posti per il percorso online di ottobre. Scrivimi METODO in DM 📩",
@@ -129,6 +136,23 @@ def test_frammenti_reali_dei_log_vengono_scartati():
         ok, why = comment_is_acceptable(c)
         assert not ok, c
         assert why
+
+
+def test_scarta_frammento_con_punto_dallo_screenshot():
+    ok, why = comment_is_acceptable('Che emozione vedere la “Ginnastichina” approdata su.')
+    assert not ok and "frammento" in why
+
+
+def test_non_scarta_avverbi_e_commenti_completi_con_punteggiatura():
+    for comment in ["Questo esercizio mi ha sorpreso molto.", "Il video spiega bene come fare.",
+                    "Keep going on.", "Una storia speciale, da ricordare sempre."]:
+        assert comment_is_acceptable(comment, language="auto")[0], comment
+
+
+def test_scarta_commento_generico_sulla_piattaforma_dallo_screenshot():
+    ok, why = comment_is_acceptable("Interessante l’arrivo della Ginnastichina su questa piattaforma.")
+    assert not ok and "generico" in why
+    assert comment_is_acceptable("Interessante come hai gestito il recupero dopo la gara.")[0]
 
 
 def test_commento_completo_passa():

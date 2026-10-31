@@ -88,7 +88,7 @@ def interact_with_user(
     comment_done = interacted = followed = scraped = sent_pm = False
     logger.debug("Checking profile..")
     start_time = time()
-    profile_data, skipped = profile_filter.check_profile(device, username)
+    profile_data, skipped = profile_filter.check_profile(device, username, current_mode=current_mode)
     if username == my_username:
         logger.info("It's you, skip.")
         return (
@@ -774,7 +774,9 @@ def _clean_caption(testo: str) -> str:
     return t
 
 
-def _leggi_caption_post(device: DeviceFacade, target_username: Optional[str]) -> Tuple[str, str]:
+def _leggi_caption_post(
+    device: DeviceFacade, target_username: Optional[str], check_label: bool = False
+) -> Tuple[str, str]:
     """Caption GREZZA del post aperto e etichetta sotto al nome dell'autore
     ("Partnership retribuita con X", "Sponsorizzato"), senza toccare lo
     schermo. Prima il selettore, poi l'albero completo (nodes_from_dump):
@@ -795,14 +797,14 @@ def _leggi_caption_post(device: DeviceFacade, target_username: Optional[str]) ->
         label_view = device.find(resourceId=ResourceID.SECONDARY_LABEL)
         if label_view.exists():
             label = label_view.get_text(error=False) or ""
-        if not caption:
-            # l'etichetta e' facoltativa (molti post non ce l'hanno): il dump
-            # completo, che costa ~1 s, si fa solo se manca la caption
+        if not caption or (check_label and not label):
+            # Il controllo marchi cerca l'etichetta anche quando il selettore non la trova.
             nodi = device.nodes_from_dump()
             if nodi:
-                caption = device.text_from_dump(
-                    ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT, nodi
-                )
+                if not caption:
+                    caption = device.text_from_dump(
+                        ResourceID.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT, nodi
+                    )
                 label = label or device.text_from_dump(ResourceID.SECONDARY_LABEL, nodi)
     except Exception as e:
         logger.debug(f"[integratori] caption non letta: {e}")
@@ -818,7 +820,8 @@ def _post_promuove_integratori(
     Non legge nulla dallo schermo quando il filtro e' spento."""
     if profile_filter is None or not profile_filter.skips_supplement_posts():
         return None
-    caption, label = _leggi_caption_post(device, target_username)
+    check_label = bool((profile_filter.conditions or {}).get("skip_brand_promotions", False))
+    caption, label = _leggi_caption_post(device, target_username, check_label=check_label)
     if not caption and not label:
         logger.debug("[integratori] caption non visibile: il post passa.")
         return None
@@ -1023,7 +1026,11 @@ def _comment(
                     # petto e' notevole" sotto a "☃️☃️"), e il file di fallback e'
                     # anch'esso gergo fitness generico. Meglio il solo like.
                     min_words = ai_comment.min_caption_words(args)
-                    skip_reason = ai_comment.caption_skip_reason(post_caption, min_words)
+                    conditions = getattr(profile_filter, "conditions", None) or {}
+                    skip_reason = ai_comment.caption_skip_reason(
+                        post_caption, min_words,
+                        require_caption_text=bool(conditions.get("require_comment_caption_text", False)),
+                    )
                     if skip_reason and not getattr(args, "ai_comments_allow_no_caption", False):
                         logger.info(
                             f"[ai-comment] caption {post_caption[:50]!r}: {skip_reason} -> "

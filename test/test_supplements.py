@@ -144,6 +144,83 @@ def test_filter_acceso_usa_parole_extra():
     assert f.supplement_post_reason("Domenica di riposo") is None
 
 
+def test_regola_roberto_esclude_integratori_e_promozioni_di_qualunque_marchio():
+    f = _filtro(skip_supplement_posts=True, skip_brand_promotions=True)
+    for caption, label in [
+        ("Oggi creatina e via, gamba pesante", ""),
+        ("Grazie @tsunaminutrition", ""),
+        ("Nuove scarpe per l'allenamento #adv", ""),
+        ("Nuova collezione collab @brandabbigliamento", ""),
+        ("Il mio codice sconto per @brandabbigliamento", ""),
+        ("Nuova collezione @brandabbigliamento, codice SARA10", ""),
+        ("", "Partnership retribuita con Nike"),
+    ]:
+        assert f.supplement_post_reason(caption, label), (caption, label)
+    assert f.supplement_post_reason("Allenamento gambe oggi", "Milano, Italy") is None
+    assert f.supplement_post_reason("Allenamento con @mario dopo una lunga giornata", "") is None
+
+
+def test_marchi_sportivi_riconosciuti_anche_senza_sponsorizzazione_dichiarata():
+    f = _filtro(skip_supplement_posts=True, skip_brand_promotions=True)
+    for caption in [
+        "Nuove scarpe Nike per allenarmi oggi",
+        "Allenamento con la tuta adidas",
+        "@gymshark nuova collezione",
+        "Allenamento con @nikerunning oggi",
+        "La mia maglia Under Armour",
+        "Oggi squat con attrezzi Technogym",
+        "Le nuove macchine Panatta",
+        "Scarpe New Balance in palestra",
+    ]:
+        assert f.supplement_post_reason(caption), caption
+    for caption in [
+        "Allenamento con @mario dopo una lunga giornata",
+        "Il mio nickname nuovo è simpatico",
+        "Oggi lavoro sul mio balance e la stabilità",
+    ]:
+        assert f.supplement_post_reason(caption) is None, caption
+    # Altri account mantengono la regola preesistente.
+    assert _filtro(skip_supplement_posts=True).supplement_post_reason("Nuove scarpe Nike") is None
+
+
+def test_pagine_marchi_sportivi_escluse_solo_con_regola_roberto():
+    for username, name in [("nike", "Nike"), ("adidas_originals", "Adidas Originals"),
+                           ("technogym", "Technogym"), ("panattaofficial", "Panatta")]:
+        assert supplement_page_reason(username, name, "", exclude_brand_promotions=True), username
+    assert supplement_page_reason("nickname", "Mario", "", exclude_brand_promotions=True) is None
+    assert supplement_page_reason("nike", "Nike", "") is None
+
+
+def test_filtro_profilo_blocca_i_marchi_sportivi_solo_per_roberto(monkeypatch):
+    from GramAddict.core import filter as filter_mod
+    from GramAddict.core.filter import Profile, SkipReason
+    from GramAddict.core.views import FollowStatus
+
+    profile = Profile(0, FollowStatus.FOLLOW, False, False, False, 30, "", None, "Nike")
+    profile.set_followers_and_following(1000, 500)
+    f = _filtro(skip_supplement_pages=True, skip_brand_promotions=True)
+    reasons = []
+    monkeypatch.setattr(f, "get_all_data", lambda device: profile)
+    monkeypatch.setattr(f, "return_check_profile", lambda u, p, skip_reason=None: reasons.append(skip_reason) or skip_reason is not None)
+    monkeypatch.setattr(filter_mod, "args", type("Args", (), {"disable_filters": False})(), raising=False)
+    assert f.check_profile(None, "nike")[1]
+    assert reasons[-1] is SkipReason.SUPPLEMENT_PAGE
+    f.conditions["skip_brand_promotions"] = False
+    assert not f.check_profile(None, "nike")[1]
+
+
+def test_filtro_brand_resta_attivo_durante_blogger():
+    from GramAddict.plugins.interact_blogger import _size_filters_suspended
+
+    f = _filtro(skip_supplement_pages=True, skip_brand_promotions=True)
+    with _size_filters_suspended(f):
+        assert f.conditions["skip_supplement_pages"] is True
+
+    other = _filtro(skip_supplement_pages=True)
+    with _size_filters_suspended(other):
+        assert other.conditions["skip_supplement_pages"] is False
+
+
 class _Vista:
     def __init__(self, testo):
         self._testo = testo
@@ -229,6 +306,37 @@ def test_post_promuove_integratori_rispetta_il_filtro(monkeypatch):
     assert _post_promuove_integratori(dev, None, "gino") is None
     # caption non visibile: il post passa (fail-open)
     assert _post_promuove_integratori(_DeviceFinto(), _filtro(skip_supplement_posts=True), "gino") is None
+
+
+def test_partnership_senza_caption_viene_rilevata_prima_di_commento_e_follow(monkeypatch):
+    from GramAddict.core.interaction import _post_promuove_integratori
+
+    rid = _resource_ids(monkeypatch)
+    dev = _DeviceFinto(selettore={rid.SECONDARY_LABEL: "Paid partnership with Nike"})
+    f = _filtro(skip_supplement_posts=True, skip_brand_promotions=True)
+    assert _post_promuove_integratori(dev, f, "gino")
+
+
+def test_marchio_sportivo_nel_post_blocca_il_flusso_prima_di_commento_e_follow(monkeypatch):
+    from GramAddict.core.interaction import _post_promuove_integratori
+
+    rid = _resource_ids(monkeypatch)
+    dev = _DeviceFinto(selettore={rid.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT: "gino Nuove scarpe Nike per allenarmi oggi"})
+    f = _filtro(skip_supplement_posts=True, skip_brand_promotions=True)
+    assert _post_promuove_integratori(dev, f, "gino")
+
+
+def test_partnership_nel_dump_viene_rilevata_anche_con_caption_visibile(monkeypatch):
+    from GramAddict.core.interaction import _post_promuove_integratori
+
+    rid = _resource_ids(monkeypatch)
+    dev = _DeviceFinto(
+        selettore={rid.ROW_FEED_COMMENT_TEXTVIEW_LAYOUT: "gino Allenamento gambe oggi"},
+        dump=[{"resource_id": rid.SECONDARY_LABEL, "text": "Paid partnership with Nike",
+               "bounds": {"left": 0, "top": 0, "right": 1, "bottom": 1}}],
+    )
+    f = _filtro(skip_supplement_posts=True, skip_brand_promotions=True)
+    assert _post_promuove_integratori(dev, f, "gino")
 
 
 def test_check_profile_scarta_la_pagina_di_integratori(monkeypatch):

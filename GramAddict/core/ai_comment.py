@@ -179,6 +179,12 @@ _FRAGMENT_TAIL = {
     "se", "mai", "ogni", "tutto", "the", "an", "of", "to", "on", "for", "and",
     "with", "very", "so", "not",
 }
+# Articoli e preposizioni italiane non completano una frase neppure con il punto.
+_INCOMPLETE_ITALIAN_ENDINGS = {
+    "il", "lo", "la", "i", "gli", "le", "un", "una", "uno", "di", "da", "in",
+    "con", "su", "per", "tra", "fra", "a", "del", "della", "dei", "delle",
+    "degli", "al", "alla", "ai", "alle", "nel", "nella", "nei", "sul", "sulla", "sui",
+}
 _COMMENT_MIN_WORDS = 3
 _COMMENT_TERMINATORS = ".?!\"”)…"
 _COMMENT_MAX_WORDS = 22
@@ -215,6 +221,10 @@ _FIRST_PERSON_RE = re.compile(
     re.IGNORECASE,
 )
 _DEICTIC_OPENER_RE = re.compile(r"^\s*(quel|quella|quei|quelle|quegli)\b", re.IGNORECASE)
+_GENERIC_PLATFORM_RE = re.compile(
+    r"^\s*interessante\b.*\b(?:su|in)\s+(?:questa|la)\s+(?:piattaforma|app)\b",
+    re.IGNORECASE,
+)
 # il modello non vede nulla: questi verbi annunciano un dettaglio inventato
 _VISUAL_INFERENCE_RE = re.compile(
     r"\b(sembra|sembrano|si vede|si vedono|si nota|si notano|si sente|si legge|traspare|"
@@ -233,7 +243,7 @@ _VARIATIONS = (
     "",  # nessuna indicazione extra: lascia respirare il modello
     "",
     "Per questo commento: inizia con un verbo all'indicativo (non un imperativo, non un consiglio), nessun augurio in chiusura.",
-    "Per questo commento: una sola frase secca di 6-9 parole, tono asciutto, nessun augurio.",
+    "Per questo commento: una sola frase naturale di 6-9 parole, nessun augurio.",
     "Per questo commento: chiudi con un augurio breve e specifico al tema della caption (mai 'continua cosi'', mai 'forza', mai 'complimenti').",
     "Per questo commento: tono leggero, una battuta bonaria sul dettaglio della caption, senza punti esclamativi e senza consigli.",
     "Per questo commento: inizia con un aggettivo o con un numero presente nella caption; chiudi senza augurio e senza 'quel/quella'.",
@@ -293,7 +303,9 @@ def clean_caption(caption: Optional[str], target_username: Optional[str] = None)
     return text
 
 
-def caption_skip_reason(caption: Optional[str], min_words: int = 3) -> Optional[str]:
+def caption_skip_reason(
+    caption: Optional[str], min_words: int = 3, require_caption_text: bool = False
+) -> Optional[str]:
     """Perche' NON chiamare l'AI su questa caption (None = si puo' chiamare).
 
     - poche parole vere (emoji, cifre, cuoricini non contano): qualunque
@@ -318,6 +330,9 @@ def caption_skip_reason(caption: Optional[str], min_words: int = 3) -> Optional[
     if len(words) < max(0, int(min_words)):
         return f"meno di {min_words} parole vere"
     plain = [w for w in text.split() if not w.startswith(("#", "@"))]
+    caption_text = re.sub(r"[#@][\w.]+", " ", text) if require_caption_text else ""
+    if require_caption_text and len(_WORD_RE.findall(caption_text)) < max(0, int(min_words)):
+        return f"meno di {min_words} parole nella didascalia, esclusi hashtag e menzioni"
     if "#" in text and not any(_WORD_RE.search(w) for w in plain):
         # solo hashtag: servono almeno 3 tag "parlanti" (>=5 lettere, non generici)
         tags = [
@@ -374,8 +389,8 @@ def comment_is_acceptable(
     """Controlli sull'output che il guardrail dello Space non fa.
 
     Ritorna ``(ok, motivo)``. Scarta:
-      - frammenti: meno di ``min_words`` parole, oppure nessuna punteggiatura
-        finale E ultima parola che e' un articolo/preposizione ("Bello il",
+      - frammenti: meno di ``min_words`` parole, oppure ultima parola che
+        lascia la frase incompleta anche se c'è un punto ("Bello il",
         "Ottima intensita' per"). Nei log erano il 7%: e' il ragionamento
         interno dei modelli reasoning che si mangia i token di output;
       - commenti che nominano chi scrive ("continua cosi' Mattia"): il modello
@@ -387,6 +402,9 @@ def comment_is_acceptable(
         return False, f"troppo corto ({len(words)} parole)"
     last = words[-1].strip(",;:").lower()
     if text[-1] not in _COMMENT_TERMINATORS and last in _FRAGMENT_TAIL:
+        return False, f"frammento (finisce con '{words[-1]}')"
+    last_word = words[-1].strip(".,;:!?…\"'”’)").casefold()
+    if last_word in _INCOMPLETE_ITALIAN_ENDINGS:
         return False, f"frammento (finisce con '{words[-1]}')"
     if author_name:
         if re.search(rf"\b{re.escape(author_name)}\b", text, re.IGNORECASE):
@@ -405,6 +423,8 @@ def comment_is_acceptable(
         return False, "lingua sbagliata (inglese)"
     if _DEICTIC_OPENER_RE.match(text):
         return False, "attacco 'Quel/Quella' (tic da bot)"
+    if _GENERIC_PLATFORM_RE.search(text):
+        return False, "commento generico sulla piattaforma"
     if _FIRST_PERSON_RE.search(text):
         return False, "prima persona"
     if _VISUAL_INFERENCE_RE.search(text):

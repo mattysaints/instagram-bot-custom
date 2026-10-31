@@ -80,6 +80,8 @@ def _size_filters_suspended(profile_filter, keep_skip_following=False):
         return
 
     overrides = dict(_POTENCY_NEUTRAL)
+    if conditions.get("skip_brand_promotions", False):
+        overrides.pop("skip_supplement_pages", None)
     if keep_skip_following:
         overrides["skip_following"] = True
 

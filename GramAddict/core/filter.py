@@ -26,6 +26,14 @@ from GramAddict.core.views import FollowStatus, ProfileView, normalize_ig_userna
 
 logger = logging.getLogger(__name__)
 
+_FITNESS_SIGNAL_RE = re.compile(
+    r"\b(?:fitness|fit|gym|gyms|palestr\w*|allenament\w*|allenar\w*|"
+    r"body\s?build\w*|culturism\w*|ipertrofi\w*|muscolazione|"
+    r"powerlift\w*|weightlift\w*|crossfit|personal\s*trainer|"
+    r"preparator[ei]\s+atletic[oi]|sollevamento\s+pesi|ifbb|classic\s+physique)\b",
+    re.IGNORECASE,
+)
+
 FIELD_SKIP_BUSINESS = "skip_business"
 FIELD_SKIP_NON_BUSINESS = "skip_non_business"
 FIELD_SKIP_FOLLOWING = "skip_following"
@@ -107,6 +115,7 @@ class SkipReason(Enum):
     BIOGRAPHY_IS_EMPTY = auto()
     LAST_POST_TOO_OLD = auto()
     SUPPLEMENT_PAGE = auto()
+    NO_FITNESS_SIGNAL = auto()
 
 
 class Profile(object):
@@ -307,7 +316,7 @@ class Filter:
             return False
         return self.storage.following_origin(username) in ("after_bot", "not_following")
 
-    def check_profile(self, device, username):
+    def check_profile(self, device, username, current_mode=None):
         """
         This method assumes being on someone's profile already.
         """
@@ -430,14 +439,29 @@ class Filter:
                 profile_data.business_category,
                 extra_words=self.conditions.get(FIELD_SUPPLEMENT_WORDS),
                 extra_brands=self.conditions.get(FIELD_SUPPLEMENT_BRANDS),
+                exclude_brand_promotions=bool(self.conditions.get("skip_brand_promotions", False)),
             )
             if motivo:
                 logger.info(
-                    f"@{username} e' una pagina di integratori ({motivo}), skip.",
+                    f"@{username} è una pagina di marchio o integratori ({motivo}), skip.",
                     extra={"color": f"{Fore.CYAN}"},
                 )
                 return profile_data, self.return_check_profile(
                     username, profile_data, SkipReason.SUPPLEMENT_PAGE
+                )
+
+        if (
+            self.conditions.get("require_fitness_for_place_likers", False)
+            and current_mode in ("place-likers-recent", "place-likers-top")
+        ):
+            evidence = " ".join(
+                str(value or "").replace("_", " ").replace(".", " ").replace("-", " ")
+                for value in (username, profile_data.fullname, profile_data.biography, profile_data.business_category)
+            )
+            if not _FITNESS_SIGNAL_RE.search(evidence):
+                logger.info(f"@{username}: nessun segnale fitness nel profilo trovato tramite luogo, skip.")
+                return profile_data, self.return_check_profile(
+                    username, profile_data, SkipReason.NO_FITNESS_SIGNAL
                 )
 
         logger.debug(
@@ -767,6 +791,7 @@ class Filter:
             header_label,
             extra_words=self.conditions.get(FIELD_SUPPLEMENT_WORDS),
             extra_brands=self.conditions.get(FIELD_SUPPLEMENT_BRANDS),
+            exclude_brand_promotions=bool(self.conditions.get("skip_brand_promotions", False)),
         )
 
     def can_pm_to_private_or_empty(self) -> bool:
