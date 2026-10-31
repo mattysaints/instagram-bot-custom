@@ -2831,7 +2831,8 @@ class ProfileView(ActionBarView):
         # La schermata di login non consuma tentativi: si aspetta a parte
         # (vedi sotto), perche' il bot da solo non puo' fare niente per
         # risolverla e uscire dal ciclo servirebbe solo a perdere la finestra.
-        for tentativo in range(6):
+        tentativo = 0
+        while tentativo < 6:
             if self._new_ui_profile_button():
                 return
             if self._old_ui_profile_button():
@@ -2896,6 +2897,7 @@ class ProfileView(ActionBarView):
                     )
                 random_sleep(55, 65, modulable=False)
                 continue
+            tentativo += 1
             # Prima di tutto il resto: se c'e' il dialogo di sistema "l'app
             # non risponde", va chiuso, perche' finche' resta li' nessuna
             # altra mossa ha effetto. Riaprire Instagram sotto quel dialogo
