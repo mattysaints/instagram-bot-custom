@@ -91,7 +91,18 @@ def run_safely(device, device_id, sessions, session_state, screen_record, config
                 AdbError,
                 timeout,
                 UiObjectNotFoundError,
-            ):
+            ) as e:
+                if isinstance(e, GatewayError) and "Uiautomator started failed" in str(e):
+                    logger.error(
+                        "Il servizio di controllo dell'emulatore non si avvia. "
+                        "Salvo la sessione e interrompo il bot: riavvia l'emulatore "
+                        "prima di riprovare."
+                    )
+                    try:
+                        sessions.persist(directory=session_state.my_username)
+                    except Exception as persist_error:
+                        logger.error(f"Salvataggio sessione non riuscito: {persist_error}")
+                    sys.exit(2)
                 restart(
                     device,
                     sessions,
